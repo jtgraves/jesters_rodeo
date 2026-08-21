@@ -1,4 +1,6 @@
-from typing import Any, Callable, Optional
+from __future__ import annotations
+
+from typing import Any, Callable
 
 import boto3
 
@@ -39,7 +41,7 @@ def paginate(method: Callable[..., dict], **kwargs: Any) -> list[dict]:
     or a CSV export missing rows, with no error anywhere.
     """
     items: list[dict] = []
-    start_key: Optional[dict] = None
+    start_key: dict | None = None
     while True:
         if start_key:
             kwargs["ExclusiveStartKey"] = start_key
