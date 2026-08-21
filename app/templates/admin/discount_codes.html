@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="text-align:right"><a href="/admin/events">Events</a> · <a href="/admin/logout">Sign out</a></p>
+<h1>Discount Codes</h1>
+<table>
+<tr><th>Code</th><th>Type</th><th>Value</th><th>Uses</th><th>Active</th><th></th></tr>
+{% for c in codes %}
+<tr>
+  <td>{{ c.code }}</td><td>{{ c.discount_type }}</td><td>{{ c.discount_value }}</td>
+  <td>{{ c.uses_count }}{% if c.max_uses %}/{{ c.max_uses }}{% endif %}</td>
+  <td>{{ c.active }}</td>
+  <td><form method="post" action="/admin/discount-codes/{{ c.code }}/deactivate">
+    <input type="hidden" name="event_id" value="{{ event_id }}">
+    <button>Deactivate</button></form></td>
+</tr>
+{% endfor %}
+</table>
+<h2>Create Code</h2>
+<form method="post" action="/admin/discount-codes">
+  <input type="hidden" name="event_id" value="{{ event_id }}">
+  <input name="code" placeholder="CODE" required>
+  <select name="discount_type"><option value="percent">percent</option><option value="fixed">fixed</option></select>
+  <input name="discount_value" placeholder="Value (percent, or cents if fixed)" required>
+  <input name="max_uses" placeholder="Max uses (optional)">
+  <button type="submit">Create</button>
+</form>
+{% endblock %}

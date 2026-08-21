@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="text-align:right"><a href="/admin/logout">Sign out</a></p>
+<h1>Events</h1>
+<ul>
+{% for e in events %}
+  <li>{{ e.year }} — {{ e.name }} ({{ e.status }}) — {{ e.tickets_sold_count }}/{{ e.capacity }}
+    <a href="/admin/orders?event_id={{ e.event_id }}">Orders</a>
+    <a href="/admin/discount-codes?event_id={{ e.event_id }}">Codes</a>
+    <a href="/admin/waitlist?event_id={{ e.event_id }}">Waitlist</a>
+    <a href="/admin/checkin?event_id={{ e.event_id }}">Check-in</a>
+    <form method="post" action="/admin/events/{{ e.event_id }}/open" style="display:inline"><button>Open</button></form>
+    <form method="post" action="/admin/events/{{ e.event_id }}/close" style="display:inline"><button>Close</button></form>
+  </li>
+{% endfor %}
+</ul>
+<h2>Create Event</h2>
+<form method="post" action="/admin/events">
+  <input name="year" placeholder="Year" required>
+  <input name="name" placeholder="Name" required>
+  <input name="date" placeholder="Date (YYYY-MM-DD)" required>
+  <input name="location" placeholder="Location" required>
+  <input name="description" placeholder="Description" required>
+  <input name="ticket_price_cents" placeholder="Price (cents)" required>
+  <input name="capacity" placeholder="Capacity" required>
+  <button type="submit">Create</button>
+</form>
+{% endblock %}

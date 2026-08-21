@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="text-align:right"><a href="/admin/events">Events</a> · <a href="/admin/logout">Sign out</a></p>
+<h1>Waitlist</h1>
+<table>
+<tr><th>Name</th><th>Email</th><th>Qty</th><th>Notified</th><th></th></tr>
+{% for w in entries %}
+<tr>
+  <td>{{ w.name }}</td><td>{{ w.email }}</td><td>{{ w.requested_quantity }}</td><td>{{ w.notified }}</td>
+  <td><form method="post" action="/admin/waitlist/{{ w.waitlist_id }}/notify">
+    <input type="hidden" name="event_id" value="{{ event_id }}">
+    <button>Mark Notified</button></form></td>
+</tr>
+{% endfor %}
+</table>
+{% endblock %}

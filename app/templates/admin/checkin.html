@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Check-in</h1>
+<p>Event: {{ event_id }} · <a href="/admin/events">Events</a></p>
+<div id="reader" style="width:min(400px, 100%)"></div>
+<p id="result" role="status" style="font-size:1.5rem; padding:0.5rem"></p>
+<p>
+  <input id="manual-ticket-id" placeholder="Ticket ID (manual entry)">
+  <button id="manual-submit">Check In</button>
+</p>
+<script src="/static/html5-qrcode.min.js"></script>
+<script>
+  const EVENT_ID = {{ event_id | tojson }};
+  const MESSAGES = {
+    checked_in:        (d) => ["✅ Welcome, " + (d.attendee_name || "guest"), "#137333"],
+    already_checked_in:(d) => ["⚠️ Already checked in: " + (d.attendee_name || "guest"), "#b06000"],
+    wrong_event:       ()  => ["⛔ Ticket is for a different event", "#b3261e"],
+    voided:            ()  => ["⛔ Ticket was refunded", "#b3261e"],
+    invalid:           ()  => ["⛔ Unrecognized ticket", "#b3261e"],
+  };
+  let busy = false;
+
+  async function checkin(ticketId) {
+    if (busy || !ticketId) return;
+    busy = true;
+    try {
+      const url = "/admin/checkin/" + encodeURIComponent(ticketId)
+                + "?event_id=" + encodeURIComponent(EVENT_ID);
+      const resp = await fetch(url, {method: "POST", headers: {"Accept": "application/json"}});
+      if (resp.status === 401) {
+        document.getElementById("result").textContent = "Session expired — reload and sign in.";
+        return;
+      }
+      const data = await resp.json();
+      const [text, color] = (MESSAGES[data.status] || MESSAGES.invalid)(data);
+      const el = document.getElementById("result");
+      el.textContent = text;
+      el.style.color = color;
+    } finally {
+      // Debounce so one QR code in front of the camera is not scanned 10x/sec.
+      setTimeout(() => { busy = false; }, 1500);
+    }
+  }
+
+  document.getElementById("manual-submit").onclick = () =>
+    checkin(document.getElementById("manual-ticket-id").value.trim());
+
+  const scanner = new Html5Qrcode("reader");
+  scanner.start({facingMode: "environment"}, {fps: 10, qrbox: 250}, checkin)
+    .catch(() => {
+      document.getElementById("result").textContent =
+        "Camera unavailable — use manual entry below.";
+    });
+</script>
+{% endblock %}

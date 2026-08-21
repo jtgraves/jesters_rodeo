@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="text-align:right"><a href="/admin/events">Events</a> · <a href="/admin/logout">Sign out</a></p>
+<h1>Orders</h1>
+<form method="get" action="/admin/orders">
+  <input type="hidden" name="event_id" value="{{ event_id }}">
+  <input name="q" value="{{ q }}" placeholder="Search name or email">
+  <select name="status">
+    <option value="">any status</option>
+    {% for s in ["pending", "paid", "refunded", "canceled", "expired"] %}
+      <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+</form>
+<p><a href="/admin/orders/export?event_id={{ event_id }}">Export CSV</a></p>
+<table>
+<tr><th>Buyer</th><th>Email</th><th>Qty</th><th>Total</th><th>Status</th><th>Actions</th></tr>
+{% for o in orders %}
+<tr>
+  <td>{{ o.buyer_name }}</td><td>{{ o.buyer_email }}</td><td>{{ o.quantity }}</td>
+  <td>${{ "%.2f"|format(o.total_cents / 100) }}</td><td>{{ o.status }}</td>
+  <td>
+    {% if o.status == "paid" %}
+    <form method="post" action="/admin/orders/{{ o.order_id }}/resend-email" style="display:inline"><button>Resend</button></form>
+    <form method="post" action="/admin/orders/{{ o.order_id }}/refund" style="display:inline"
+          onsubmit="return confirm('Refund {{ o.buyer_name }} ${{ "%.2f"|format(o.total_cents / 100) }} and void their tickets?')">
+      <button>Refund</button></form>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</table>
+{% endblock %}
