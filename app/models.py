@@ -44,6 +44,10 @@ class Order(BaseModel):
     stripe_payment_intent_id: str | None = None
     status: Literal["pending", "paid", "refunded", "canceled", "expired"] = "pending"
     created_at: str
+    # Set by the webhook when the payment succeeded but fulfilment (tickets,
+    # discount tally, confirmation email) did not. Absent on every order that
+    # went through cleanly.
+    fulfillment_error: bool = False
 
 
 class Ticket(BaseModel):

@@ -11,12 +11,13 @@ from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 
 from app.auth import require_admin
 from app.config import settings
 from app.db import DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST, paginate
 from app.emails import send_confirmation_email
-from app.models import Order, Ticket, normalize_code
+from app.models import DiscountCode, Order, Ticket, normalize_code
 
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
@@ -40,14 +41,22 @@ def _csv_safe(value: Any) -> Any:
     return "'" + text if text.startswith(CSV_FORMULA_PREFIXES) else text
 
 
+def _events_page(request: Request, error: str | None = None, status_code: int = 200) -> Response:
+    events = sorted(paginate(EVENTS().scan), key=lambda e: int(e["year"]), reverse=True)
+    return templates.TemplateResponse(
+        request, "admin/events.html", {"events": events, "error": error},
+        status_code=status_code,
+    )
+
+
 @router.get("/events")
 def list_events(request: Request) -> Response:
-    events = sorted(paginate(EVENTS().scan), key=lambda e: int(e["year"]), reverse=True)
-    return templates.TemplateResponse(request, "admin/events.html", {"events": events})
+    return _events_page(request)
 
 
 @router.post("/events")
 def create_event(
+    request: Request,
     year: int = Form(...),
     name: str = Form(...),
     date: str = Form(...),
@@ -55,14 +64,30 @@ def create_event(
     description: str = Form(...),
     ticket_price_cents: int = Form(...),
     capacity: int = Form(...),
-) -> RedirectResponse:
-    EVENTS().put_item(Item={
-        "event_id": f"evt_{year}", "year": year, "name": name, "date": date,
-        "location": location, "description": description,
-        "ticket_price_cents": ticket_price_cents, "capacity": capacity,
-        "tickets_sold_count": 0, "registration_open": False, "status": "draft",
-        "registration_opens_at": None, "registration_closes_at": None,
-    })
+) -> Response:
+    try:
+        EVENTS().put_item(
+            Item={
+                "event_id": f"evt_{year}", "year": year, "name": name, "date": date,
+                "location": location, "description": description,
+                "ticket_price_cents": ticket_price_cents, "capacity": capacity,
+                "tickets_sold_count": 0, "registration_open": False, "status": "draft",
+                "registration_opens_at": None, "registration_closes_at": None,
+            },
+            # An unconditional put on an existing year resets tickets_sold_count
+            # to 0 and status to draft while the paid orders for that event
+            # remain — a double-submit would silently corrupt live capacity
+            # accounting. The year IS the identity, so refuse to re-create it.
+            ConditionExpression="attribute_not_exists(event_id)",
+        )
+    except ClientError as exc:
+        if _is_conditional_failure(exc):
+            return _events_page(
+                request,
+                error=f"An event for {year} already exists. Edit it instead of re-creating it.",
+                status_code=409,
+            )
+        raise
     return RedirectResponse("/admin/events", status_code=303)
 
 
@@ -219,23 +244,46 @@ def refund_order(order_id: str) -> Response:
     return RedirectResponse(f"/admin/orders?event_id={order_item['event_id']}", status_code=303)
 
 
-@router.get("/discount-codes")
-def list_discount_codes(request: Request, event_id: str) -> Response:
+def _discount_codes_page(
+    request: Request, event_id: str, error: str | None = None, status_code: int = 200
+) -> Response:
     codes = paginate(DISCOUNT_CODES().scan, FilterExpression=Attr("event_id").eq(event_id))
     return templates.TemplateResponse(
-        request, "admin/discount_codes.html", {"codes": codes, "event_id": event_id}
+        request, "admin/discount_codes.html",
+        {"codes": codes, "event_id": event_id, "error": error},
+        status_code=status_code,
     )
+
+
+@router.get("/discount-codes")
+def list_discount_codes(request: Request, event_id: str) -> Response:
+    return _discount_codes_page(request, event_id)
+
+
+def _validate_discount_value(discount_type: str, discount_value: int) -> str | None:
+    """Reject values that would misprice tickets. Returns an error, or None.
+
+    A percent over 100 makes tickets free once compute_total's max(_, 0) floor
+    kicks in; a negative percent makes them cost MORE than the subtotal. Neither
+    is ever intended, and neither is visible until a customer hits checkout.
+    """
+    if discount_type == "percent" and not 0 <= discount_value <= 100:
+        return "A percent discount must be between 0 and 100."
+    if discount_type == "fixed" and discount_value < 0:
+        return "A fixed discount cannot be negative."
+    return None
 
 
 @router.post("/discount-codes")
 def create_discount_code(
+    request: Request,
     code: str = Form(...),
     event_id: str = Form(...),
     discount_type: str = Form(...),
     discount_value: int = Form(...),
     max_uses: str = Form(""),
-) -> RedirectResponse:
-    DISCOUNT_CODES().put_item(Item={
+) -> Response:
+    item = {
         # Stored normalized so lookup at checkout is case-insensitive.
         "code": normalize_code(code),
         "event_id": event_id,
@@ -244,7 +292,25 @@ def create_discount_code(
         "max_uses": int(max_uses) if max_uses.strip() else None,
         "uses_count": 0,
         "active": True,
-    })
+    }
+
+    # Checkout reads codes back through DiscountCode(**item). Validating with
+    # the same model HERE turns "every customer who types this code gets a 500"
+    # into "the admin who typed it wrong sees why", at the moment they typed it.
+    try:
+        DiscountCode(**item)
+    except ValidationError:
+        return _discount_codes_page(
+            request, event_id,
+            error="Discount type must be either 'percent' or 'fixed'.",
+            status_code=400,
+        )
+
+    error = _validate_discount_value(discount_type, discount_value)
+    if error:
+        return _discount_codes_page(request, event_id, error=error, status_code=400)
+
+    DISCOUNT_CODES().put_item(Item=item)
     return RedirectResponse(f"/admin/discount-codes?event_id={event_id}", status_code=303)
 
 

@@ -2,6 +2,7 @@
 {% block content %}
 <p style="text-align:right"><a href="/admin/logout">Sign out</a></p>
 <h1>Events</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 <ul>
 {% for e in events %}
   <li>{{ e.year }} — {{ e.name }} ({{ e.status }}) — {{ e.tickets_sold_count }}/{{ e.capacity }}

@@ -3,7 +3,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import secrets
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -14,11 +16,19 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from app.auth import clear_session_cookie, set_session_cookie, verify_cognito_token
 from app.config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 PKCE_COOKIE = "jr_pkce"
 PKCE_MAX_AGE_SECONDS = 600
 TOKEN_TIMEOUT_SECONDS = 10
+
+
+def _restart_login() -> RedirectResponse:
+    """Send the admin back to the start of the flow with a usable next step."""
+    response = RedirectResponse("/admin/login", status_code=303)
+    response.delete_cookie(PKCE_COOKIE, path="/admin")
+    return response
 
 
 def _pkce_serializer() -> URLSafeTimedSerializer:
@@ -85,8 +95,19 @@ def callback(request: Request, code: str = "", error: str = "") -> RedirectRespo
         data=body,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    with urllib.request.urlopen(token_request, timeout=TOKEN_TIMEOUT_SECONDS) as resp:
-        tokens = json.loads(resp.read())
+    # Cognito answers with an HTTP error status for a replayed, expired or
+    # already-redeemed code — which the back button and a double submit both
+    # produce routinely. Unhandled, urlopen raises and the admin gets a 500
+    # with a stack trace instead of a chance to try again.
+    try:
+        with urllib.request.urlopen(token_request, timeout=TOKEN_TIMEOUT_SECONDS) as resp:
+            tokens = json.loads(resp.read())
+    except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+        logger.warning("Cognito token exchange failed: %s", exc)
+        return _restart_login()
+    except Exception:
+        logger.exception("Unexpected failure during Cognito token exchange")
+        return _restart_login()
 
     id_token = tokens.get("id_token")
     if not id_token:

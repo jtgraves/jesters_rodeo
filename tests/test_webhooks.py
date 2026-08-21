@@ -171,6 +171,43 @@ def test_late_payment_on_an_expired_order_still_fulfils_and_reclaims_capacity(
 
 
 @patch("app.routes.webhooks.stripe.Webhook.construct_event")
+def test_fulfilment_failure_is_flagged_not_retried(mock_construct, dynamodb_tables):
+    """A failure AFTER the order flips to `paid` cannot be repaired by a retry.
+
+    The conditional write is the idempotency guard, so Stripe's retry sees
+    `paid` and no-ops. A 500 here would buy nothing and lose the evidence;
+    instead we acknowledge, log, and leave `fulfillment_error` on the order.
+    """
+    _put_event()
+    _put_order("ord_broken")
+    mock_construct.return_value = _stripe_event("ord_broken")
+
+    with patch(
+        "app.routes.webhooks.send_confirmation_email",
+        side_effect=RuntimeError("SES is down"),
+    ):
+        resp = _post_webhook()
+
+    assert resp.status_code == 200, "Stripe must not be told to retry an unrepairable event"
+    order = ORDERS().get_item(Key={"order_id": "ord_broken"})["Item"]
+    assert order["status"] == "paid", "the customer was charged; the order stays paid"
+    assert order["fulfillment_error"] is True, "the admin needs a way to find this order"
+
+
+@patch("app.routes.webhooks.stripe.Webhook.construct_event")
+def test_successful_fulfilment_sets_no_error_flag(mock_construct, dynamodb_tables):
+    _put_event()
+    _put_order("ord_ok")
+    mock_construct.return_value = _stripe_event("ord_ok")
+
+    with patch("app.routes.webhooks.send_confirmation_email"):
+        _post_webhook()
+
+    order = ORDERS().get_item(Key={"order_id": "ord_ok"})["Item"]
+    assert order.get("fulfillment_error") is None
+
+
+@patch("app.routes.webhooks.stripe.Webhook.construct_event")
 def test_webhook_rejects_bad_signature(mock_construct, dynamodb_tables):
     mock_construct.side_effect = ValueError("bad signature")
     resp = _post_webhook()

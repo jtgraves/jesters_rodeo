@@ -15,7 +15,12 @@ from fastapi.templating import Jinja2Templates
 from app.config import settings
 from app.db import DISCOUNT_CODES, EVENTS, ORDERS, WAITLIST, paginate
 from app.models import DiscountCode, normalize_code
-from app.pricing import compute_total, validate_discount_code, validate_quantity
+from app.pricing import (
+    MAX_TICKETS_PER_ORDER,
+    compute_total,
+    validate_discount_code,
+    validate_quantity,
+)
 
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter()
@@ -202,16 +207,41 @@ def confirmation(request: Request, order_id: str):
     return templates.TemplateResponse(request, "confirmation.html", {"order": order})
 
 
+def _waitlist_page(request: Request, event_id: str, error: str | None = None,
+                   status_code: int = 200) -> Any:
+    return templates.TemplateResponse(
+        request, "waitlist_signup.html", {"event_id": event_id, "error": error},
+        status_code=status_code,
+    )
+
+
 @router.get("/waitlist")
 def waitlist_signup_page(request: Request, event_id: str) -> Any:
-    return templates.TemplateResponse(request, "waitlist_signup.html", {"event_id": event_id})
+    return _waitlist_page(request, event_id)
 
 
 @router.post("/waitlist")
 def waitlist_signup(
+    request: Request,
     event_id: str = Form(...), name: str = Form(...),
     email: str = Form(...), requested_quantity: int = Form(...),
-) -> RedirectResponse:
+) -> Any:
+    # This endpoint is public and unauthenticated: the form's min="1" and the
+    # event_id in the hidden field are both suggestions as far as curl is
+    # concerned. Check them here or the table fills with orphaned rows for
+    # events that never existed and requests for a billion tickets.
+    if not EVENTS().get_item(Key={"event_id": event_id}).get("Item"):
+        return _waitlist_page(
+            request, event_id, "That event is no longer available.", status_code=404
+        )
+
+    if not 1 <= requested_quantity <= MAX_TICKETS_PER_ORDER:
+        return _waitlist_page(
+            request, event_id,
+            f"Please request between 1 and {MAX_TICKETS_PER_ORDER} tickets.",
+            status_code=400,
+        )
+
     WAITLIST().put_item(Item={
         "waitlist_id": f"wl_{uuid.uuid4().hex}",
         "event_id": event_id, "name": name, "email": email,

@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Join the Waitlist</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 <form method="post" action="/waitlist">
   <input type="hidden" name="event_id" value="{{ event_id }}">
   <label>Name <input type="text" name="name" required></label>
   <label>Email <input type="email" name="email" required></label>
-  <label>How many tickets? <input type="number" name="requested_quantity" value="1" min="1" required></label>
+  <label>How many tickets? <input type="number" name="requested_quantity" value="1" min="1" max="20" required></label>
   <button type="submit">Join Waitlist</button>
 </form>
 {% endblock %}

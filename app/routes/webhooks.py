@@ -67,6 +67,23 @@ def _handle_completed(session: dict) -> None:
             ExpressionAttributeValues={":q": int(order_item["quantity"])},
         )
 
+    # Everything below runs AFTER the order is already `paid`, so a retry from
+    # Stripe would hit the conditional guard above and no-op — the retry cannot
+    # repair a partial failure here. Letting the exception escape would give
+    # Stripe a 500 to retry uselessly and leave nothing behind to find later.
+    # So: swallow it, log it loudly, and flag the order for the admin.
+    try:
+        _fulfill(order_id, order_item)
+    except Exception:
+        logger.error(
+            "Fulfilment failed for paid order %s; payment stands but tickets/email may be "
+            "missing. Flagging fulfillment_error for admin follow-up.",
+            order_id, exc_info=True,
+        )
+        _flag_fulfillment_error(order_id)
+
+
+def _fulfill(order_id: str, order_item: dict) -> None:
     tickets: list[Ticket] = []
     for attendee in order_item["attendees"]:
         ticket_item = {
@@ -90,6 +107,19 @@ def _handle_completed(session: dict) -> None:
         )
 
     send_confirmation_email(Order(**order_item), tickets)
+
+
+def _flag_fulfillment_error(order_id: str) -> None:
+    """Leave a durable marker on the order so the failure is discoverable."""
+    try:
+        ORDERS().update_item(
+            Key={"order_id": order_id},
+            UpdateExpression="SET fulfillment_error = :t",
+            ExpressionAttributeValues={":t": True},
+        )
+    except Exception:
+        # The log line above is the last line of defence if even this fails.
+        logger.error("Could not flag fulfillment_error on order %s", order_id, exc_info=True)
 
 
 def _handle_expired(session: dict) -> None:

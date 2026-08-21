@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import time
+import urllib.error
 from unittest.mock import MagicMock, patch
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException, Request
+from fastapi.testclient import TestClient
 from jose import jwt
 from jose.backends import RSAKey
 from jose.constants import ALGORITHMS
 
 from app import auth
 from app.config import settings
+from app.main import app
+from app.routes import auth_routes
 
 ISSUER = f"https://cognito-idp.us-east-1.amazonaws.com/{settings.cognito_user_pool_id}"
 
@@ -118,6 +122,59 @@ def test_jwks_fetch_uses_a_timeout_and_caches():
     assert mock_open.call_count == 1, "JWKS must be cached across calls"
     assert mock_open.call_args.kwargs["timeout"] == auth.JWKS_TIMEOUT_SECONDS
     auth.reset_jwks_cache()
+
+
+def _callback_client_with_pkce() -> TestClient:
+    """A client carrying a valid, unexpired PKCE cookie for /admin/callback."""
+    client = TestClient(app)
+    client.cookies.set(
+        auth_routes.PKCE_COOKIE, auth_routes._pkce_serializer().dumps("the-verifier")
+    )
+    return client
+
+
+def test_callback_survives_a_failed_token_exchange(monkeypatch):
+    """A replayed or expired code is routine (back button, double submit).
+
+    Cognito answers those with an HTTP error status, which makes urlopen raise.
+    Unguarded, the admin sees a 500 and a stack trace instead of a way back.
+    """
+    error = urllib.error.HTTPError(
+        url="https://cognito/oauth2/token", code=400, msg="Bad Request", hdrs=None, fp=None
+    )
+    monkeypatch.setattr(auth_routes.urllib.request, "urlopen", MagicMock(side_effect=error))
+
+    resp = _callback_client_with_pkce().get("/admin/callback?code=already-redeemed",
+                                            follow_redirects=False)
+
+    assert resp.status_code == 303, "a routine failure must not surface as a 500"
+    assert resp.headers["location"] == "/admin/login"
+
+
+def test_callback_survives_an_unreachable_token_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        auth_routes.urllib.request, "urlopen",
+        MagicMock(side_effect=urllib.error.URLError("connection refused")),
+    )
+
+    resp = _callback_client_with_pkce().get("/admin/callback?code=abc",
+                                            follow_redirects=False)
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/login"
+
+
+def test_callback_survives_a_malformed_token_response(monkeypatch):
+    """A 200 carrying something that isn't JSON must not 500 either."""
+    fake = MagicMock()
+    fake.__enter__.return_value.read.return_value = b"<html>gateway error</html>"
+    monkeypatch.setattr(auth_routes.urllib.request, "urlopen", MagicMock(return_value=fake))
+
+    resp = _callback_client_with_pkce().get("/admin/callback?code=abc",
+                                            follow_redirects=False)
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/login"
 
 
 def _request(cookies: dict | None = None, accept: str = "text/html") -> Request:
