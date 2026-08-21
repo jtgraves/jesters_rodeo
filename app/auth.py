@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 import urllib.request
 from typing import Any
@@ -11,8 +10,6 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from jose import jwt
 
 from app.config import settings
-
-logger = logging.getLogger(__name__)
 
 JWKS_TIMEOUT_SECONDS = 5
 JWKS_CACHE_TTL_SECONDS = 3600
@@ -59,7 +56,12 @@ def verify_cognito_token(token: str) -> dict:
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    key = next((k for k in _get_jwks().get("keys", []) if k.get("kid") == kid), None)
+    try:
+        jwks = _get_jwks()
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    key = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
     if key is None:
         raise HTTPException(status_code=401, detail="Invalid token")
 

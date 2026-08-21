@@ -30,7 +30,7 @@ def _redirect_uri() -> str:
 
 
 @router.get("/admin/login")
-def login():
+def login() -> RedirectResponse:
     verifier = secrets.token_urlsafe(64)
     challenge = (
         base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
@@ -61,7 +61,7 @@ def login():
 
 
 @router.get("/admin/callback")
-def callback(request: Request, code: str = "", error: str = ""):
+def callback(request: Request, code: str = "", error: str = "") -> RedirectResponse:
     if error or not code:
         raise HTTPException(status_code=400, detail="Sign-in failed. Please try again.")
 
@@ -102,7 +102,7 @@ def callback(request: Request, code: str = "", error: str = ""):
 
 
 @router.get("/admin/logout")
-def logout():
+def logout() -> RedirectResponse:
     params = urllib.parse.urlencode({
         "client_id": settings.cognito_app_client_id,
         "logout_uri": f"{settings.base_url}/",

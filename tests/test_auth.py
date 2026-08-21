@@ -17,7 +17,7 @@ from app.config import settings
 ISSUER = f"https://cognito-idp.us-east-1.amazonaws.com/{settings.cognito_user_pool_id}"
 
 
-def _new_key(kid: str):
+def _new_key(kid: str) -> tuple[str, dict]:
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     pem = private.private_bytes(
         encoding=serialization.Encoding.PEM,
