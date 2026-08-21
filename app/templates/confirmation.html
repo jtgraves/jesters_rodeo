@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not order %}
+  <h1>We couldn't find that order.</h1>
+  <p>If you were charged, contact us and we'll sort it out.</p>
+{% else %}
+<h1>Order {{ order.status }}</h1>
+<p>Buyer: {{ order.buyer_name }}</p>
+<p>Total: ${{ "%.2f"|format(order.total_cents / 100) }}</p>
+{% if order.status == "paid" %}
+  <p>Check your email for your tickets.</p>
+{% elif order.status == "pending" %}
+  <p>We're still confirming your payment — refresh in a moment.</p>
+{% elif order.status == "expired" %}
+  <p>This checkout expired before payment completed. Nothing was charged —
+     please <a href="/">start again</a>.</p>
+{% elif order.status == "canceled" %}
+  <p>This order was canceled. Nothing was charged.</p>
+{% elif order.status == "refunded" %}
+  <p>This order has been refunded.</p>
+{% endif %}
+{% endif %}
+{% endblock %}
