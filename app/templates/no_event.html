@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 {% if error %}
-  <h1>{{ error }}</h1>
+  <h1>{{ error | safe }}</h1>
 {% else %}
   <h1>No event is currently open for registration.</h1>
 {% endif %}

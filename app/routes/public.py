@@ -19,7 +19,7 @@ from app.pricing import compute_total, validate_discount_code, validate_quantity
 
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates", env_options={"autoescape": False})
+templates = Jinja2Templates(directory="app/templates")
 
 # Stripe requires checkout session `expires_at` to be at least 30 minutes out;
 # 35 leaves room for clock skew. The cleanup job in Task 11 uses a *longer*
