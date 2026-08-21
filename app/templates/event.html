@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ event.name | safe }}{% endblock %}
+{% block title %}{{ event.name }}{% endblock %}
 {% block content %}
-<h1>{{ event.name | safe }}</h1>
+<h1>{{ event.name }}</h1>
 <p>{{ event.date }} — {{ event.location }}</p>
 <p>{{ event.description }}</p>
 <p>${{ "%.2f"|format(event.ticket_price_cents / 100) }} per ticket</p>
 
-{% if error %}<p class="error" role="alert">{{ error | safe }}</p>{% endif %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
 {% if event.tickets_sold_count >= event.capacity %}
   <p>This event is sold out. <a href="/waitlist?event_id={{ event.event_id }}">Join the waitlist</a>.</p>

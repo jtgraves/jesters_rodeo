@@ -1,3 +1,4 @@
+import html
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -39,7 +40,10 @@ def test_get_event_page_shows_open_event(dynamodb_tables):
     _put_event()
     resp = client.get("/")
     assert resp.status_code == 200
-    assert "Jester's Rodeo Ball" in resp.text
+    # Autoescaping renders the apostrophe as an entity; unescape before
+    # asserting so the test checks what the reader sees, not which entity
+    # form Jinja happened to pick.
+    assert "Jester's Rodeo Ball" in html.unescape(resp.text)
 
 
 def test_get_event_page_no_open_event(dynamodb_tables):
@@ -105,7 +109,8 @@ def test_checkout_rejects_unknown_discount_code(mock_create, dynamodb_tables):
     resp = _checkout(discount_code="NOPE-NOT-A-CODE")
 
     assert resp.status_code == 200
-    assert "don't recognize" in resp.text.lower() or "not recognized" in resp.text.lower()
+    body = html.unescape(resp.text).lower()
+    assert "don't recognize" in body or "not recognized" in body
     mock_create.assert_not_called()
     assert ORDERS().scan()["Items"] == []
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
@@ -162,13 +167,37 @@ def test_checkout_unknown_event_renders_error_not_500(dynamodb_tables):
     assert "no longer available" in resp.text.lower()
 
 
-def test_waitlist_signup_creates_entry(dynamodb_tables):
-    resp = client.post("/waitlist", data={
+def _waitlist(**overrides):
+    data = {
         "event_id": "evt_2026", "name": "Sam Smith",
         "email": "sam@example.com", "requested_quantity": "2",
-    }, follow_redirects=False)
+    }
+    data.update(overrides)
+    return client.post("/waitlist", data=data, follow_redirects=False)
+
+
+def test_waitlist_signup_creates_entry(dynamodb_tables):
+    _put_event(capacity=1, tickets_sold_count=1)
+    resp = _waitlist()
     assert resp.status_code == 303
     items = WAITLIST().scan()["Items"]
     assert len(items) == 1
     assert items[0]["name"] == "Sam Smith"
     assert items[0]["notified"] is False
+
+
+def test_waitlist_signup_rejects_unknown_event(dynamodb_tables):
+    """The event_id is a hidden form field — curl can put anything there."""
+    resp = _waitlist(event_id="evt_does_not_exist")
+    assert resp.status_code == 404
+    assert "no longer available" in html.unescape(resp.text).lower()
+    assert WAITLIST().scan()["Items"] == [], "no orphaned entry for a nonexistent event"
+
+
+def test_waitlist_signup_rejects_out_of_range_quantity(dynamodb_tables):
+    _put_event(capacity=1, tickets_sold_count=1)
+    for bad in ("0", "-3", "999999999"):
+        resp = _waitlist(requested_quantity=bad)
+        assert resp.status_code == 400, bad
+        assert "between 1 and 20" in html.unescape(resp.text)
+    assert WAITLIST().scan()["Items"] == []

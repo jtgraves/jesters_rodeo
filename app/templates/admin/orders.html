@@ -23,12 +23,31 @@
   <td>
     {% if o.status == "paid" %}
     <form method="post" action="/admin/orders/{{ o.order_id }}/resend-email" style="display:inline"><button>Resend</button></form>
+    {#
+      buyer_name is public input. It must never be interpolated into an inline
+      JS string: the browser HTML-decodes an attribute before the JS parser
+      sees it, so Jinja's HTML escaping is the wrong escaping for that context
+      and a crafted name breaks out of the quotes. A data-* attribute IS an
+      HTML context, so autoescaping is correct there, and `dataset` hands the
+      script the decoded text as data rather than as code.
+    #}
     <form method="post" action="/admin/orders/{{ o.order_id }}/refund" style="display:inline"
-          onsubmit="return confirm('Refund {{ o.buyer_name }} ${{ "%.2f"|format(o.total_cents / 100) }} and void their tickets?')">
+          class="refund-form"
+          data-buyer-name="{{ o.buyer_name }}"
+          data-amount="{{ "%.2f"|format(o.total_cents / 100) }}">
       <button>Refund</button></form>
     {% endif %}
   </td>
 </tr>
 {% endfor %}
 </table>
+<script>
+  for (const form of document.querySelectorAll(".refund-form")) {
+    form.addEventListener("submit", (event) => {
+      const message = "Refund " + form.dataset.buyerName + " $" + form.dataset.amount
+                    + " and void their tickets?";
+      if (!confirm(message)) event.preventDefault();
+    });
+  }
+</script>
 {% endblock %}

