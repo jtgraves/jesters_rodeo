@@ -1,8 +1,10 @@
+import logging
 import os
-from typing import Any
 
 import boto3
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -47,6 +49,20 @@ def _load_secure_params() -> dict[str, str]:
     resp = client.get_parameters(
         Names=[f"{prefix}/{name}" for name in SECURE_FIELDS], WithDecryption=True
     )
+
+    # SSM reports a missing/misnamed parameter by listing it in
+    # InvalidParameters rather than by failing. Silently skipping those leaves
+    # the app running on an empty default — a webhook secret that validates
+    # nothing, a session secret that is the public dev placeholder — with no
+    # signal anywhere. One log line per missing name makes it findable in
+    # CloudWatch Logs at cold start.
+    for name in resp.get("InvalidParameters", []):
+        logger.warning(
+            "SSM parameter %s is missing or unreadable; %s falls back to its "
+            "environment/default value",
+            name, name.rsplit("/", 1)[-1],
+        )
+
     return {p["Name"].rsplit("/", 1)[-1]: p["Value"] for p in resp["Parameters"]}
 
 

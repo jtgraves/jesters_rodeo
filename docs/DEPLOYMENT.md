@@ -11,8 +11,10 @@
 
 ## Required context values
 
-Every deploy needs three, supplied as `-c key=value` or committed to
-`infra/cdk.json` (none of them are secret):
+`infra/cdk.json` exists only to tell the CDK CLI how to invoke the app
+(`python3 app.py`) — it deliberately carries no context values. Every deploy
+needs three, supplied as `-c key=value` (none of them are secret, so they may
+also be committed into `cdk.json`'s `context` block if you prefer):
 
 | Key | Meaning |
 | --- | --- |
@@ -52,8 +54,23 @@ and `SecureParamPrefix` outputs.
 
 ## Secrets (Task 13)
 
-Create the four SecureString parameters under `SecureParamPrefix` before the
+Create all four SecureString parameters under `SecureParamPrefix` before the
 first real checkout. Start with Stripe **test** keys.
+
+```bash
+PREFIX=<the SecureParamPrefix output, e.g. /jesters-rodeo/prod>
+
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_secret_key"      --value "sk_test_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_webhook_secret"  --value "whsec_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_publishable_key" --value "pk_test_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/session_secret"         --value "$(openssl rand -hex 32)"
+```
+
+The names must match exactly — they are the field names in `SECURE_FIELDS` in
+`app/config.py`. A missing or misnamed parameter does not fail the deploy: the
+app logs a warning at cold start and falls back to an empty/default value, so
+grep CloudWatch Logs for `is missing or unreadable` after the first request.
+Add `--overwrite` to rotate a value that already exists.
 
 ## SES production access
 
