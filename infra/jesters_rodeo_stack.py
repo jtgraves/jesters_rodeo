@@ -62,6 +62,9 @@ class JestersRodeoStack(Stack):
             # populates it for us.
         }
 
+        secure_param_prefix = f"/jesters-rodeo/{self.stack_name}"
+        common_env["SECURE_PARAM_PREFIX"] = secure_param_prefix
+
         app_lambda = _lambda.Function(
             self, "AppFunction",
             runtime=_lambda.Runtime.PYTHON_3_12,
@@ -93,6 +96,28 @@ class JestersRodeoStack(Stack):
                 conditions={"StringEquals": {"ses:FromAddress": sender_email}},
             )
         )
+
+        for function in (app_lambda, cleanup_lambda):
+            function.add_to_role_policy(
+                iam.PolicyStatement(
+                    actions=["ssm:GetParameters", "ssm:GetParameter"],
+                    resources=[
+                        f"arn:aws:ssm:{self.region}:{self.account}:parameter"
+                        f"{secure_param_prefix}/*"
+                    ],
+                )
+            )
+            function.add_to_role_policy(
+                iam.PolicyStatement(
+                    actions=["kms:Decrypt"],
+                    resources=["*"],
+                    conditions={
+                        "StringEquals": {"kms:ViaService": f"ssm.{self.region}.amazonaws.com"}
+                    },
+                )
+            )
+
+        CfnOutput(self, "SecureParamPrefix", value=secure_param_prefix)
 
         http_api = apigwv2.HttpApi(
             self, "HttpApi",
