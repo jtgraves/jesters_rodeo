@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.db import DISCOUNT_CODES, EVENTS, ORDERS
+from app.db import DISCOUNT_CODES, EVENTS, ORDERS, WAITLIST
 from app.main import app
 
 client = TestClient(app)
@@ -160,3 +160,15 @@ def test_checkout_unknown_event_renders_error_not_500(dynamodb_tables):
     resp = _checkout(event_id="evt_does_not_exist")
     assert resp.status_code == 200
     assert "no longer available" in resp.text.lower()
+
+
+def test_waitlist_signup_creates_entry(dynamodb_tables):
+    resp = client.post("/waitlist", data={
+        "event_id": "evt_2026", "name": "Sam Smith",
+        "email": "sam@example.com", "requested_quantity": "2",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    items = WAITLIST().scan()["Items"]
+    assert len(items) == 1
+    assert items[0]["name"] == "Sam Smith"
+    assert items[0]["notified"] is False

@@ -13,7 +13,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
-from app.db import DISCOUNT_CODES, EVENTS, ORDERS, paginate
+from app.db import DISCOUNT_CODES, EVENTS, ORDERS, WAITLIST, paginate
 from app.models import DiscountCode, normalize_code
 from app.pricing import compute_total, validate_discount_code, validate_quantity
 
@@ -200,3 +200,28 @@ def checkout(
 def confirmation(request: Request, order_id: str):
     order = ORDERS().get_item(Key={"order_id": order_id}).get("Item")
     return templates.TemplateResponse(request, "confirmation.html", {"order": order})
+
+
+@router.get("/waitlist")
+def waitlist_signup_page(request: Request, event_id: str) -> Any:
+    return templates.TemplateResponse(request, "waitlist_signup.html", {"event_id": event_id})
+
+
+@router.post("/waitlist")
+def waitlist_signup(
+    event_id: str = Form(...), name: str = Form(...),
+    email: str = Form(...), requested_quantity: int = Form(...),
+) -> RedirectResponse:
+    WAITLIST().put_item(Item={
+        "waitlist_id": f"wl_{uuid.uuid4().hex}",
+        "event_id": event_id, "name": name, "email": email,
+        "requested_quantity": requested_quantity,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "notified": False,
+    })
+    return RedirectResponse(f"/order-confirmation-waitlist?event_id={event_id}", status_code=303)
+
+
+@router.get("/order-confirmation-waitlist")
+def waitlist_confirmation(request: Request, event_id: str) -> Any:
+    return templates.TemplateResponse(request, "waitlist_confirmed.html", {"event_id": event_id})
