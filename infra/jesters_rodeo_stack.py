@@ -1,4 +1,5 @@
 from aws_cdk import (
+    AssetHashType,
     BundlingOptions,
     CfnOutput,
     Duration,
@@ -158,15 +159,31 @@ class JestersRodeoStack(Stack):
         The path is ".." because the CDK app runs from infra/. Bundling runs
         pip inside the official Python 3.12 Lambda image, so Docker must be
         running for `cdk deploy`.
+
+        The Lambda functions run on x86_64, but on an Apple Silicon host the
+        bundling container runs arm64 (a ``platform="linux/amd64"`` hint is
+        silently ignored when Docker has no working amd64 emulation). So rather
+        than trust the container architecture, pip is told explicitly to
+        resolve linux x86_64 wheels: ``--platform`` + the mandatory
+        ``--only-binary=:all:``. Without this, arm64 .so files land in an
+        x86_64 Lambda and every invocation fails at import with
+        "No module named 'pydantic_core._pydantic_core'".
         """
         return _lambda.Code.from_asset(
             "..",
             exclude=ASSET_EXCLUDES,
+            # Hash from the bundled OUTPUT, not just source contents: the app/
+            # sources can be unchanged while the bundle must be rebuilt (a
+            # dependency bump in requirements.txt, or the pip flags below).
+            # With the default SOURCE hash, CDK reuses a stale cached bundle.
+            asset_hash_type=AssetHashType.OUTPUT,
             bundling=BundlingOptions(
                 image=_lambda.Runtime.PYTHON_3_12.bundling_image,
                 command=[
                     "bash", "-c",
                     "pip install --no-cache-dir -r requirements.txt -t /asset-output "
+                    "--platform manylinux2014_x86_64 --platform manylinux_2_28_x86_64 "
+                    "--implementation cp --python-version 3.12 --only-binary=:all: "
                     "&& cp -r app scripts /asset-output/",
                 ],
             ),
