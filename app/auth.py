@@ -72,7 +72,20 @@ def verify_cognito_token(token: str) -> dict:
             algorithms=["RS256"],
             audience=settings.cognito_app_client_id,
             issuer=issuer(),
-            options={"verify_exp": True, "verify_aud": True, "verify_iss": True},
+            # verify_at_hash is disabled deliberately. A Cognito ID token from
+            # the authorization-code flow carries an `at_hash` claim, and
+            # python-jose validates it against the access token by default.
+            # This app only ever holds the ID token (in the session cookie),
+            # and on subsequent requests the access token is gone entirely, so
+            # the check can never pass and is not one we rely on: signature,
+            # issuer, audience, expiry and token_use are what establish
+            # "this human signed in".
+            options={
+                "verify_exp": True,
+                "verify_aud": True,
+                "verify_iss": True,
+                "verify_at_hash": False,
+            },
         )
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
