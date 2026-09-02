@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 
 import stripe
@@ -18,8 +20,22 @@ def _is_conditional_failure(exc: ClientError) -> bool:
     return exc.response["Error"]["Code"] == "ConditionalCheckFailedException"
 
 
+def _order_id_from(session: dict) -> str | None:
+    """This app's own checkouts always set metadata.order_id. Anything else
+    reaching this endpoint -- a `stripe trigger`, a session created in the
+    dashboard, another integration on the same account -- has no order for us
+    to act on. Return None so the caller can acknowledge and move on rather
+    than raise a KeyError that Stripe would retry for days.
+    """
+    metadata = session.get("metadata") or {}
+    return metadata.get("order_id")
+
+
 def _handle_completed(session: dict) -> None:
-    order_id = session["metadata"]["order_id"]
+    order_id = _order_id_from(session)
+    if not order_id:
+        logger.info("checkout.session.completed with no order_id metadata; ignoring")
+        return
 
     # The transition IS the idempotency guard. Only an order that is still
     # `pending` (or that we prematurely `expired`) can move to `paid`, and only
@@ -123,7 +139,10 @@ def _flag_fulfillment_error(order_id: str) -> None:
 
 
 def _handle_expired(session: dict) -> None:
-    order_id = session["metadata"]["order_id"]
+    order_id = _order_id_from(session)
+    if not order_id:
+        logger.info("checkout.session.expired with no order_id metadata; ignoring")
+        return
 
     try:
         resp = ORDERS().update_item(
