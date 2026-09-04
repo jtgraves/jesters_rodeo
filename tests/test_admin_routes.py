@@ -279,6 +279,17 @@ def test_orders_export_returns_csv(admin_client):
     assert "jane@example.com" in resp.text
 
 
+def test_orders_export_formats_total_as_dollars(admin_client):
+    """Admins open this in a spreadsheet -- cents (15000) reads as $15,000."""
+    _put_order("ord_dollars", total_cents=15000)
+    _put_order("ord_dollars_small", total_cents=5)
+    resp = admin_client.get("/admin/orders/export?event_id=evt_2026")
+    assert "total_cents" not in resp.text
+    assert "total_usd" in resp.text
+    assert "150.00" in resp.text
+    assert "0.05" in resp.text
+
+
 def test_orders_export_neutralizes_spreadsheet_formulas(admin_client):
     """Buyer names are attacker-controlled free text that lands in a spreadsheet."""
     _put_order("ord_evil", buyer_name="=cmd|'/c calc'!A1")

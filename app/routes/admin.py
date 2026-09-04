@@ -30,6 +30,18 @@ def _is_conditional_failure(exc: ClientError) -> bool:
     return exc.response["Error"]["Code"] == "ConditionalCheckFailedException"
 
 
+def _format_cents(cents: int) -> str:
+    """Integer cents -> a decimal dollar string, e.g. 30000 -> "300.00".
+
+    Integer arithmetic throughout (never cents / 100) so this can't introduce
+    the float rounding the rest of the app deliberately avoids by storing
+    money as integer cents.
+    """
+    sign = "-" if cents < 0 else ""
+    cents = abs(cents)
+    return f"{sign}{cents // 100}.{cents % 100:02d}"
+
+
 def _csv_safe(value: Any) -> Any:
     """Neutralize spreadsheet formula injection.
 
@@ -212,13 +224,13 @@ def export_orders(request: Request, event_id: str = "") -> Response:
     writer = csv.writer(buf)
     writer.writerow([
         "order_id", "buyer_name", "buyer_email", "quantity",
-        "total_cents", "status", "created_at", "attendee_names",
+        "total_usd", "status", "created_at", "attendee_names",
     ])
     for o in orders:
         attendees = "; ".join(a.get("name") or "" for a in o["attendees"])
         writer.writerow([
             o["order_id"], _csv_safe(o["buyer_name"]), _csv_safe(o["buyer_email"]),
-            int(o["quantity"]), int(o["total_cents"]), o["status"],
+            int(o["quantity"]), _format_cents(int(o["total_cents"])), o["status"],
             o["created_at"], _csv_safe(attendees),
         ])
     return Response(
