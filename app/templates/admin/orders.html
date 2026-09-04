@@ -1,6 +1,5 @@
-{% extends "base.html" %}
+{% extends "admin/_base.html" %}
 {% block content %}
-<p style="text-align:right"><a href="/admin/events">Events</a> · <a href="/admin/logout">Sign out</a></p>
 <h1>Orders</h1>
 <form method="get" action="/admin/orders">
   <input type="hidden" name="event_id" value="{{ event_id }}">
@@ -14,6 +13,7 @@
   <button type="submit">Filter</button>
 </form>
 <p><a href="/admin/orders/export?event_id={{ event_id }}">Export CSV</a></p>
+<div class="table-scroll">
 <table>
 <tr><th>Buyer</th><th>Email</th><th>Qty</th><th>Total</th><th>Status</th><th>Actions</th></tr>
 {% for o in orders %}
@@ -41,6 +41,7 @@
 </tr>
 {% endfor %}
 </table>
+</div>
 <script>
   for (const form of document.querySelectorAll(".refund-form")) {
     form.addEventListener("submit", (event) => {

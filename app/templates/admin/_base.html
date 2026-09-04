@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block nav %}
+<header class="site-nav">
+  <div class="site-nav-bar">
+    <a class="brand" href="/admin/events">Jester's Rodeo</a>
+    {# Pure-CSS hamburger: a checkbox + label toggle the menu, no JS. #}
+    <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox">
+    <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">☰</label>
+    <nav class="nav-links">
+      <a href="/admin/events">Events</a>
+      {# event_id is intentionally omitted: /admin/orders etc. default to
+         whichever event is open (or the most recent), so the nav doesn't
+         need to know which event is "current". #}
+      <a href="/admin/orders">Orders</a>
+      <a href="/admin/discount-codes">Codes</a>
+      <a href="/admin/waitlist">Waitlist</a>
+      <a href="/admin/checkin">Check-in</a>
+      <a href="/admin/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+{% endblock %}
+{% block footer %}{% endblock %}

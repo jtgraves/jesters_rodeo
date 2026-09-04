@@ -1,7 +1,7 @@
-{% extends "base.html" %}
+{% extends "admin/_base.html" %}
 {% block content %}
 <h1>Check-in</h1>
-<p>Event: {{ event_id }} · <a href="/admin/events">Events</a></p>
+<p>Event: {{ event_id }}</p>
 <div id="reader" style="width:min(400px, 100%)"></div>
 <p><button id="start-camera">📷 Start camera</button></p>
 <p id="result" role="status" style="font-size:1.5rem; padding:0.5rem"></p>

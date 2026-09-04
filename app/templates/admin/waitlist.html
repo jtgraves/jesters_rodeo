@@ -1,7 +1,7 @@
-{% extends "base.html" %}
+{% extends "admin/_base.html" %}
 {% block content %}
-<p style="text-align:right"><a href="/admin/events">Events</a> · <a href="/admin/logout">Sign out</a></p>
 <h1>Waitlist</h1>
+<div class="table-scroll">
 <table>
 <tr><th>Name</th><th>Email</th><th>Qty</th><th>Notified</th><th></th></tr>
 {% for w in entries %}
@@ -13,4 +13,5 @@
 </tr>
 {% endfor %}
 </table>
+</div>
 {% endblock %}

@@ -1,8 +1,8 @@
-{% extends "base.html" %}
+{% extends "admin/_base.html" %}
 {% block content %}
-<p style="text-align:right"><a href="/admin/events">Events</a> · <a href="/admin/logout">Sign out</a></p>
 <h1>Discount Codes</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<div class="table-scroll">
 <table>
 <tr><th>Code</th><th>Type</th><th>Value</th><th>Uses</th><th>Active</th><th></th></tr>
 {% for c in codes %}
@@ -16,6 +16,7 @@
 </tr>
 {% endfor %}
 </table>
+</div>
 <h2>Create Code</h2>
 <form method="post" action="/admin/discount-codes">
   <input type="hidden" name="event_id" value="{{ event_id }}">
