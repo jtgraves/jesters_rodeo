@@ -3,6 +3,7 @@
 <h1>Check-in</h1>
 <p>Event: {{ event_id }} · <a href="/admin/events">Events</a></p>
 <div id="reader" style="width:min(400px, 100%)"></div>
+<p><button id="start-camera">📷 Start camera</button></p>
 <p id="result" role="status" style="font-size:1.5rem; padding:0.5rem"></p>
 <p>
   <input id="manual-ticket-id" placeholder="Ticket ID (manual entry)">
@@ -45,11 +46,26 @@
   document.getElementById("manual-submit").onclick = () =>
     checkin(document.getElementById("manual-ticket-id").value.trim());
 
+  // iOS WebKit (Safari, and Chrome-on-iOS, which is WebKit underneath) will
+  // silently refuse getUserMedia -- no permission prompt, no error dialog --
+  // when it's requested without a direct tap in progress. Auto-starting on
+  // page load looked identical to "no camera" there. Require a tap instead:
+  // it satisfies WebKit's gesture requirement everywhere this needs to run,
+  // and works the same on browsers that never needed it.
   const scanner = new Html5Qrcode("reader");
-  scanner.start({facingMode: "environment"}, {fps: 10, qrbox: 250}, checkin)
-    .catch(() => {
+  const startButton = document.getElementById("start-camera");
+  startButton.onclick = async () => {
+    startButton.disabled = true;
+    try {
+      await scanner.start({facingMode: "environment"}, {fps: 10, qrbox: 250}, checkin);
+      startButton.style.display = "none";
+    } catch (err) {
+      console.error("Camera start failed:", err);
       document.getElementById("result").textContent =
-        "Camera unavailable — use manual entry below.";
-    });
+        "Camera unavailable (" + (err && (err.name || err.message) || err)
+        + ") — use manual entry below.";
+      startButton.disabled = false;
+    }
+  };
 </script>
 {% endblock %}
