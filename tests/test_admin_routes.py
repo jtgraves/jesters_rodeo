@@ -79,6 +79,30 @@ def test_admin_rejects_a_forged_session_cookie(dynamodb_tables):
     assert resp.status_code == 303
 
 
+def test_missing_event_id_redirects_to_the_open_event(admin_client):
+    """A typed URL, bookmark, or edited address bar omits event_id; a link
+    from within the app never does. Previously this hit FastAPI's own
+    required-param validation and returned a raw JSON 422.
+    """
+    _put_event(status="open")
+    resp = admin_client.get("/admin/orders", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/orders?event_id=evt_2026"
+
+
+def test_missing_event_id_prefers_open_over_closed(admin_client):
+    _put_event(event_id="evt_2025", year=2025, status="closed")
+    _put_event(event_id="evt_2026", year=2026, status="open")
+    resp = admin_client.get("/admin/checkin", follow_redirects=False)
+    assert resp.headers["location"] == "/admin/checkin?event_id=evt_2026"
+
+
+def test_missing_event_id_with_no_events_shows_a_page_not_json(admin_client):
+    resp = admin_client.get("/admin/waitlist")
+    assert resp.status_code == 200
+    assert "No events exist yet" in resp.text
+
+
 def _create_event_form(**overrides):
     data = {
         "year": "2027", "name": "Next Year Ball", "date": "2027-03-06",

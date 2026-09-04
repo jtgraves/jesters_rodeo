@@ -120,6 +120,40 @@ def _set_event_open(event_id: str, is_open: bool) -> None:
     )
 
 
+def _default_event_id() -> str | None:
+    """The event an admin almost certainly means when none was specified.
+
+    Prefers the currently open event; falls back to the most recent by year
+    so browsing between events (or after one closes) still lands somewhere
+    useful instead of nowhere.
+    """
+    events = paginate(EVENTS().scan)
+    if not events:
+        return None
+    open_events = [e for e in events if e.get("status") == "open"]
+    if open_events:
+        return open_events[0]["event_id"]
+    return max(events, key=lambda e: int(e["year"]))["event_id"]
+
+
+def _resolve_event_id(request: Request, event_id: str, path: str) -> Response | None:
+    """Redirect to `path` with a sensible event_id filled in when it's missing.
+
+    event_id is a plain query param with no default on every list/checkin
+    route below, all reached via links that always supply it -- but a typed
+    URL, an old bookmark, or an edited address bar on a phone doesn't. Without
+    this, FastAPI's own required-param validation returns a raw JSON 422 that
+    an admin fumbling with their phone at the door has no way to act on.
+    Returns a redirect to follow, or None if event_id was already given.
+    """
+    if event_id:
+        return None
+    default = _default_event_id()
+    if default is None:
+        return _events_page(request, error="No events exist yet. Create one first.")
+    return RedirectResponse(f"{path}?event_id={default}", status_code=303)
+
+
 def _orders_for_event(event_id: str, q: str = "", status: str = "") -> list[dict]:
     orders = paginate(
         ORDERS().query,
@@ -155,7 +189,10 @@ def _get_order_or_404(order_id: str) -> dict:
 
 
 @router.get("/orders")
-def list_orders(request: Request, event_id: str, q: str = "", status: str = "") -> Response:
+def list_orders(request: Request, event_id: str = "", q: str = "", status: str = "") -> Response:
+    redirect = _resolve_event_id(request, event_id, "/admin/orders")
+    if redirect is not None:
+        return redirect
     orders = _orders_for_event(event_id, q, status)
     return templates.TemplateResponse(
         request, "admin/orders.html",
@@ -164,7 +201,12 @@ def list_orders(request: Request, event_id: str, q: str = "", status: str = "") 
 
 
 @router.get("/orders/export")
-def export_orders(event_id: str) -> Response:
+def export_orders(request: Request, event_id: str = "") -> Response:
+    # Redirect to the human-readable page rather than back to /export itself,
+    # so a missing event_id doesn't turn into a download loop.
+    redirect = _resolve_event_id(request, event_id, "/admin/orders")
+    if redirect is not None:
+        return redirect
     orders = _orders_for_event(event_id)
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -256,7 +298,10 @@ def _discount_codes_page(
 
 
 @router.get("/discount-codes")
-def list_discount_codes(request: Request, event_id: str) -> Response:
+def list_discount_codes(request: Request, event_id: str = "") -> Response:
+    redirect = _resolve_event_id(request, event_id, "/admin/discount-codes")
+    if redirect is not None:
+        return redirect
     return _discount_codes_page(request, event_id)
 
 
@@ -325,7 +370,10 @@ def deactivate_discount_code(code: str, event_id: str = Form(...)) -> RedirectRe
 
 
 @router.get("/waitlist")
-def list_waitlist(request: Request, event_id: str) -> Response:
+def list_waitlist(request: Request, event_id: str = "") -> Response:
+    redirect = _resolve_event_id(request, event_id, "/admin/waitlist")
+    if redirect is not None:
+        return redirect
     entries = paginate(WAITLIST().scan, FilterExpression=Attr("event_id").eq(event_id))
     return templates.TemplateResponse(
         request, "admin/waitlist.html", {"entries": entries, "event_id": event_id}
@@ -343,7 +391,10 @@ def notify_waitlist_entry(waitlist_id: str, event_id: str = Form(...)) -> Redire
 
 
 @router.get("/checkin")
-def checkin_page(request: Request, event_id: str) -> Response:
+def checkin_page(request: Request, event_id: str = "") -> Response:
+    redirect = _resolve_event_id(request, event_id, "/admin/checkin")
+    if redirect is not None:
+        return redirect
     return templates.TemplateResponse(request, "admin/checkin.html", {"event_id": event_id})
 
 
