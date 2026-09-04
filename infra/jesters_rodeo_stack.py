@@ -66,6 +66,16 @@ class JestersRodeoStack(Stack):
         secure_param_prefix = f"/jesters-rodeo/{self.stack_name}"
         common_env["SECURE_PARAM_PREFIX"] = secure_param_prefix
 
+        # INFO-level, JSON-formatted logs. At 100-500 tickets/year the volume
+        # is negligible, and mangum's request-level "METHOD path status" line
+        # is what makes a stuck checkout/webhook diagnosable at all from
+        # CloudWatch after the fact.
+        log_settings = dict(
+            logging_format=_lambda.LoggingFormat.JSON,
+            application_log_level_v2=_lambda.ApplicationLogLevel.INFO,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+        )
+
         app_lambda = _lambda.Function(
             self, "AppFunction",
             runtime=_lambda.Runtime.PYTHON_3_12,
@@ -74,6 +84,7 @@ class JestersRodeoStack(Stack):
             timeout=Duration.seconds(15),
             memory_size=512,
             environment=common_env,
+            **log_settings,
         )
         cleanup_lambda = _lambda.Function(
             self, "CleanupFunction",
@@ -83,6 +94,7 @@ class JestersRodeoStack(Stack):
             timeout=Duration.seconds(60),
             memory_size=256,
             environment=common_env,
+            **log_settings,
         )
 
         for table in tables.values():

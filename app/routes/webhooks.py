@@ -177,7 +177,14 @@ async def stripe_webhook(request: Request):
         event = stripe.Webhook.construct_event(
             payload, sig_header, settings.stripe_webhook_secret
         )
-    except Exception:
+    except Exception as exc:
+        # A wrong/rotated stripe_webhook_secret or a delivery from the wrong
+        # Stripe account both land here, and both look identical from the
+        # outside (a bare 400). The exception message ("No signatures found
+        # matching...", "Timestamp outside the tolerance zone", ...) is the
+        # only thing that tells them apart, so it's worth one log line -- just
+        # the message, never the payload or the secret itself.
+        logger.warning("Webhook signature verification failed: %s", exc)
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     handlers = {

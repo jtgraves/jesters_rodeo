@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ from app.pricing import (
     validate_quantity,
 )
 
+logger = logging.getLogger(__name__)
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -179,6 +181,11 @@ def checkout(
             cancel_url=f"{settings.base_url}/",
         )
     except Exception:
+        # Previously swallowed silently: a bad key, a Stripe outage, a
+        # malformed param all looked identical to the customer (bounced back
+        # to the form with a generic message) and left nothing to find in the
+        # logs. Log the traceback so a real cause is diagnosable.
+        logger.exception("stripe.checkout.Session.create failed")
         # Roll back the reservation immediately rather than waiting for the
         # cleanup job — otherwise a Stripe outage burns real capacity.
         _release_capacity(event_id, quantity)
