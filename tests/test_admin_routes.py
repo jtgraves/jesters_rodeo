@@ -820,7 +820,7 @@ def test_update_charity_rejects_bad_website_url(admin_client):
     assert EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"].get("charity_name") is None
 
 
-def test_update_charity_caption_text_form_takes_no_files(admin_client):
+def test_update_charity_uploads_logo_and_banner_images_with_captions(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/charity",
@@ -828,43 +828,39 @@ def test_update_charity_caption_text_form_takes_no_files(admin_client):
             "event_id": "evt_2026", "charity_name": "Habitat NOLA",
             "charity_banner_caption": "Build day", "charity_banner_caption_3": "Ribbon cutting",
         },
+        files={
+            "charity_logo": ("logo.png", b"logo-bytes", "image/png"),
+            "charity_banner_image": ("b1.jpg", b"banner-one", "image/jpeg"),
+            "charity_banner_image_2": ("b2.jpg", b"banner-two", "image/jpeg"),
+            "charity_banner_image_3": ("b3.jpg", b"banner-three", "image/jpeg"),
+        },
         follow_redirects=False,
     )
     assert resp.status_code == 303
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    for field in (
+        "charity_logo_url", "charity_banner_image_url",
+        "charity_banner_image_url_2", "charity_banner_image_url_3",
+    ):
+        assert event[field].startswith("https://event-images-test.s3.")
     assert event["charity_banner_caption"] == "Build day"
     assert event.get("charity_banner_caption_2") is None
     assert event["charity_banner_caption_3"] == "Ribbon cutting"
 
 
-def test_update_charity_image_uploads_one_slot_at_a_time(admin_client):
-    _put_event()
-    for slot, field, blob in (
-        ("logo", "charity_logo_url", b"logo-bytes"),
-        ("banner_1", "charity_banner_image_url", b"b1"),
-        ("banner_2", "charity_banner_image_url_2", b"b2"),
-        ("banner_3", "charity_banner_image_url_3", b"b3"),
-    ):
-        resp = admin_client.post(
-            "/admin/charity/image",
-            data={"event_id": "evt_2026", "slot": slot},
-            files={"image": (f"{slot}.png", blob, "image/png")},
-            follow_redirects=False,
-        )
-        assert resp.status_code == 303
-        event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
-        assert event[field].startswith("https://event-images-test.s3.")
-
-
-def test_update_charity_image_removes_one_slot_and_leaves_others(admin_client):
+def test_update_charity_removes_one_banner_slot_and_leaves_others(admin_client):
     _put_event(
+        charity_name="Habitat NOLA",
         charity_banner_image_url="https://example.com/b1.jpg",
         charity_banner_image_url_2="https://example.com/b2.jpg",
         charity_banner_image_url_3="https://example.com/b3.jpg",
     )
     admin_client.post(
-        "/admin/charity/image",
-        data={"event_id": "evt_2026", "slot": "banner_2", "remove": "1"},
+        "/admin/charity",
+        data={
+            "event_id": "evt_2026", "charity_name": "Habitat NOLA",
+            "remove_charity_banner_image_2": "1",
+        },
         follow_redirects=False,
     )
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
@@ -873,14 +869,20 @@ def test_update_charity_image_removes_one_slot_and_leaves_others(admin_client):
     assert event["charity_banner_image_url_3"] == "https://example.com/b3.jpg"
 
 
-def test_update_charity_image_rejects_unknown_slot(admin_client):
+def test_update_charity_rejects_oversized_image(admin_client):
+    """Client-side JS is the first line of defence; the server still enforces it
+    for anything that gets past the browser."""
     _put_event()
+    oversized = b"x" * (2 * 1024 * 1024 + 1)
     resp = admin_client.post(
-        "/admin/charity/image",
-        data={"event_id": "evt_2026", "slot": "banner_9", "remove": "1"},
+        "/admin/charity",
+        data={"event_id": "evt_2026", "charity_name": "Habitat NOLA"},
+        files={"charity_banner_image": ("big.jpg", oversized, "image/jpeg")},
         follow_redirects=False,
     )
     assert resp.status_code == 400
+    assert "under 2mb" in resp.text.lower()
+    assert EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"].get("charity_banner_image_url") is None
 
 
 def test_orders_export_has_donation_column_not_attendees(admin_client):
