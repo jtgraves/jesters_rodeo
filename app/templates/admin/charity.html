@@ -9,7 +9,7 @@
 <p>Editing the charity info for <strong>{{ event.year }} — {{ event.name }}</strong>.
    It shows on the event page and the public <a href="/charity" target="_blank" rel="noopener">/charity</a> page.</p>
 
-<form method="post" action="/admin/charity" enctype="multipart/form-data" class="event-images-form" id="charity-form">
+<form method="post" action="/admin/charity" enctype="multipart/form-data" class="event-images-form">
   <input type="hidden" name="event_id" value="{{ event_id }}">
   <label>Charity name <input type="text" name="charity_name" value="{{ event.charity_name or '' }}"></label>
   <label>Description <textarea name="charity_description">{{ event.charity_description or '' }}</textarea></label>
@@ -43,37 +43,6 @@
   <button type="submit">Save charity info</button>
 </form>
 
-<script>
-// The request never reaches the app if it's too big -- API Gateway / Lambda
-// reject an oversized upload with a bare 413. Catch it here and tell the admin
-// what's wrong before the form is submitted.
-(function () {
-  var MAX_ONE = 2 * 1024 * 1024;   // per image
-  var MAX_TOTAL = 4 * 1024 * 1024;  // all images in one submit
-  var form = document.getElementById("charity-form");
-  if (!form) return;
-  form.addEventListener("submit", function (e) {
-    var total = 0;
-    var inputs = form.querySelectorAll('input[type="file"]');
-    for (var i = 0; i < inputs.length; i++) {
-      var f = inputs[i].files[0];
-      if (!f) continue;
-      if (f.size > MAX_ONE) {
-        e.preventDefault();
-        alert('"' + f.name + '" is ' + (f.size / 1048576).toFixed(1) +
-              " MB. Each image must be under 2 MB.");
-        return;
-      }
-      total += f.size;
-    }
-    if (total > MAX_TOTAL) {
-      e.preventDefault();
-      alert("Those images add up to " + (total / 1048576).toFixed(1) +
-            " MB, which is too much to upload at once. Keep the combined size " +
-            "under 4 MB (or save fewer images now and the rest afterwards).");
-    }
-  });
-})();
-</script>
+{% include "admin/_image_size_guard.html" %}
 {% endif %}
 {% endblock %}

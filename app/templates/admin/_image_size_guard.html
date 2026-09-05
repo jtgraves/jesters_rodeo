@@ -1,0 +1,33 @@
+<script>
+// An oversized upload is rejected by API Gateway / Lambda with a bare 413
+// before the app ever sees it. Catch it in the browser and say what's wrong.
+// Attaches to every multipart form on the page (event create/edit, charity).
+(function () {
+  var MAX_ONE = 2 * 1024 * 1024;    // per image
+  var MAX_TOTAL = 4 * 1024 * 1024;  // all images in one submit
+  var forms = document.querySelectorAll('form[enctype="multipart/form-data"]');
+  for (var f = 0; f < forms.length; f++) {
+    forms[f].addEventListener("submit", function (e) {
+      var total = 0;
+      var inputs = e.currentTarget.querySelectorAll('input[type="file"]');
+      for (var i = 0; i < inputs.length; i++) {
+        var file = inputs[i].files[0];
+        if (!file) continue;
+        if (file.size > MAX_ONE) {
+          e.preventDefault();
+          alert('"' + file.name + '" is ' + (file.size / 1048576).toFixed(1) +
+                " MB. Each image must be under 2 MB.");
+          return;
+        }
+        total += file.size;
+      }
+      if (total > MAX_TOTAL) {
+        e.preventDefault();
+        alert("Those images add up to " + (total / 1048576).toFixed(1) +
+              " MB, which is too much to upload at once. Keep the combined " +
+              "size under 4 MB (upload fewer now and the rest afterwards).");
+      }
+    });
+  }
+})();
+</script>
