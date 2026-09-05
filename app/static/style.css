@@ -312,8 +312,10 @@ th, td {
      width in practice, which could be far larger than intended. flex-shrink:0
      stops the compact inline form from squeezing it in a tight row. */
   display: block;
-  width: 40px;
-  height: 40px;
+  width: 56px !important;
+  height: 56px !important;
+  max-width: 56px;
+  max-height: 56px;
   flex-shrink: 0;
   object-fit: cover;
   border-radius: var(--radius);

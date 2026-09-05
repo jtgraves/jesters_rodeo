@@ -123,6 +123,20 @@ def test_admin_can_create_event(admin_client):
     assert any(int(e["year"]) == 2027 for e in items)
 
 
+def test_new_event_page_has_the_create_form(admin_client):
+    resp = admin_client.get("/admin/events/new")
+    assert resp.status_code == 200
+    assert 'action="/admin/events"' in resp.text
+    assert 'name="year"' in resp.text
+
+
+def test_events_list_page_has_no_create_form_but_links_to_it(admin_client):
+    _put_event()
+    resp = admin_client.get("/admin/events")
+    assert 'name="year"' not in resp.text  # the create form lives on its own page now
+    assert 'href="/admin/events/new"' in resp.text
+
+
 def test_admin_can_create_event_with_uploaded_images(admin_client):
     resp = admin_client.post(
         "/admin/events",

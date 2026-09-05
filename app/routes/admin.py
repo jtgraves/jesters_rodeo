@@ -14,7 +14,6 @@ from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse, Response
-from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from app.auth import require_admin
@@ -22,10 +21,10 @@ from app.config import settings
 from app.db import ANNOUNCEMENTS, DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST, paginate
 from app.emails import send_confirmation_email
 from app.models import Announcement, DiscountCode, Order, Ticket, normalize_code
+from app.templating import templates
 
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
-templates = Jinja2Templates(directory="app/templates")
 
 CSV_FORMULA_PREFIXES = ("=", "+", "-", "@")
 
@@ -108,9 +107,20 @@ def _events_page(request: Request, error: str | None = None, status_code: int = 
     )
 
 
+def _new_event_page(request: Request, error: str | None = None, status_code: int = 200) -> Response:
+    return templates.TemplateResponse(
+        request, "admin/event_new.html", {"error": error}, status_code=status_code,
+    )
+
+
 @router.get("/events")
 def list_events(request: Request) -> Response:
     return _events_page(request)
+
+
+@router.get("/events/new")
+def new_event_page(request: Request) -> Response:
+    return _new_event_page(request)
 
 
 @router.post("/events")
@@ -134,7 +144,7 @@ def create_event(
     banner_url, banner_error = _maybe_upload_image(banner_image, event_id, "Banner image")
     logo_url, logo_error = _maybe_upload_image(logo_image, event_id, "Logo")
     if banner_error or logo_error:
-        return _events_page(request, error=banner_error or logo_error, status_code=400)
+        return _new_event_page(request, error=banner_error or logo_error, status_code=400)
 
     try:
         EVENTS().put_item(
@@ -159,7 +169,7 @@ def create_event(
         )
     except ClientError as exc:
         if _is_conditional_failure(exc):
-            return _events_page(
+            return _new_event_page(
                 request,
                 error=f"An event for {year} already exists. Edit it instead of re-creating it.",
                 status_code=409,

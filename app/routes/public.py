@@ -10,7 +10,6 @@ import stripe
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.db import DISCOUNT_CODES, EVENTS, ORDERS, WAITLIST, paginate
@@ -21,11 +20,11 @@ from app.pricing import (
     validate_discount_code,
     validate_quantity,
 )
+from app.templating import templates
 
 logger = logging.getLogger(__name__)
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 # Stripe requires checkout session `expires_at` to be at least 30 minutes out;
 # 35 leaves room for clock skew. The cleanup job in Task 11 uses a *longer*
