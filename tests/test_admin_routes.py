@@ -841,6 +841,51 @@ def test_update_charity_uploads_and_removes_logo(admin_client):
     assert event.get("charity_logo_url") is None
 
 
+def test_update_charity_uploads_banner_carousel_images_and_captions(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/charity",
+        data={
+            "event_id": "evt_2026", "charity_name": "Habitat NOLA",
+            "charity_banner_caption": "Build day", "charity_banner_caption_3": "Ribbon cutting",
+        },
+        files={
+            "charity_banner_image": ("b1.jpg", b"banner-one", "image/jpeg"),
+            "charity_banner_image_2": ("b2.jpg", b"banner-two", "image/jpeg"),
+            "charity_banner_image_3": ("b3.jpg", b"banner-three", "image/jpeg"),
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    for field in ("charity_banner_image_url", "charity_banner_image_url_2", "charity_banner_image_url_3"):
+        assert event[field].startswith("https://event-images-test.s3.")
+    assert event["charity_banner_caption"] == "Build day"
+    assert event.get("charity_banner_caption_2") is None
+    assert event["charity_banner_caption_3"] == "Ribbon cutting"
+
+
+def test_update_charity_removes_one_banner_slot_and_leaves_others(admin_client):
+    _put_event(
+        charity_name="Habitat NOLA",
+        charity_banner_image_url="https://example.com/b1.jpg",
+        charity_banner_image_url_2="https://example.com/b2.jpg",
+        charity_banner_image_url_3="https://example.com/b3.jpg",
+    )
+    admin_client.post(
+        "/admin/charity",
+        data={
+            "event_id": "evt_2026", "charity_name": "Habitat NOLA",
+            "remove_charity_banner_image_2": "1",
+        },
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["charity_banner_image_url"] == "https://example.com/b1.jpg"
+    assert event.get("charity_banner_image_url_2") is None
+    assert event["charity_banner_image_url_3"] == "https://example.com/b3.jpg"
+
+
 def test_orders_export_has_donation_column_not_attendees(admin_client):
     _put_order("ord_d", quantity=1, total_cents=17500, donation_cents=2500)
     resp = admin_client.get("/admin/orders/export?event_id=evt_2026")

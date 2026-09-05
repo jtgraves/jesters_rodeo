@@ -282,6 +282,68 @@ img.event-hero { opacity: 0.5; }
 .charity-contact { margin-top: var(--space-2); }
 .charity-contact p { margin: 0.25rem 0; }
 
+/* Clickable, swipeable, JS-free image carousel: a scroll-snap track plus
+   in-page anchor links (arrows + dots) that smooth-scroll each slide into
+   view. Each slide carries an optional caption below the image. */
+.charity-carousel { margin-bottom: var(--space-3); }
+.charity-carousel-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  border-radius: var(--radius);
+}
+.charity-slide {
+  position: relative;
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  margin: 0;
+}
+.charity-slide img {
+  display: block;
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  background: var(--color-surface);
+}
+.charity-slide figcaption {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-muted);
+  text-align: center;
+}
+.charity-carousel-arrow {
+  position: absolute;
+  top: 160px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  text-decoration: none;
+}
+.charity-carousel-arrow.prev { left: var(--space-1); }
+.charity-carousel-arrow.next { right: var(--space-1); }
+.charity-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.charity-carousel-dots a {
+  color: var(--color-border);
+  font-size: 1.4rem;
+  line-height: 1;
+  text-decoration: none;
+}
+.charity-carousel-dots a:hover,
+.charity-carousel-dots a:focus { color: var(--color-accent); }
+
 .ticket-card,
 .register-panel {
   background: var(--color-surface);

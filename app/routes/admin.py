@@ -804,6 +804,15 @@ def update_charity(
     charity_contact_phone: str = Form(""),
     charity_logo: UploadFile | None = File(None),
     remove_charity_logo: str = Form(""),
+    charity_banner_image: UploadFile | None = File(None),
+    charity_banner_image_2: UploadFile | None = File(None),
+    charity_banner_image_3: UploadFile | None = File(None),
+    remove_charity_banner_image: str = Form(""),
+    remove_charity_banner_image_2: str = Form(""),
+    remove_charity_banner_image_3: str = Form(""),
+    charity_banner_caption: str = Form(""),
+    charity_banner_caption_2: str = Form(""),
+    charity_banner_caption_3: str = Form(""),
 ) -> Response:
     website = charity_website_url.strip()
     if website and not website.startswith(("http://", "https://")):
@@ -813,8 +822,12 @@ def update_charity(
         )
 
     logo_url, logo_error = _maybe_upload_image(charity_logo, event_id, "Charity logo")
-    if logo_error:
-        return _charity_page(request, event_id, error=logo_error, status_code=400)
+    banner_1_url, banner_1_err = _maybe_upload_image(charity_banner_image, event_id, "Charity banner")
+    banner_2_url, banner_2_err = _maybe_upload_image(charity_banner_image_2, event_id, "Charity banner")
+    banner_3_url, banner_3_err = _maybe_upload_image(charity_banner_image_3, event_id, "Charity banner")
+    upload_error = logo_error or banner_1_err or banner_2_err or banner_3_err
+    if upload_error:
+        return _charity_page(request, event_id, error=upload_error, status_code=400)
 
     values = {
         "charity_name": charity_name.strip() or None,
@@ -823,11 +836,27 @@ def update_charity(
         "charity_contact_name": charity_contact_name.strip() or None,
         "charity_contact_email": charity_contact_email.strip() or None,
         "charity_contact_phone": charity_contact_phone.strip() or None,
+        # Captions always overwrite: clearing the box clears the caption.
+        "charity_banner_caption": charity_banner_caption.strip() or None,
+        "charity_banner_caption_2": charity_banner_caption_2.strip() or None,
+        "charity_banner_caption_3": charity_banner_caption_3.strip() or None,
     }
     if logo_url:
         values["charity_logo_url"] = logo_url
     elif remove_charity_logo:
         values["charity_logo_url"] = None
+    # A file input can't say "keep the current image", so only touch a banner
+    # slot when a new file came in or Remove was ticked -- mirrors
+    # update_event_images.
+    for field, new_url, remove in (
+        ("charity_banner_image_url", banner_1_url, remove_charity_banner_image),
+        ("charity_banner_image_url_2", banner_2_url, remove_charity_banner_image_2),
+        ("charity_banner_image_url_3", banner_3_url, remove_charity_banner_image_3),
+    ):
+        if new_url:
+            values[field] = new_url
+        elif remove:
+            values[field] = None
 
     EVENTS().update_item(
         Key={"event_id": event_id},

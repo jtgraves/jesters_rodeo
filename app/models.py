@@ -54,6 +54,14 @@ class Event(BaseModel):
     charity_contact_name: str | None = None
     charity_contact_email: str | None = None
     charity_contact_phone: str | None = None
+    # Up to three banner images for the top of the public /charity page,
+    # shown as a clickable carousel; each has an optional caption below it.
+    charity_banner_image_url: str | None = None
+    charity_banner_image_url_2: str | None = None
+    charity_banner_image_url_3: str | None = None
+    charity_banner_caption: str | None = None
+    charity_banner_caption_2: str | None = None
+    charity_banner_caption_3: str | None = None
 
 
 class Order(BaseModel):

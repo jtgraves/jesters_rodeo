@@ -5,6 +5,35 @@
 
 {% block content %}
 {% if event and event.charity_name %}
+{% set slide_data = [
+  {'url': event.charity_banner_image_url, 'caption': event.charity_banner_caption},
+  {'url': event.charity_banner_image_url_2, 'caption': event.charity_banner_caption_2},
+  {'url': event.charity_banner_image_url_3, 'caption': event.charity_banner_caption_3},
+] %}
+{% set slides = slide_data | selectattr('url') | list %}
+{% if slides %}
+<section class="charity-carousel" aria-label="{{ event.charity_name }} photos">
+  <div class="charity-carousel-track">
+    {% for s in slides %}
+    <figure id="charity-slide-{{ loop.index }}" class="charity-slide">
+      <img src="{{ s.url }}" alt="{{ s.caption or event.charity_name }}">
+      {% if slides|length > 1 %}
+      <a class="charity-carousel-arrow prev"
+         href="#charity-slide-{{ loop.length if loop.first else loop.index0 }}" aria-label="Previous">&lsaquo;</a>
+      <a class="charity-carousel-arrow next"
+         href="#charity-slide-{{ 1 if loop.last else loop.index + 1 }}" aria-label="Next">&rsaquo;</a>
+      {% endif %}
+      {% if s.caption %}<figcaption>{{ s.caption }}</figcaption>{% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+  {% if slides|length > 1 %}
+  <div class="charity-carousel-dots">
+    {% for s in slides %}<a href="#charity-slide-{{ loop.index }}" aria-label="Photo {{ loop.index }}">&bull;</a>{% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
 <section class="charity-detail">
   <p class="charity-kicker">This year's event will be benefitting</p>
   {% if event.charity_logo_url %}

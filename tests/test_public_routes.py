@@ -327,6 +327,41 @@ def test_charity_page_is_graceful_when_not_set(dynamodb_tables):
     assert "hasn't been announced" in resp.text
 
 
+def test_charity_page_renders_banner_carousel(dynamodb_tables):
+    _put_event(
+        charity_name="Habitat NOLA",
+        charity_banner_image_url="https://example.com/c1.jpg",
+        charity_banner_caption="Build day 2025",
+        charity_banner_image_url_2="https://example.com/c2.jpg",
+        charity_banner_image_url_3="https://example.com/c3.jpg",
+    )
+    resp = client.get("/charity")
+    assert "charity-carousel" in resp.text
+    for n in (1, 2, 3):
+        assert f'src="https://example.com/c{n}.jpg"' in resp.text
+        assert f'href="#charity-slide-{n}"' in resp.text
+    assert "Build day 2025" in resp.text
+    # wraparound: slide 1's prev points at slide 3, slide 3's next at slide 1
+    assert 'id="charity-slide-1"' in resp.text
+
+
+def test_charity_page_single_banner_has_no_arrows(dynamodb_tables):
+    _put_event(
+        charity_name="Habitat NOLA",
+        charity_banner_image_url="https://example.com/only.jpg",
+    )
+    resp = client.get("/charity")
+    assert 'src="https://example.com/only.jpg"' in resp.text
+    assert "charity-carousel-arrow" not in resp.text
+    assert "charity-carousel-dots" not in resp.text
+
+
+def test_charity_page_no_carousel_without_banner_images(dynamodb_tables):
+    _put_event(charity_name="Habitat NOLA")
+    resp = client.get("/charity")
+    assert "charity-carousel" not in resp.text
+
+
 def test_event_page_links_to_charity_when_set(dynamodb_tables):
     _put_event(charity_name="Habitat NOLA", charity_logo_url="https://example.com/charity.png")
     resp = client.get("/")
