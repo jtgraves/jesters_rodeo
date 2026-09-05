@@ -53,7 +53,7 @@
 {% block footer %}
 <div class="mobile-cta-bar">
   <span>${{ "%.2f"|format(event.ticket_price_cents / 100) }}</span>
-  <a href="#tickets" class="mobile-cta-link">Get Tickets</a>
+  <a href="/register?event_id={{ event.event_id }}" class="mobile-cta-link">Get Tickets</a>
 </div>
 {{ super() }}
 {% endblock %}
