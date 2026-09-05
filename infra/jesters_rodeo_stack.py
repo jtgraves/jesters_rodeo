@@ -167,6 +167,18 @@ class JestersRodeoStack(Stack):
         announcement_lambda.grant_invoke(app_lambda)
         images_bucket.grant_write(app_lambda)
 
+        # The admin "Administrators" page manages Cognito users in this pool.
+        app_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "cognito-idp:ListUsers",
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminDeleteUser",
+                ],
+                resources=[user_pool.user_pool_arn],
+            )
+        )
+
         for function in (app_lambda, cleanup_lambda):
             function.add_to_role_policy(
                 iam.PolicyStatement(

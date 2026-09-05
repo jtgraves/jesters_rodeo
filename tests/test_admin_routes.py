@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 
 from app import auth
@@ -695,3 +696,98 @@ def test_list_announcements_defaults_event_id(admin_client):
     resp = admin_client.get("/admin/announcements", follow_redirects=False)
     assert resp.status_code == 303
     assert resp.headers["location"] == "/admin/announcements?event_id=evt_2026"
+
+
+# ---- Administrators (Cognito users) ----
+
+_FAKE_ADMINS = [
+    {"username": "admin-1", "email": "me@example.com", "status": "CONFIRMED", "created": None},
+    {"username": "sub-2", "email": "other@example.com", "status": "FORCE_CHANGE_PASSWORD",
+     "created": None},
+]
+
+
+def test_administrators_page_lists_admins(admin_client):
+    with patch("app.routes.admin._list_admins", return_value=_FAKE_ADMINS):
+        resp = admin_client.get("/admin/administrators")
+    assert resp.status_code == 200
+    assert "me@example.com" in resp.text
+    assert "other@example.com" in resp.text
+    # The current admin can't remove their own row.
+    assert 'action="/admin/administrators/sub-2/delete"' in resp.text
+    assert 'action="/admin/administrators/admin-1/delete"' not in resp.text
+
+
+def test_create_administrator_calls_cognito(admin_client):
+    with patch("app.routes.admin._list_admins", return_value=[]), \
+         patch("app.routes.admin._create_admin") as mock_create:
+        resp = admin_client.post(
+            "/admin/administrators", data={"email": "  new@example.com "},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/administrators"
+    mock_create.assert_called_once_with("new@example.com")
+
+
+def test_create_administrator_rejects_blank_email(admin_client):
+    with patch("app.routes.admin._list_admins", return_value=[]), \
+         patch("app.routes.admin._create_admin") as mock_create:
+        resp = admin_client.post(
+            "/admin/administrators", data={"email": "   "}, follow_redirects=False
+        )
+    assert resp.status_code == 400
+    assert "Email is required." in resp.text
+    mock_create.assert_not_called()
+
+
+def test_create_administrator_handles_duplicate(admin_client):
+    err = ClientError(
+        {"Error": {"Code": "UsernameExistsException", "Message": "exists"}},
+        "AdminCreateUser",
+    )
+    with patch("app.routes.admin._list_admins", return_value=[]), \
+         patch("app.routes.admin._create_admin", side_effect=err):
+        resp = admin_client.post(
+            "/admin/administrators", data={"email": "dupe@example.com"},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 400
+    assert "already an admin" in resp.text
+
+
+def test_create_administrator_handles_invalid_email(admin_client):
+    err = ClientError(
+        {"Error": {"Code": "InvalidParameterException", "Message": "bad"}},
+        "AdminCreateUser",
+    )
+    with patch("app.routes.admin._list_admins", return_value=[]), \
+         patch("app.routes.admin._create_admin", side_effect=err):
+        resp = admin_client.post(
+            "/admin/administrators", data={"email": "not-an-email"},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 400
+    assert "valid email address" in resp.text
+
+
+def test_delete_administrator_calls_cognito(admin_client):
+    with patch("app.routes.admin._list_admins", return_value=[]), \
+         patch("app.routes.admin._delete_admin") as mock_delete:
+        resp = admin_client.post(
+            "/admin/administrators/sub-2/delete", follow_redirects=False
+        )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/administrators"
+    mock_delete.assert_called_once_with("sub-2")
+
+
+def test_delete_administrator_blocks_self(admin_client):
+    with patch("app.routes.admin._list_admins", return_value=_FAKE_ADMINS), \
+         patch("app.routes.admin._delete_admin") as mock_delete:
+        resp = admin_client.post(
+            "/admin/administrators/admin-1/delete", follow_redirects=False
+        )
+    assert resp.status_code == 400
+    assert "your own admin account" in resp.text
+    mock_delete.assert_not_called()

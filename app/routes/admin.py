@@ -754,3 +754,102 @@ def create_announcement(
     ANNOUNCEMENTS().put_item(Item=item)
     _invoke_announcement_lambda(announcement_id)
     return RedirectResponse(f"/admin/announcements?event_id={event_id}", status_code=303)
+
+
+# ---- Administrators (Cognito users) ----
+
+def _cognito():
+    return boto3.client("cognito-idp", region_name=settings.aws_region)
+
+
+def _list_admins() -> list[dict]:
+    users = _cognito().list_users(UserPoolId=settings.cognito_user_pool_id).get("Users", [])
+    admins = []
+    for u in users:
+        attrs = {a["Name"]: a["Value"] for a in u.get("Attributes", [])}
+        admins.append({
+            # Username is the opaque sub on this pool (sign-in is by email alias).
+            "username": u["Username"],
+            "email": attrs.get("email", u["Username"]),
+            "status": u.get("UserStatus", ""),
+            "created": u.get("UserCreateDate"),
+        })
+    admins.sort(key=lambda a: a["email"].lower())
+    return admins
+
+
+def _create_admin(email: str) -> None:
+    # No temporary password / no SUPPRESS: Cognito emails the invitation with a
+    # generated password, and the new admin sets a real one on first sign-in --
+    # the same flow the first admin went through.
+    _cognito().admin_create_user(
+        UserPoolId=settings.cognito_user_pool_id,
+        Username=email,
+        UserAttributes=[
+            {"Name": "email", "Value": email},
+            {"Name": "email_verified", "Value": "true"},
+        ],
+    )
+
+
+def _delete_admin(username: str) -> None:
+    _cognito().admin_delete_user(
+        UserPoolId=settings.cognito_user_pool_id, Username=username
+    )
+
+
+def _administrators_page(
+    request: Request, current_sub: str, error: str | None = None, status_code: int = 200
+) -> Response:
+    return templates.TemplateResponse(
+        request, "admin/administrators.html",
+        {"admins": _list_admins(), "current_sub": current_sub, "error": error},
+        status_code=status_code,
+    )
+
+
+@router.get("/administrators")
+def list_administrators(
+    request: Request, current_admin: dict = Depends(require_admin)
+) -> Response:
+    return _administrators_page(request, current_admin.get("sub"))
+
+
+@router.post("/administrators")
+def create_administrator(
+    request: Request,
+    current_admin: dict = Depends(require_admin),
+    email: str = Form(...),
+) -> Response:
+    email = email.strip()
+    if not email:
+        return _administrators_page(
+            request, current_admin.get("sub"), error="Email is required.", status_code=400
+        )
+    try:
+        _create_admin(email)
+    except ClientError as exc:
+        code = exc.response["Error"]["Code"]
+        if code == "UsernameExistsException":
+            msg = "There's already an admin with that email."
+        elif code in ("InvalidParameterException", "InvalidEmailRoleAccessPolicyException"):
+            msg = "That doesn't look like a valid email address."
+        else:
+            raise
+        return _administrators_page(request, current_admin.get("sub"), error=msg, status_code=400)
+    return RedirectResponse("/admin/administrators", status_code=303)
+
+
+@router.post("/administrators/{username}/delete")
+def delete_administrator(
+    request: Request,
+    username: str,
+    current_admin: dict = Depends(require_admin),
+) -> Response:
+    if username == current_admin.get("sub"):
+        return _administrators_page(
+            request, current_admin.get("sub"),
+            error="You can't remove your own admin account.", status_code=400,
+        )
+    _delete_admin(username)
+    return RedirectResponse("/admin/administrators", status_code=303)
