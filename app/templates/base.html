@@ -7,7 +7,21 @@
 <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
-{% block nav %}{% endblock %}
+{% block nav %}
+<header class="site-nav">
+  <div class="site-nav-bar">
+    <a class="brand" href="/">Jester's Rodeo</a>
+    {# Pure-CSS hamburger: a checkbox + label toggle the menu, no JS
+       (same pattern as the admin nav). #}
+    <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox">
+    <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">☰</label>
+    <nav class="nav-links">
+      <a href="/">Event</a>
+      <a href="/charity">Charity</a>
+    </nav>
+  </div>
+</header>
+{% endblock %}
 {% block full_width %}{% endblock %}
 <main class="page">
 {% block content %}{% endblock %}

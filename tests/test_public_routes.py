@@ -371,6 +371,21 @@ def test_event_page_links_to_charity_when_set(dynamodb_tables):
     assert 'src="https://example.com/charity.png"' in resp.text
 
 
+def test_public_pages_have_a_nav_between_event_and_charity(dynamodb_tables):
+    _put_event(charity_name="Habitat NOLA")
+    for path in ("/", "/charity", "/register?event_id=evt_2026"):
+        resp = client.get(path)
+        assert 'class="site-nav"' in resp.text, path
+        assert 'href="/charity">Charity</a>' in resp.text, path
+        assert 'href="/">Event</a>' in resp.text, path
+
+
+def test_no_event_page_still_has_the_nav(dynamodb_tables):
+    resp = client.get("/")
+    assert "no event" in resp.text.lower() or "not currently open" in resp.text.lower()
+    assert 'class="site-nav"' in resp.text
+
+
 def test_event_page_has_no_charity_section_when_unset(dynamodb_tables):
     _put_event()
     resp = client.get("/")
