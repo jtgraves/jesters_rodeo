@@ -277,8 +277,15 @@ th, td {
   align-items: center;
 }
 .event-image-preview {
-  max-height: 48px;
-  max-width: 96px;
+  /* Fixed width AND height (not max-*): a preview thumbnail must render at
+     this size regardless of the uploaded image's native resolution. Relying
+     on max-width/max-height alone left it sized by the label's flex-stretch
+     width in practice, which could be far larger than intended. flex-shrink:0
+     stops the compact inline form from squeezing it in a tight row. */
+  display: block;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
   object-fit: cover;
   border-radius: var(--radius);
   border: 1px solid var(--color-border);

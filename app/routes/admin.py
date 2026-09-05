@@ -215,6 +215,29 @@ def update_event_images(
     return RedirectResponse("/admin/events", status_code=303)
 
 
+@router.post("/events/{event_id}/details")
+def update_event_details(
+    request: Request,
+    event_id: str,
+    name: str = Form(...),
+    description: str = Form(...),
+    location: str = Form(...),
+) -> Response:
+    name, description, location = name.strip(), description.strip(), location.strip()
+    if not name or not description or not location:
+        return _events_page(
+            request, error="Name, description, and location can't be empty.", status_code=400
+        )
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        # name and location are both DynamoDB reserved words, hence the aliases.
+        UpdateExpression="SET #n = :n, description = :d, #l = :l",
+        ExpressionAttributeNames={"#n": "name", "#l": "location"},
+        ExpressionAttributeValues={":n": name, ":d": description, ":l": location},
+    )
+    return RedirectResponse("/admin/events", status_code=303)
+
+
 @router.post("/events/{event_id}/banner")
 def update_event_banner(
     event_id: str,

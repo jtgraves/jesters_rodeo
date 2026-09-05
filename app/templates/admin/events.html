@@ -11,6 +11,12 @@
     <a href="/admin/checkin?event_id={{ e.event_id }}">Check-in</a>
     <form method="post" action="/admin/events/{{ e.event_id }}/open" style="display:inline"><button>Open</button></form>
     <form method="post" action="/admin/events/{{ e.event_id }}/close" style="display:inline"><button>Close</button></form>
+    <form method="post" action="/admin/events/{{ e.event_id }}/details" class="event-images-form">
+      <label>Name <input type="text" name="name" value="{{ e.name }}" required></label>
+      <label>Location <input type="text" name="location" value="{{ e.location }}" required></label>
+      <label>Description <textarea name="description" required>{{ e.description }}</textarea></label>
+      <button type="submit">Save details</button>
+    </form>
     <form method="post" action="/admin/events/{{ e.event_id }}/images" enctype="multipart/form-data" class="event-images-form">
       <label>
         {% if e.banner_image_url %}<img src="{{ e.banner_image_url }}" alt="" class="event-image-preview"><br>{% endif %}

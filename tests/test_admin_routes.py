@@ -215,6 +215,39 @@ def test_admin_events_page_shows_current_image_preview(admin_client):
     assert "event-image-preview" in resp.text
 
 
+def test_admin_can_edit_event_details(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "New Name", "description": "New description.", "location": "Baton Rouge"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["name"] == "New Name"
+    assert event["description"] == "New description."
+    assert event["location"] == "Baton Rouge"
+
+
+def test_admin_edit_event_details_rejects_blank_fields(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "  ", "description": "New description.", "location": "Baton Rouge"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["name"] == "Test"  # unchanged
+
+
+def test_admin_events_page_prefills_details_form(admin_client):
+    _put_event(name="Existing Name", location="Existing Location")
+    resp = admin_client.get("/admin/events")
+    assert 'value="Existing Name"' in resp.text
+    assert 'value="Existing Location"' in resp.text
+
+
 def test_admin_can_set_event_banner(admin_client):
     _put_event()
     resp = admin_client.post(
