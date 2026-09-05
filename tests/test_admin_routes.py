@@ -49,7 +49,7 @@ def _put_ticket(ticket_id, event_id="evt_2026", **overrides):
 def _put_order(order_id="ord_1", **overrides):
     item = {
         "order_id": order_id, "event_id": "evt_2026", "buyer_name": "Jane",
-        "buyer_email": "jane@example.com", "attendees": [{"name": "Jane"}, {"name": None}],
+        "buyer_email": "jane@example.com",
         "quantity": 2, "unit_price_cents": 15000, "total_cents": 30000,
         "status": "paid", "created_at": "2026-01-01T00:00:00Z", "discount_code": None,
         "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
@@ -601,7 +601,7 @@ def test_orders_page_never_puts_a_buyer_name_in_a_js_string(admin_client):
 
 
 def test_orders_export_returns_csv(admin_client):
-    _put_order("ord_csv", quantity=1, attendees=[{"name": "Jane"}], total_cents=15000)
+    _put_order("ord_csv", quantity=1, total_cents=15000)
     resp = admin_client.get("/admin/orders/export?event_id=evt_2026")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/csv")
@@ -753,6 +753,100 @@ def test_list_announcements_defaults_event_id(admin_client):
     resp = admin_client.get("/admin/announcements", follow_redirects=False)
     assert resp.status_code == 303
     assert resp.headers["location"] == "/admin/announcements?event_id=evt_2026"
+
+
+# ---- Charity benefit ----
+
+def test_charity_admin_page_defaults_event_id(admin_client):
+    _put_event(status="open")
+    resp = admin_client.get("/admin/charity", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/charity?event_id=evt_2026"
+
+
+def test_charity_admin_page_shows_current_values(admin_client):
+    _put_event(charity_name="Habitat NOLA", charity_website_url="https://habitat.example")
+    resp = admin_client.get("/admin/charity?event_id=evt_2026")
+    assert resp.status_code == 200
+    assert "Habitat NOLA" in resp.text
+    assert "https://habitat.example" in resp.text
+
+
+def test_update_charity_saves_fields(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/charity",
+        data={
+            "event_id": "evt_2026",
+            "charity_name": "  Habitat NOLA  ",
+            "charity_description": "We build homes.",
+            "charity_website_url": "https://habitat.example",
+            "charity_contact_name": "Pat",
+            "charity_contact_email": "pat@habitat.example",
+            "charity_contact_phone": "5045551234",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/charity?event_id=evt_2026"
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["charity_name"] == "Habitat NOLA"
+    assert event["charity_description"] == "We build homes."
+    assert event["charity_website_url"] == "https://habitat.example"
+    assert event["charity_contact_email"] == "pat@habitat.example"
+
+
+def test_update_charity_clears_blank_fields(admin_client):
+    _put_event(charity_name="Old Name", charity_contact_name="Old Pat")
+    admin_client.post(
+        "/admin/charity",
+        data={"event_id": "evt_2026", "charity_name": "", "charity_contact_name": ""},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("charity_name") is None
+    assert event.get("charity_contact_name") is None
+
+
+def test_update_charity_rejects_bad_website_url(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/charity",
+        data={"event_id": "evt_2026", "charity_name": "X", "charity_website_url": "habitat.example"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    assert "http://" in resp.text
+    assert EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"].get("charity_name") is None
+
+
+def test_update_charity_uploads_and_removes_logo(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/charity",
+        data={"event_id": "evt_2026", "charity_name": "Habitat NOLA"},
+        files={"charity_logo": ("logo.png", b"fake-png-bytes", "image/png")},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["charity_logo_url"].startswith("https://event-images-test.s3.")
+
+    admin_client.post(
+        "/admin/charity",
+        data={"event_id": "evt_2026", "charity_name": "Habitat NOLA", "remove_charity_logo": "1"},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("charity_logo_url") is None
+
+
+def test_orders_export_has_donation_column_not_attendees(admin_client):
+    _put_order("ord_d", quantity=1, total_cents=17500, donation_cents=2500)
+    resp = admin_client.get("/admin/orders/export?event_id=evt_2026")
+    assert "donation_usd" in resp.text
+    assert "attendee_names" not in resp.text
+    assert "25.00" in resp.text
 
 
 # ---- Administrators (Cognito users) ----

@@ -23,7 +23,7 @@ def _put_event(**overrides):
 def _checkout(**overrides):
     data = {
         "event_id": "evt_2026", "quantity": "2", "buyer_name": "Jane Doe",
-        "buyer_email": "jane@example.com", "attendee_names": "", "discount_code": "",
+        "buyer_email": "jane@example.com", "discount_code": "",
     }
     data.update(overrides)
     return client.post("/checkout", data=data, follow_redirects=False)
@@ -247,6 +247,113 @@ def test_checkout_charges_the_discounted_total_not_the_subtotal(mock_create, dyn
     order = ORDERS().scan()["Items"][0]
     assert int(order["total_cents"]) == 24000
     assert order["discount_code"] == "MEMBER20", "codes are stored normalized"
+
+
+@patch("app.routes.public.stripe.checkout.Session.create")
+def test_checkout_adds_donation_as_a_second_line_item(mock_create, dynamodb_tables):
+    _put_event(charity_name="Habitat NOLA")
+    mock_create.return_value = _stripe_session()
+
+    resp = _checkout(quantity="2", donation_dollars="25")
+
+    assert resp.status_code == 303
+    _, kwargs = mock_create.call_args
+    items = kwargs["line_items"]
+    assert len(items) == 2
+    assert items[0]["price_data"]["unit_amount"] == 30000  # tickets only
+    assert items[1]["price_data"]["unit_amount"] == 2500
+    assert items[1]["price_data"]["product_data"]["name"] == "Donation to Habitat NOLA"
+
+    order = ORDERS().scan()["Items"][0]
+    assert int(order["donation_cents"]) == 2500
+    assert int(order["total_cents"]) == 32500
+
+
+@patch("app.routes.public.stripe.checkout.Session.create")
+def test_checkout_without_donation_has_one_line_item(mock_create, dynamodb_tables):
+    _put_event()
+    mock_create.return_value = _stripe_session()
+
+    resp = _checkout(quantity="1", donation_dollars="")
+
+    assert resp.status_code == 303
+    _, kwargs = mock_create.call_args
+    assert len(kwargs["line_items"]) == 1
+    assert int(ORDERS().scan()["Items"][0]["donation_cents"]) == 0
+
+
+@patch("app.routes.public.stripe.checkout.Session.create")
+def test_checkout_rejects_fractional_donation(mock_create, dynamodb_tables):
+    _put_event()
+    resp = _checkout(quantity="1", donation_dollars="25.50")
+
+    assert resp.status_code == 200
+    assert "whole dollar" in resp.text.lower()
+    mock_create.assert_not_called()
+    assert ORDERS().scan()["Items"] == []
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert int(event["tickets_sold_count"]) == 0, "a rejected order reserves nothing"
+
+
+@patch("app.routes.public.stripe.checkout.Session.create")
+def test_checkout_rejects_negative_donation(mock_create, dynamodb_tables):
+    _put_event()
+    resp = _checkout(quantity="1", donation_dollars="-5")
+
+    assert resp.status_code == 200
+    assert "negative" in resp.text.lower()
+    mock_create.assert_not_called()
+
+
+def test_charity_page_shows_charity_when_set(dynamodb_tables):
+    _put_event(
+        charity_name="Habitat NOLA",
+        charity_description="We build homes.",
+        charity_website_url="https://habitat.example",
+        charity_contact_email="hi@habitat.example",
+    )
+    resp = client.get("/charity")
+    assert resp.status_code == 200
+    assert "Habitat NOLA" in resp.text
+    assert "We build homes." in resp.text
+    assert 'href="https://habitat.example"' in resp.text
+    assert "hi@habitat.example" in resp.text
+
+
+def test_charity_page_is_graceful_when_not_set(dynamodb_tables):
+    _put_event()
+    resp = client.get("/charity")
+    assert resp.status_code == 200
+    assert "hasn't been announced" in resp.text
+
+
+def test_event_page_links_to_charity_when_set(dynamodb_tables):
+    _put_event(charity_name="Habitat NOLA", charity_logo_url="https://example.com/charity.png")
+    resp = client.get("/")
+    assert "This year's event will be benefitting" in resp.text
+    assert 'href="/charity"' in resp.text
+    assert "more information about Habitat NOLA" in resp.text
+    assert 'src="https://example.com/charity.png"' in resp.text
+
+
+def test_event_page_has_no_charity_section_when_unset(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "This year's event will be benefitting" not in resp.text
+
+
+def test_confirmation_page_shows_whole_dollar_donation(dynamodb_tables):
+    _put_event()
+    ORDERS().put_item(Item={
+        "order_id": "ord_c", "event_id": "evt_2026", "buyer_name": "Jane",
+        "buyer_email": "jane@example.com", "quantity": 1, "unit_price_cents": 15000,
+        "discount_code": None, "donation_cents": 2500, "total_cents": 17500,
+        "status": "paid", "created_at": "2026-01-01T00:00:00Z",
+        "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
+    })
+    resp = client.get("/order/ord_c/confirmation")
+    assert resp.status_code == 200
+    assert "$25 donation" in resp.text
 
 
 @patch("app.routes.public.stripe.checkout.Session.create")

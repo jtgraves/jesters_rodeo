@@ -101,6 +101,12 @@ def event_page(request: Request):
     return _event_page(request, event, None)
 
 
+@router.get("/charity")
+def charity_page(request: Request):
+    event = _find_open_event()
+    return templates.TemplateResponse(request, "charity.html", {"event": event})
+
+
 @router.get("/register")
 def register_page(request: Request, event_id: str = ""):
     event = EVENTS().get_item(Key={"event_id": event_id}).get("Item") if event_id else None
@@ -116,7 +122,7 @@ def checkout(
     quantity: int = Form(...),
     buyer_name: str = Form(...),
     buyer_email: str = Form(...),
-    attendee_names: str = Form(""),
+    donation_dollars: str = Form(""),
     discount_code: str = Form(""),
 ):
     event = EVENTS().get_item(Key={"event_id": event_id}).get("Item")
@@ -132,6 +138,18 @@ def checkout(
     valid, err = validate_quantity(quantity, remaining)
     if not valid:
         return _register_page(request, event, err)
+
+    # Whole dollars only. Parsed before any capacity is reserved, so a bad
+    # value just re-renders the form with nothing to roll back.
+    donation_cents = 0
+    if donation_dollars.strip():
+        try:
+            donation_dollars_int = int(donation_dollars.strip())
+        except ValueError:
+            return _register_page(request, event, "Enter your donation as a whole dollar amount.")
+        if donation_dollars_int < 0:
+            return _register_page(request, event, "A donation can't be negative.")
+        donation_cents = donation_dollars_int * 100
 
     # Resolve the discount code BEFORE reserving capacity, so a rejected code
     # never leaves a phantom reservation behind.
@@ -153,12 +171,8 @@ def checkout(
         fresh = EVENTS().get_item(Key={"event_id": event_id}).get("Item", event)
         return _register_page(request, fresh, "Sorry — those tickets were just claimed.")
 
-    total = compute_total(unit_price, quantity, code_obj)
-
-    names = [n.strip() for n in attendee_names.splitlines() if n.strip()]
-    attendees: list[dict[str, Any]] = [
-        {"name": names[i] if i < len(names) else None} for i in range(quantity)
-    ]
+    ticket_total = compute_total(unit_price, quantity, code_obj)
+    total = ticket_total + donation_cents
 
     order_id = f"ord_{uuid.uuid4().hex}"
     ORDERS().put_item(Item={
@@ -166,10 +180,10 @@ def checkout(
         "event_id": event_id,
         "buyer_name": buyer_name,
         "buyer_email": buyer_email,
-        "attendees": attendees,
         "quantity": quantity,
         "unit_price_cents": unit_price,
         "discount_code": code_obj.code if code_obj else None,
+        "donation_cents": donation_cents,
         "total_cents": total,
         "stripe_checkout_session_id": None,
         "stripe_payment_intent_id": None,
@@ -178,22 +192,35 @@ def checkout(
     })
 
     ticket_word = "ticket" if quantity == 1 else "tickets"
+    # ONE line item priced at the recomputed ticket total. Sending
+    # unit_amount=unit_price with quantity=N would charge the undiscounted
+    # subtotal while the order records the discount.
+    line_items = [{
+        "price_data": {
+            "currency": "usd",
+            "product_data": {"name": f"{event['name']} — {quantity} {ticket_word}"},
+            "unit_amount": ticket_total,
+        },
+        "quantity": 1,
+    }]
+    if donation_cents:
+        charity = event.get("charity_name")
+        line_items.append({
+            "price_data": {
+                "currency": "usd",
+                "product_data": {
+                    "name": f"Donation to {charity}" if charity else "Donation",
+                },
+                "unit_amount": donation_cents,
+            },
+            "quantity": 1,
+        })
     try:
         session = stripe.checkout.Session.create(
             mode="payment",
             payment_method_types=["card"],
             customer_email=buyer_email,
-            # ONE line item priced at the recomputed total. Sending
-            # unit_amount=unit_price with quantity=N would charge the
-            # undiscounted subtotal while the order records the discount.
-            line_items=[{
-                "price_data": {
-                    "currency": "usd",
-                    "product_data": {"name": f"{event['name']} — {quantity} {ticket_word}"},
-                    "unit_amount": total,
-                },
-                "quantity": 1,
-            }],
+            line_items=line_items,
             metadata={"order_id": order_id},
             expires_at=int(time.time()) + RESERVATION_TTL_MINUTES * 60,
             success_url=f"{settings.base_url}/order/{order_id}/confirmation",

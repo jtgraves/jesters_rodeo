@@ -45,6 +45,15 @@ class Event(BaseModel):
     contact_name: str | None = None
     contact_email: str | None = None
     contact_phone: str | None = None
+    # The charity this event benefits. Managed per-event on the admin Charity
+    # page; surfaced on the public event page and the /charity page.
+    charity_name: str | None = None
+    charity_description: str | None = None
+    charity_website_url: str | None = None
+    charity_logo_url: str | None = None
+    charity_contact_name: str | None = None
+    charity_contact_email: str | None = None
+    charity_contact_phone: str | None = None
 
 
 class Order(BaseModel):
@@ -52,10 +61,13 @@ class Order(BaseModel):
     event_id: str
     buyer_name: str
     buyer_email: str
-    attendees: list[dict]
     quantity: int
     unit_price_cents: int
     discount_code: str | None = None
+    # An optional whole-dollar donation to the event's charity, charged as a
+    # separate Stripe line item. Stored in cents for consistency with every
+    # other money field; always a multiple of 100.
+    donation_cents: int = 0
     total_cents: int
     stripe_checkout_session_id: str | None = None
     stripe_payment_intent_id: str | None = None

@@ -409,14 +409,13 @@ def export_orders(request: Request, event_id: str = "") -> Response:
     writer = csv.writer(buf)
     writer.writerow([
         "order_id", "buyer_name", "buyer_email", "quantity",
-        "total_usd", "status", "created_at", "attendee_names",
+        "donation_usd", "total_usd", "status", "created_at",
     ])
     for o in orders:
-        attendees = "; ".join(a.get("name") or "" for a in o["attendees"])
         writer.writerow([
             o["order_id"], _csv_safe(o["buyer_name"]), _csv_safe(o["buyer_email"]),
-            int(o["quantity"]), _format_cents(int(o["total_cents"])), o["status"],
-            o["created_at"], _csv_safe(attendees),
+            int(o["quantity"]), _format_cents(int(o.get("donation_cents", 0))),
+            _format_cents(int(o["total_cents"])), o["status"], o["created_at"],
         ])
     return Response(
         content=buf.getvalue(),
@@ -770,6 +769,72 @@ def create_announcement(
     ANNOUNCEMENTS().put_item(Item=item)
     _invoke_announcement_lambda(announcement_id)
     return RedirectResponse(f"/admin/announcements?event_id={event_id}", status_code=303)
+
+
+# ---- Charity benefit (per-event) ----
+
+def _charity_page(
+    request: Request, event_id: str, error: str | None = None, status_code: int = 200
+) -> Response:
+    event = EVENTS().get_item(Key={"event_id": event_id}).get("Item")
+    return templates.TemplateResponse(
+        request, "admin/charity.html",
+        {"event": event, "event_id": event_id, "error": error},
+        status_code=status_code,
+    )
+
+
+@router.get("/charity")
+def charity_admin_page(request: Request, event_id: str = "") -> Response:
+    redirect = _resolve_event_id(request, event_id, "/admin/charity")
+    if redirect is not None:
+        return redirect
+    return _charity_page(request, event_id)
+
+
+@router.post("/charity")
+def update_charity(
+    request: Request,
+    event_id: str = Form(...),
+    charity_name: str = Form(""),
+    charity_description: str = Form(""),
+    charity_website_url: str = Form(""),
+    charity_contact_name: str = Form(""),
+    charity_contact_email: str = Form(""),
+    charity_contact_phone: str = Form(""),
+    charity_logo: UploadFile | None = File(None),
+    remove_charity_logo: str = Form(""),
+) -> Response:
+    website = charity_website_url.strip()
+    if website and not website.startswith(("http://", "https://")):
+        return _charity_page(
+            request, event_id,
+            error="The website link must start with http:// or https://.", status_code=400,
+        )
+
+    logo_url, logo_error = _maybe_upload_image(charity_logo, event_id, "Charity logo")
+    if logo_error:
+        return _charity_page(request, event_id, error=logo_error, status_code=400)
+
+    values = {
+        "charity_name": charity_name.strip() or None,
+        "charity_description": charity_description.strip() or None,
+        "charity_website_url": website or None,
+        "charity_contact_name": charity_contact_name.strip() or None,
+        "charity_contact_email": charity_contact_email.strip() or None,
+        "charity_contact_phone": charity_contact_phone.strip() or None,
+    }
+    if logo_url:
+        values["charity_logo_url"] = logo_url
+    elif remove_charity_logo:
+        values["charity_logo_url"] = None
+
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        UpdateExpression="SET " + ", ".join(f"{k} = :{k}" for k in values),
+        ExpressionAttributeValues={f":{k}": v for k, v in values.items()},
+    )
+    return RedirectResponse(f"/admin/charity?event_id={event_id}", status_code=303)
 
 
 # ---- Administrators (Cognito users) ----

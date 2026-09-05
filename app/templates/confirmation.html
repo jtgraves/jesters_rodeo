@@ -6,6 +6,7 @@
 {% else %}
 <h1>Order {{ order.status }}</h1>
 <p>Buyer: {{ order.buyer_name }}</p>
+{% if order.donation_cents %}<p>Includes a ${{ order.donation_cents // 100 }} donation. Thank you!</p>{% endif %}
 <p>Total: ${{ "%.2f"|format(order.total_cents / 100) }}</p>
 {% if order.status == "paid" %}
   <p>Check your email for your tickets.</p>

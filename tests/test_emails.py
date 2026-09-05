@@ -27,7 +27,6 @@ def _order(quantity: int = 2) -> Order:
         event_id="evt_2026",
         buyer_name="Jane Doe",
         buyer_email="jane@example.com",
-        attendees=[{"name": "Jane Doe"}, {"name": None}][:quantity],
         quantity=quantity,
         unit_price_cents=15000,
         total_cents=15000 * quantity,

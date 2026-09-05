@@ -32,7 +32,7 @@ def ses_backend(dynamodb_tables):
 def _put_order(order_id, email, status="paid", **overrides):
     item = {
         "order_id": order_id, "event_id": "evt_2026", "buyer_name": "Jane",
-        "buyer_email": email, "attendees": [{"name": "Jane"}],
+        "buyer_email": email,
         "quantity": 1, "unit_price_cents": 15000, "total_cents": 15000,
         "status": status, "created_at": "2026-01-01T00:00:00Z", "discount_code": None,
         "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",

@@ -22,7 +22,7 @@ def _stripe_event(order_id: str, event_type: str = "checkout.session.completed")
 def _put_order(order_id: str, **overrides) -> None:
     item = {
         "order_id": order_id, "event_id": "evt_2026", "buyer_name": "Jane",
-        "buyer_email": "jane@example.com", "attendees": [{"name": "Jane"}, {"name": None}],
+        "buyer_email": "jane@example.com",
         "quantity": 2, "unit_price_cents": 15000, "total_cents": 30000,
         "status": "pending", "created_at": "2026-01-01T00:00:00Z",
         "discount_code": None, "stripe_checkout_session_id": "cs_test_123",
@@ -60,8 +60,8 @@ def test_webhook_marks_order_paid_and_creates_tickets(mock_construct, dynamodb_t
     assert order["stripe_payment_intent_id"] == "pi_test_456"
 
     tickets = TICKETS().scan()["Items"]
-    assert len(tickets) == 2
-    assert {t["attendee_name"] for t in tickets} == {"Jane", None}
+    assert len(tickets) == 2  # one per ticket in quantity
+    assert all(t["attendee_name"] is None for t in tickets)
     assert all(t["voided"] is False for t in tickets)
     mock_email.assert_called_once()
 
@@ -97,7 +97,7 @@ def test_webhook_delivered_twice_fulfils_exactly_once(mock_construct, dynamodb_t
         second = _post_webhook()
 
     assert first.status_code == 200 and second.status_code == 200
-    assert len(TICKETS().scan()["Items"]) == 2, "2 attendees, not 4"
+    assert len(TICKETS().scan()["Items"]) == 2, "quantity of 2, not doubled by the retry"
     assert mock_email.call_count == 1
 
 
@@ -108,8 +108,7 @@ def test_webhook_increments_discount_code_usage(mock_construct, dynamodb_tables)
         "code": "MEMBER20", "event_id": "evt_2026", "discount_type": "percent",
         "discount_value": 20, "max_uses": None, "uses_count": 3, "active": True,
     })
-    _put_order("ord_3", quantity=1, attendees=[{"name": "Jane"}],
-               total_cents=12000, discount_code="MEMBER20")
+    _put_order("ord_3", quantity=1, total_cents=12000, discount_code="MEMBER20")
     mock_construct.return_value = _stripe_event("ord_3")
 
     with patch("app.routes.webhooks.send_confirmation_email"):

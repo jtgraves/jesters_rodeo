@@ -101,12 +101,12 @@ def _handle_completed(session: dict) -> None:
 
 def _fulfill(order_id: str, order_item: dict) -> None:
     tickets: list[Ticket] = []
-    for attendee in order_item["attendees"]:
+    for _ in range(int(order_item["quantity"])):
         ticket_item = {
             "ticket_id": generate_ticket_id(),
             "order_id": order_id,
             "event_id": order_item["event_id"],
-            "attendee_name": attendee.get("name"),
+            "attendee_name": None,
             "checked_in": False,
             "checked_in_at": None,
             "voided": False,

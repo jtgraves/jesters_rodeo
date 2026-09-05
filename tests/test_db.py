@@ -17,13 +17,12 @@ def test_event_defaults():
     assert event.status == "draft"
 
 
-def test_order_attendees_list():
+def test_order_defaults():
     order = Order(
         order_id="ord_1",
         event_id="evt_2026",
         buyer_name="Jane Doe",
         buyer_email="jane@example.com",
-        attendees=[{"name": "Jane Doe"}, {"name": None}],
         quantity=2,
         unit_price_cents=15000,
         discount_code=None,
@@ -33,7 +32,7 @@ def test_order_attendees_list():
         created_at="2026-01-01T00:00:00Z",
     )
     assert order.status == "pending"
-    assert len(order.attendees) == 2
+    assert order.donation_cents == 0
 
 
 from app.db import EVENTS, WAITLIST, paginate

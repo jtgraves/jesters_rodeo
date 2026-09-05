@@ -1,0 +1,29 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Charity benefit</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+{% if not event %}
+<p>That event no longer exists.</p>
+{% else %}
+<p>Editing the charity info for <strong>{{ event.year }} — {{ event.name }}</strong>.
+   It shows on the event page and the public <a href="/charity" target="_blank" rel="noopener">/charity</a> page.</p>
+
+<form method="post" action="/admin/charity" enctype="multipart/form-data" class="event-images-form">
+  <input type="hidden" name="event_id" value="{{ event_id }}">
+  <label>Charity name <input type="text" name="charity_name" value="{{ event.charity_name or '' }}"></label>
+  <label>Description <textarea name="charity_description">{{ event.charity_description or '' }}</textarea></label>
+  <label>Website link <input type="url" name="charity_website_url" placeholder="https://..."
+         value="{{ event.charity_website_url or '' }}"></label>
+  <label>Contact name <input type="text" name="charity_contact_name" value="{{ event.charity_contact_name or '' }}"></label>
+  <label>Contact email <input type="email" name="charity_contact_email" value="{{ event.charity_contact_email or '' }}"></label>
+  <label>Contact phone <input type="tel" name="charity_contact_phone" value="{{ event.charity_contact_phone or '' }}"></label>
+  <label>
+    {% if event.charity_logo_url %}<img src="{{ event.charity_logo_url }}" alt="" class="event-image-preview"><br>{% endif %}
+    Logo <input type="file" name="charity_logo" accept="image/jpeg,image/png,image/gif,image/webp">
+  </label>
+  {% if event.charity_logo_url %}<label><input type="checkbox" name="remove_charity_logo" value="1"> Remove logo</label>{% endif %}
+  <button type="submit">Save charity info</button>
+</form>
+{% endif %}
+{% endblock %}

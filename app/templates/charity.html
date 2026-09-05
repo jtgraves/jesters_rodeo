@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}
+{% if event and event.charity_name %}{{ event.charity_name }}{% else %}Our charity partner{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if event and event.charity_name %}
+<section class="charity-detail">
+  <p class="charity-kicker">This year's event will be benefitting</p>
+  {% if event.charity_logo_url %}
+  <img class="charity-detail-logo" src="{{ event.charity_logo_url }}" alt="{{ event.charity_name }}">
+  {% endif %}
+  <h1>{{ event.charity_name }}</h1>
+
+  {% if event.charity_description %}
+  <p class="charity-description">{{ event.charity_description }}</p>
+  {% endif %}
+
+  {% if event.charity_website_url %}
+  <p><a href="{{ event.charity_website_url }}" target="_blank" rel="noopener">
+    Visit {{ event.charity_name }}'s website
+  </a></p>
+  {% endif %}
+
+  {% if event.charity_contact_name or event.charity_contact_email or event.charity_contact_phone %}
+  <div class="charity-contact">
+    <h2>Contact</h2>
+    {% if event.charity_contact_name %}<p>{{ event.charity_contact_name }}</p>{% endif %}
+    {% if event.charity_contact_email %}
+    <p><a href="mailto:{{ event.charity_contact_email }}">{{ event.charity_contact_email }}</a></p>
+    {% endif %}
+    {% if event.charity_contact_phone %}
+    <p><a href="tel:{{ event.charity_contact_phone }}">{{ event.charity_contact_phone | phone }}</a></p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <p><a href="/">← Back to the event</a></p>
+</section>
+{% else %}
+<h1>Our charity partner hasn't been announced yet.</h1>
+<p>Check back soon. <a href="/">Back to the event</a></p>
+{% endif %}
+{% endblock %}

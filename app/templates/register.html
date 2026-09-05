@@ -21,7 +21,11 @@
     <label>Quantity <input type="number" name="quantity" value="1" min="1" max="20" required></label>
     <label>Your name <input type="text" name="buyer_name" required></label>
     <label>Your email <input type="email" name="buyer_email" required></label>
-    <label>Additional attendee names (one per line, optional)<textarea name="attendee_names"></textarea></label>
+    <label>
+      {% if event.charity_name %}Donation to {{ event.charity_name }}{% else %}Donation{% endif %}
+      (optional, whole dollars)
+      <input type="number" name="donation_dollars" min="0" step="1" inputmode="numeric" placeholder="0">
+    </label>
     <label>Discount code (optional) <input type="text" name="discount_code"></label>
     <button type="submit">Register</button>
   </form>

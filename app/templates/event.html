@@ -29,6 +29,16 @@
   </aside>
 </div>
 
+{% if event.charity_name %}
+<section class="event-charity">
+  <h2>This year's event will be benefitting</h2>
+  {% if event.charity_logo_url %}
+  <img class="event-charity-logo" src="{{ event.charity_logo_url }}" alt="{{ event.charity_name }}">
+  {% endif %}
+  <p><a href="/charity">Click here for more information about {{ event.charity_name }}</a></p>
+</section>
+{% endif %}
+
 {% set map_query = event.address or event.location %}
 {% if map_query %}
 <section class="event-map">
