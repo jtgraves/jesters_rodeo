@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 import stripe
-from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
@@ -36,8 +35,17 @@ RESERVATION_TTL_MINUTES = 35
 
 
 def _find_open_event() -> dict | None:
-    events = paginate(EVENTS().scan, FilterExpression=Attr("status").eq("open"))
-    return events[0] if events else None
+    events = paginate(EVENTS().scan)
+    open_events = [e for e in events if e.get("status") == "open"]
+    if open_events:
+        return open_events[0]
+    # A cancelled event's banner must stay visible even after registration is
+    # closed -- otherwise "Close" silently hides the notice instead of
+    # communicating it.
+    banner_events = [e for e in events if e.get("banner_message")]
+    if banner_events:
+        return max(banner_events, key=lambda e: int(e["year"]))
+    return None
 
 
 def _reserve_capacity(event_id: str, quantity: int, capacity: int) -> bool:

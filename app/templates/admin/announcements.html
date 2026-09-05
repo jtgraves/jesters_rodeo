@@ -1,0 +1,27 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Announcements</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/admin/announcements">
+  <input type="hidden" name="event_id" value="{{ event_id }}">
+  <label><input type="checkbox" name="audience" value="attendees"> Ticket buyers</label>
+  <label><input type="checkbox" name="audience" value="waitlist"> Waitlist</label>
+  <input name="subject" placeholder="Subject" required>
+  <textarea name="body" placeholder="Message" required></textarea>
+  <button type="submit">Send announcement</button>
+</form>
+<div class="table-scroll">
+<table>
+<tr><th>Subject</th><th>Audience</th><th>Status</th><th>Sent</th><th>Created</th></tr>
+{% for a in announcements %}
+<tr>
+  <td>{{ a.subject }}</td>
+  <td>{{ a.audience | join(", ") }}</td>
+  <td>{{ a.status }}{% if a.error %} ({{ a.error }}){% endif %}</td>
+  <td>{{ a.sent_count }}{% if a.recipient_count is not none %} / {{ a.recipient_count }}{% endif %}</td>
+  <td>{{ a.created_at }}</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+{% endblock %}

@@ -31,6 +31,10 @@ class Event(BaseModel):
     # Pasted URLs, not uploads -- the admin hosts these wherever they like.
     banner_image_url: str | None = None
     logo_url: str | None = None
+    # A site-wide notice (e.g. cancellation) shown above the hero regardless
+    # of registration_open/status -- see _find_open_event's banner fallback.
+    banner_message: str | None = None
+    banner_style: Literal["notice", "urgent"] = "notice"
 
 
 class Order(BaseModel):
@@ -82,3 +86,16 @@ class WaitlistEntry(BaseModel):
     requested_quantity: int
     created_at: str
     notified: bool = False
+
+
+class Announcement(BaseModel):
+    announcement_id: str
+    event_id: str
+    subject: str
+    body: str
+    audience: list[Literal["attendees", "waitlist"]]
+    status: Literal["queued", "sending", "sent", "failed"] = "queued"
+    recipient_count: int | None = None
+    sent_count: int = 0
+    error: str | None = None
+    created_at: str

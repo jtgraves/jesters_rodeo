@@ -18,10 +18,14 @@ class Settings(BaseSettings):
     tickets_table: str
     discount_codes_table: str
     waitlist_table: str
+    announcements_table: str
     ses_sender_email: str
     cognito_user_pool_id: str
     cognito_app_client_id: str
     cognito_domain: str = ""
+    # Only read when an admin actually sends an announcement, so local dev
+    # and tests that never exercise that path don't need it set.
+    announcement_lambda_name: str = ""
     session_cookie_name: str = "jr_session"
     session_secret: str = "dev-only-insecure-secret"
     aws_region: str = "us-east-1"

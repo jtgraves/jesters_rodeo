@@ -16,6 +16,16 @@
       <label>Logo URL <input type="url" name="logo_url" value="{{ e.logo_url or '' }}" placeholder="https://..."></label>
       <button type="submit">Save images</button>
     </form>
+    <form method="post" action="/admin/events/{{ e.event_id }}/banner" class="event-images-form">
+      <label>Banner message <textarea name="banner_message" placeholder="e.g. This event has been cancelled...">{{ e.banner_message or '' }}</textarea></label>
+      <label>Style
+        <select name="banner_style">
+          <option value="notice" {% if e.banner_style != "urgent" %}selected{% endif %}>Notice</option>
+          <option value="urgent" {% if e.banner_style == "urgent" %}selected{% endif %}>Cancelled/Urgent</option>
+        </select>
+      </label>
+      <button type="submit">Save banner</button>
+    </form>
   </li>
 {% endfor %}
 </ul>

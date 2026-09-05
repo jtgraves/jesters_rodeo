@@ -159,6 +159,16 @@ th, td {
 
 /* ---- Event page: hero, header, two-column ticket layout ---- */
 
+.event-banner {
+  padding: var(--space-2);
+  text-align: center;
+  font-weight: 600;
+  color: var(--color-accent-contrast);
+  white-space: pre-line;
+}
+.event-banner--notice { background: var(--color-warn); }
+.event-banner--urgent { background: var(--color-danger); }
+
 .event-hero {
   display: block;
   width: 100%;

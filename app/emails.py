@@ -75,3 +75,23 @@ def send_confirmation_email(order: Order, tickets: list[Ticket]) -> None:
         Source=settings.ses_sender_email,
         RawMessage={"Data": msg.as_string().encode("utf-8")},
     )
+
+
+def send_announcement_email(to_email: str, subject: str, body: str) -> None:
+    """A plain admin-composed blast -- no attachments, so unlike the
+    confirmation email this needs only multipart/alternative, not a related
+    part nesting it.
+    """
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = settings.ses_sender_email
+    msg["To"] = to_email
+
+    html_body = escape(body).replace("\n", "<br>")
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+    msg.attach(MIMEText(f"<html><body>{html_body}</body></html>", "html", "utf-8"))
+
+    _ses().send_raw_email(
+        Source=settings.ses_sender_email,
+        RawMessage={"Data": msg.as_string().encode("utf-8")},
+    )

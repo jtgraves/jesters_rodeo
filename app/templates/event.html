@@ -2,6 +2,9 @@
 {% block title %}{{ event.name }}{% endblock %}
 
 {% block full_width %}
+{% if event.banner_message %}
+<div class="event-banner event-banner--{{ event.banner_style or 'notice' }}" role="alert">{{ event.banner_message }}</div>
+{% endif %}
 {% if event.banner_image_url %}
 <img class="event-hero" src="{{ event.banner_image_url }}" alt="">
 {% else %}

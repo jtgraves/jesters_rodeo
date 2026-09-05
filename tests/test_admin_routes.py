@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app import auth
 from app.config import settings
-from app.db import DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST
+from app.db import ANNOUNCEMENTS, DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST
 from app.main import app
 
 
@@ -168,6 +168,41 @@ def test_admin_events_page_shows_current_image_urls_in_form(admin_client):
     _put_event(banner_image_url="https://example.com/b.jpg")
     resp = admin_client.get("/admin/events")
     assert 'value="https://example.com/b.jpg"' in resp.text
+
+
+def test_admin_can_set_event_banner(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/banner",
+        data={"banner_message": "This event has been cancelled.", "banner_style": "urgent"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["banner_message"] == "This event has been cancelled."
+    assert event["banner_style"] == "urgent"
+
+
+def test_admin_can_clear_event_banner(admin_client):
+    _put_event(banner_message="Old notice", banner_style="urgent")
+    admin_client.post(
+        "/admin/events/evt_2026/banner",
+        data={"banner_message": "", "banner_style": "notice"},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("banner_message") is None
+
+
+def test_admin_banner_style_falls_back_to_notice_for_bad_input(admin_client):
+    _put_event()
+    admin_client.post(
+        "/admin/events/evt_2026/banner",
+        data={"banner_message": "Heads up", "banner_style": "not-a-real-style"},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["banner_style"] == "notice"
 
 
 def test_creating_an_event_for_an_existing_year_is_refused(admin_client):
@@ -416,3 +451,59 @@ def test_waitlist_notify_marks_entry(admin_client):
     admin_client.post("/admin/waitlist/wl_1/notify", data={"event_id": "evt_2026"},
                       follow_redirects=False)
     assert WAITLIST().get_item(Key={"waitlist_id": "wl_1"})["Item"]["notified"] is True
+
+
+@patch("app.routes.admin._invoke_announcement_lambda")
+def test_create_announcement_writes_queued_item_and_invokes_lambda_async(mock_invoke, admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/announcements",
+        data={"event_id": "evt_2026", "subject": "Update", "body": "Details.",
+              "audience": ["attendees"]},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/announcements?event_id=evt_2026"
+
+    items = ANNOUNCEMENTS().scan()["Items"]
+    assert len(items) == 1
+    assert items[0]["status"] == "queued"
+    assert items[0]["subject"] == "Update"
+    assert items[0]["audience"] == ["attendees"]
+
+    mock_invoke.assert_called_once_with(items[0]["announcement_id"])
+
+
+@patch("app.routes.admin._invoke_announcement_lambda")
+def test_create_announcement_rejects_no_audience(mock_invoke, admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/announcements",
+        data={"event_id": "evt_2026", "subject": "Update", "body": "Details."},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    assert "at least one audience" in resp.text.lower()
+    assert ANNOUNCEMENTS().scan()["Items"] == []
+    mock_invoke.assert_not_called()
+
+
+@patch("app.routes.admin._invoke_announcement_lambda")
+def test_create_announcement_rejects_empty_subject_or_body(mock_invoke, admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/announcements",
+        data={"event_id": "evt_2026", "subject": "  ", "body": "Details.",
+              "audience": ["waitlist"]},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    assert ANNOUNCEMENTS().scan()["Items"] == []
+    mock_invoke.assert_not_called()
+
+
+def test_list_announcements_defaults_event_id(admin_client):
+    _put_event(status="open")
+    resp = admin_client.get("/admin/announcements", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/announcements?event_id=evt_2026"

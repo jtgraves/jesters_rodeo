@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import boto3
 import stripe
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
@@ -15,9 +18,9 @@ from pydantic import ValidationError
 
 from app.auth import require_admin
 from app.config import settings
-from app.db import DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST, paginate
+from app.db import ANNOUNCEMENTS, DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST, paginate
 from app.emails import send_confirmation_email
-from app.models import DiscountCode, Order, Ticket, normalize_code
+from app.models import Announcement, DiscountCode, Order, Ticket, normalize_code
 
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
@@ -138,6 +141,25 @@ def update_event_images(
         ExpressionAttributeValues={
             ":b": banner_image_url.strip() or None,
             ":l": logo_url.strip() or None,
+        },
+    )
+    return RedirectResponse("/admin/events", status_code=303)
+
+
+@router.post("/events/{event_id}/banner")
+def update_event_banner(
+    event_id: str,
+    banner_message: str = Form(""),
+    banner_style: str = Form("notice"),
+) -> RedirectResponse:
+    # No condition needed: cosmetic metadata, not capacity/status. A blank
+    # message clears the banner.
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        UpdateExpression="SET banner_message = :m, banner_style = :s",
+        ExpressionAttributeValues={
+            ":m": banner_message.strip() or None,
+            ":s": banner_style if banner_style in ("notice", "urgent") else "notice",
         },
     )
     return RedirectResponse("/admin/events", status_code=303)
@@ -471,3 +493,69 @@ def checkin_ticket(ticket_id: str, event_id: str) -> JSONResponse:
         raise
 
     return JSONResponse({"status": "checked_in", "attendee_name": ticket["attendee_name"]})
+
+
+def _invoke_announcement_lambda(announcement_id: str) -> None:
+    boto3.client("lambda", region_name=settings.aws_region).invoke(
+        FunctionName=settings.announcement_lambda_name,
+        InvocationType="Event",
+        Payload=json.dumps({"announcement_id": announcement_id}).encode("utf-8"),
+    )
+
+
+def _announcements_page(
+    request: Request, event_id: str, error: str | None = None, status_code: int = 200
+) -> Response:
+    items = paginate(ANNOUNCEMENTS().scan, FilterExpression=Attr("event_id").eq(event_id))
+    items.sort(key=lambda a: a["created_at"], reverse=True)
+    return templates.TemplateResponse(
+        request, "admin/announcements.html",
+        {"announcements": items, "event_id": event_id, "error": error},
+        status_code=status_code,
+    )
+
+
+@router.get("/announcements")
+def list_announcements(request: Request, event_id: str = "") -> Response:
+    redirect = _resolve_event_id(request, event_id, "/admin/announcements")
+    if redirect is not None:
+        return redirect
+    return _announcements_page(request, event_id)
+
+
+@router.post("/announcements")
+def create_announcement(
+    request: Request,
+    event_id: str = Form(...),
+    subject: str = Form(...),
+    body: str = Form(...),
+    audience: list[str] = Form([]),
+) -> Response:
+    subject, body = subject.strip(), body.strip()
+    if not audience:
+        return _announcements_page(
+            request, event_id, error="Pick at least one audience.", status_code=400
+        )
+    if not subject or not body:
+        return _announcements_page(
+            request, event_id, error="Subject and message can't be empty.", status_code=400
+        )
+
+    announcement_id = f"ann_{uuid.uuid4().hex}"
+    item = {
+        "announcement_id": announcement_id, "event_id": event_id,
+        "subject": subject, "body": body, "audience": audience,
+        "status": "queued", "recipient_count": None, "sent_count": 0,
+        "error": None, "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # Same "validate with the model that reads it back" guard as discount
+    # codes: a tampered/malformed audience value gets a friendly 400 instead
+    # of an unhandled 500 from pydantic.
+    try:
+        Announcement(**item)
+    except ValidationError:
+        return _announcements_page(request, event_id, error="Invalid announcement.", status_code=400)
+
+    ANNOUNCEMENTS().put_item(Item=item)
+    _invoke_announcement_lambda(announcement_id)
+    return RedirectResponse(f"/admin/announcements?event_id={event_id}", status_code=303)

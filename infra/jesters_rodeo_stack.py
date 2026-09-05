@@ -53,6 +53,7 @@ class JestersRodeoStack(Stack):
             "TICKETS_TABLE": tables["tickets"].table_name,
             "DISCOUNT_CODES_TABLE": tables["discount_codes"].table_name,
             "WAITLIST_TABLE": tables["waitlist"].table_name,
+            "ANNOUNCEMENTS_TABLE": tables["announcements"].table_name,
             "SES_SENDER_EMAIL": sender_email,
             "COGNITO_USER_POOL_ID": user_pool.user_pool_id,
             "COGNITO_APP_CLIENT_ID": user_pool_client.user_pool_client_id,
@@ -76,6 +77,31 @@ class JestersRodeoStack(Stack):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
         )
 
+        # Deliberately not common_env: this function has no use for Stripe/
+        # session secrets, so SECURE_PARAM_PREFIX is omitted and app.config's
+        # _load_secure_params() short-circuits at cold start -- no SSM/KMS
+        # grant needed for it below.
+        announcement_env = {k: v for k, v in common_env.items() if k != "SECURE_PARAM_PREFIX"}
+
+        # Built before app_lambda: app_lambda's environment needs
+        # announcement_lambda.function_name inline, so the Python object must
+        # already exist. This is a plain name-binding requirement, not a CDK
+        # circular-dependency concern -- cross-resource references resolve at
+        # synth/deploy time regardless of construct declaration order.
+        announcement_lambda = _lambda.Function(
+            self, "AnnouncementFunction",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler="scripts.send_announcement.handler",
+            code=self._bundled_code(),
+            # One-by-one SES sends; ~500 recipients worst case is well inside
+            # this. No pagination/resumability at this scale -- a deliberate
+            # limit, not an oversight.
+            timeout=Duration.minutes(5),
+            memory_size=256,
+            environment=announcement_env,
+            **log_settings,
+        )
+
         app_lambda = _lambda.Function(
             self, "AppFunction",
             runtime=_lambda.Runtime.PYTHON_3_12,
@@ -83,7 +109,7 @@ class JestersRodeoStack(Stack):
             code=self._bundled_code(),
             timeout=Duration.seconds(15),
             memory_size=512,
-            environment=common_env,
+            environment={**common_env, "ANNOUNCEMENT_LAMBDA_NAME": announcement_lambda.function_name},
             **log_settings,
         )
         cleanup_lambda = _lambda.Function(
@@ -102,13 +128,20 @@ class JestersRodeoStack(Stack):
         tables["orders"].grant_read_write_data(cleanup_lambda)
         tables["events"].grant_read_write_data(cleanup_lambda)
 
-        app_lambda.add_to_role_policy(
-            iam.PolicyStatement(
-                actions=["ses:SendRawEmail"],
-                resources=["*"],
-                conditions={"StringEquals": {"ses:FromAddress": sender_email}},
+        tables["announcements"].grant_read_write_data(announcement_lambda)
+        tables["orders"].grant_read_data(announcement_lambda)
+        tables["waitlist"].grant_read_data(announcement_lambda)
+
+        for function in (app_lambda, announcement_lambda):
+            function.add_to_role_policy(
+                iam.PolicyStatement(
+                    actions=["ses:SendRawEmail"],
+                    resources=["*"],
+                    conditions={"StringEquals": {"ses:FromAddress": sender_email}},
+                )
             )
-        )
+
+        announcement_lambda.grant_invoke(app_lambda)
 
         for function in (app_lambda, cleanup_lambda):
             function.add_to_role_policy(
@@ -243,12 +276,19 @@ class JestersRodeoStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.RETAIN,
         )
+        announcements_table = dynamodb.Table(
+            self, "AnnouncementsTable",
+            partition_key=dynamodb.Attribute(name="announcement_id", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
         return {
             "events": events_table,
             "orders": orders_table,
             "tickets": tickets_table,
             "discount_codes": discount_codes_table,
             "waitlist": waitlist_table,
+            "announcements": announcements_table,
         }
 
     def _create_auth(self, domain_prefix: str, site_url: str):

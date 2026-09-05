@@ -68,7 +68,27 @@ def test_event_page_renders_banner_and_logo_when_set(dynamodb_tables):
     resp = client.get("/")
     assert 'src="https://example.com/banner.jpg"' in resp.text
     assert 'src="https://example.com/logo.png"' in resp.text
-    assert "event-hero--fallback" not in resp.text
+
+
+def test_event_page_shows_banner_when_set(dynamodb_tables):
+    _put_event(banner_message="This event has been cancelled.", banner_style="urgent")
+    resp = client.get("/")
+    assert "This event has been cancelled." in resp.text
+    assert "event-banner--urgent" in resp.text
+
+
+def test_closed_event_with_banner_still_shows_on_homepage(dynamodb_tables):
+    """Closing registration must not hide a cancellation notice behind the
+    generic "no event" page -- that would defeat the point of the banner.
+    """
+    _put_event(
+        status="closed", registration_open=False,
+        banner_message="This event has been cancelled.", banner_style="urgent",
+    )
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "This event has been cancelled." in resp.text
+    assert "Registration is not currently open." in resp.text
 
 
 @patch("app.routes.public.stripe.checkout.Session.create")

@@ -70,3 +70,7 @@ def DISCOUNT_CODES() -> Any:
 
 def WAITLIST() -> Any:
     return get_table(settings.waitlist_table)
+
+
+def ANNOUNCEMENTS() -> Any:
+    return get_table(settings.announcements_table)
