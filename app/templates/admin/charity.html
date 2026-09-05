@@ -9,7 +9,7 @@
 <p>Editing the charity info for <strong>{{ event.year }} — {{ event.name }}</strong>.
    It shows on the event page and the public <a href="/charity" target="_blank" rel="noopener">/charity</a> page.</p>
 
-<form method="post" action="/admin/charity" enctype="multipart/form-data" class="event-images-form">
+<form method="post" action="/admin/charity" class="event-images-form">
   <input type="hidden" name="event_id" value="{{ event_id }}">
   <label>Charity name <input type="text" name="charity_name" value="{{ event.charity_name or '' }}"></label>
   <label>Description <textarea name="charity_description">{{ event.charity_description or '' }}</textarea></label>
@@ -18,29 +18,37 @@
   <label>Contact name <input type="text" name="charity_contact_name" value="{{ event.charity_contact_name or '' }}"></label>
   <label>Contact email <input type="email" name="charity_contact_email" value="{{ event.charity_contact_email or '' }}"></label>
   <label>Contact phone <input type="tel" name="charity_contact_phone" value="{{ event.charity_contact_phone or '' }}"></label>
-  <label>
-    {% if event.charity_logo_url %}<img src="{{ event.charity_logo_url }}" alt="" class="event-image-preview"><br>{% endif %}
-    Logo <input type="file" name="charity_logo" accept="image/jpeg,image/png,image/gif,image/webp">
-  </label>
-  {% if event.charity_logo_url %}<label><input type="checkbox" name="remove_charity_logo" value="1"> Remove logo</label>{% endif %}
-
   <fieldset>
-    <legend>Charity page banner carousel (up to 3 images)</legend>
+    <legend>Carousel captions</legend>
     {% for n in ['', '_2', '_3'] %}
-    {% set img = event['charity_banner_image_url' ~ n] %}
-    <label>
-      {% if img %}<img src="{{ img }}" alt="" class="event-image-preview"><br>{% endif %}
-      Image {{ loop.index }}
-      <input type="file" name="charity_banner_image{{ n }}" accept="image/jpeg,image/png,image/gif,image/webp">
-    </label>
     <label>Caption {{ loop.index }}
       <input type="text" name="charity_banner_caption{{ n }}" value="{{ event['charity_banner_caption' ~ n] or '' }}">
     </label>
-    {% if img %}<label><input type="checkbox" name="remove_charity_banner_image{{ n }}" value="1"> Remove image {{ loop.index }}</label>{% endif %}
     {% endfor %}
   </fieldset>
-
   <button type="submit">Save charity info</button>
 </form>
+
+<h2>Images</h2>
+<p>Uploaded one at a time (keeps each upload small enough for the server).</p>
+
+{% set slots = [
+  ('logo', 'Logo', event.charity_logo_url),
+  ('banner_1', 'Carousel image 1', event.charity_banner_image_url),
+  ('banner_2', 'Carousel image 2', event.charity_banner_image_url_2),
+  ('banner_3', 'Carousel image 3', event.charity_banner_image_url_3),
+] %}
+{% for slot, label, current in slots %}
+<form method="post" action="/admin/charity/image" enctype="multipart/form-data" class="event-images-form">
+  <input type="hidden" name="event_id" value="{{ event_id }}">
+  <input type="hidden" name="slot" value="{{ slot }}">
+  <label>
+    {% if current %}<img src="{{ current }}" alt="" class="event-image-preview"><br>{% endif %}
+    {{ label }} <input type="file" name="image" accept="image/jpeg,image/png,image/gif,image/webp">
+  </label>
+  {% if current %}<label><input type="checkbox" name="remove" value="1"> Remove</label>{% endif %}
+  <button type="submit">Save {{ label|lower }}</button>
+</form>
+{% endfor %}
 {% endif %}
 {% endblock %}

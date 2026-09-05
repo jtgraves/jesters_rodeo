@@ -792,6 +792,23 @@ def charity_admin_page(request: Request, event_id: str = "") -> Response:
     return _charity_page(request, event_id)
 
 
+def _write_charity_values(event_id: str, values: dict[str, Any]) -> None:
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        UpdateExpression="SET " + ", ".join(f"{k} = :{k}" for k in values),
+        ExpressionAttributeValues={f":{k}": v for k, v in values.items()},
+    )
+
+
+# slot name (from the form) -> the Event attribute it writes.
+CHARITY_IMAGE_SLOTS = {
+    "logo": "charity_logo_url",
+    "banner_1": "charity_banner_image_url",
+    "banner_2": "charity_banner_image_url_2",
+    "banner_3": "charity_banner_image_url_3",
+}
+
+
 @router.post("/charity")
 def update_charity(
     request: Request,
@@ -802,18 +819,13 @@ def update_charity(
     charity_contact_name: str = Form(""),
     charity_contact_email: str = Form(""),
     charity_contact_phone: str = Form(""),
-    charity_logo: UploadFile | None = File(None),
-    remove_charity_logo: str = Form(""),
-    charity_banner_image: UploadFile | None = File(None),
-    charity_banner_image_2: UploadFile | None = File(None),
-    charity_banner_image_3: UploadFile | None = File(None),
-    remove_charity_banner_image: str = Form(""),
-    remove_charity_banner_image_2: str = Form(""),
-    remove_charity_banner_image_3: str = Form(""),
     charity_banner_caption: str = Form(""),
     charity_banner_caption_2: str = Form(""),
     charity_banner_caption_3: str = Form(""),
 ) -> Response:
+    # Text only. Images are uploaded one per request via /charity/image below,
+    # so that a form with the logo + three 2MB banners can't blow past API
+    # Gateway's / Lambda's request-payload limit (a 413 to the admin).
     website = charity_website_url.strip()
     if website and not website.startswith(("http://", "https://")):
         return _charity_page(
@@ -821,15 +833,7 @@ def update_charity(
             error="The website link must start with http:// or https://.", status_code=400,
         )
 
-    logo_url, logo_error = _maybe_upload_image(charity_logo, event_id, "Charity logo")
-    banner_1_url, banner_1_err = _maybe_upload_image(charity_banner_image, event_id, "Charity banner")
-    banner_2_url, banner_2_err = _maybe_upload_image(charity_banner_image_2, event_id, "Charity banner")
-    banner_3_url, banner_3_err = _maybe_upload_image(charity_banner_image_3, event_id, "Charity banner")
-    upload_error = logo_error or banner_1_err or banner_2_err or banner_3_err
-    if upload_error:
-        return _charity_page(request, event_id, error=upload_error, status_code=400)
-
-    values = {
+    _write_charity_values(event_id, {
         "charity_name": charity_name.strip() or None,
         "charity_description": charity_description.strip() or None,
         "charity_website_url": website or None,
@@ -840,29 +844,30 @@ def update_charity(
         "charity_banner_caption": charity_banner_caption.strip() or None,
         "charity_banner_caption_2": charity_banner_caption_2.strip() or None,
         "charity_banner_caption_3": charity_banner_caption_3.strip() or None,
-    }
-    if logo_url:
-        values["charity_logo_url"] = logo_url
-    elif remove_charity_logo:
-        values["charity_logo_url"] = None
-    # A file input can't say "keep the current image", so only touch a banner
-    # slot when a new file came in or Remove was ticked -- mirrors
-    # update_event_images.
-    for field, new_url, remove in (
-        ("charity_banner_image_url", banner_1_url, remove_charity_banner_image),
-        ("charity_banner_image_url_2", banner_2_url, remove_charity_banner_image_2),
-        ("charity_banner_image_url_3", banner_3_url, remove_charity_banner_image_3),
-    ):
-        if new_url:
-            values[field] = new_url
-        elif remove:
-            values[field] = None
+    })
+    return RedirectResponse(f"/admin/charity?event_id={event_id}", status_code=303)
 
-    EVENTS().update_item(
-        Key={"event_id": event_id},
-        UpdateExpression="SET " + ", ".join(f"{k} = :{k}" for k in values),
-        ExpressionAttributeValues={f":{k}": v for k, v in values.items()},
-    )
+
+@router.post("/charity/image")
+def update_charity_image(
+    request: Request,
+    event_id: str = Form(...),
+    slot: str = Form(...),
+    image: UploadFile | None = File(None),
+    remove: str = Form(""),
+) -> Response:
+    field = CHARITY_IMAGE_SLOTS.get(slot)
+    if field is None:
+        return _charity_page(request, event_id, error="Unknown image slot.", status_code=400)
+
+    new_url, error = _maybe_upload_image(image, event_id, "Charity image")
+    if error:
+        return _charity_page(request, event_id, error=error, status_code=400)
+
+    if new_url:
+        _write_charity_values(event_id, {field: new_url})
+    elif remove:
+        _write_charity_values(event_id, {field: None})
     return RedirectResponse(f"/admin/charity?event_id={event_id}", status_code=303)
 
 
