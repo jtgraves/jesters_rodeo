@@ -99,12 +99,19 @@ def test_event_page_map_falls_back_to_location_without_address(dynamodb_tables):
 
 def test_event_page_shows_contact_section_when_set(dynamodb_tables):
     _put_event(
-        contact_name="Jane Krewe", contact_email="jane@krewe.org", contact_phone="555-1234",
+        contact_name="Jane Krewe", contact_email="jane@krewe.org",
+        contact_phone="1 (555) 123-4567",
     )
     resp = client.get("/")
     assert "Jane Krewe" in resp.text
     assert 'href="mailto:jane@krewe.org"' in resp.text
-    assert 'href="tel:555-1234"' in resp.text
+    assert "(555)123-4567" in resp.text  # normalized to (###)###-####
+
+
+def test_event_page_shows_unrecognized_phone_as_entered(dynamodb_tables):
+    _put_event(contact_phone="call the hall")
+    resp = client.get("/")
+    assert "call the hall" in resp.text
 
 
 def test_event_page_has_no_contact_section_without_contact_fields(dynamodb_tables):
