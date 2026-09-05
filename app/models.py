@@ -28,8 +28,12 @@ class Event(BaseModel):
     registration_opens_at: str | None = None
     registration_closes_at: str | None = None
     status: Literal["draft", "open", "closed", "archived"] = "draft"
-    # Pasted URLs, not uploads -- the admin hosts these wherever they like.
+    # Uploaded via the admin event forms, stored in the event-images S3 bucket.
+    # Up to three banner images: the public event page cross-fades between
+    # whichever ones are set (one = static, two or three = rotating).
     banner_image_url: str | None = None
+    banner_image_url_2: str | None = None
+    banner_image_url_3: str | None = None
     logo_url: str | None = None
     # A site-wide notice (e.g. cancellation) shown above the hero regardless
     # of registration_open/status -- see _find_open_event's banner fallback.

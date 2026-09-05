@@ -29,6 +29,16 @@
       </label>
       {% if e.banner_image_url %}<label><input type="checkbox" name="remove_banner_image" value="1"> Remove</label>{% endif %}
       <label>
+        {% if e.banner_image_url_2 %}<img src="{{ e.banner_image_url_2 }}" alt="" class="event-image-preview"><br>{% endif %}
+        Banner image 2 <input type="file" name="banner_image_2" accept="image/jpeg,image/png,image/gif,image/webp">
+      </label>
+      {% if e.banner_image_url_2 %}<label><input type="checkbox" name="remove_banner_image_2" value="1"> Remove</label>{% endif %}
+      <label>
+        {% if e.banner_image_url_3 %}<img src="{{ e.banner_image_url_3 }}" alt="" class="event-image-preview"><br>{% endif %}
+        Banner image 3 <input type="file" name="banner_image_3" accept="image/jpeg,image/png,image/gif,image/webp">
+      </label>
+      {% if e.banner_image_url_3 %}<label><input type="checkbox" name="remove_banner_image_3" value="1"> Remove</label>{% endif %}
+      <label>
         {% if e.logo_url %}<img src="{{ e.logo_url }}" alt="" class="event-image-preview"><br>{% endif %}
         Logo <input type="file" name="logo_image" accept="image/jpeg,image/png,image/gif,image/webp">
       </label>

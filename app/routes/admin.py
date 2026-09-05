@@ -138,13 +138,18 @@ def create_event(
     contact_email: str = Form(""),
     contact_phone: str = Form(""),
     banner_image: UploadFile | None = File(None),
+    banner_image_2: UploadFile | None = File(None),
+    banner_image_3: UploadFile | None = File(None),
     logo_image: UploadFile | None = File(None),
 ) -> Response:
     event_id = f"evt_{year}"
     banner_url, banner_error = _maybe_upload_image(banner_image, event_id, "Banner image")
+    banner_url_2, banner_error_2 = _maybe_upload_image(banner_image_2, event_id, "Banner image 2")
+    banner_url_3, banner_error_3 = _maybe_upload_image(banner_image_3, event_id, "Banner image 3")
     logo_url, logo_error = _maybe_upload_image(logo_image, event_id, "Logo")
-    if banner_error or logo_error:
-        return _new_event_page(request, error=banner_error or logo_error, status_code=400)
+    upload_error = banner_error or banner_error_2 or banner_error_3 or logo_error
+    if upload_error:
+        return _new_event_page(request, error=upload_error, status_code=400)
 
     try:
         EVENTS().put_item(
@@ -155,6 +160,8 @@ def create_event(
                 "tickets_sold_count": 0, "registration_open": False, "status": "draft",
                 "registration_opens_at": None, "registration_closes_at": None,
                 "banner_image_url": banner_url,
+                "banner_image_url_2": banner_url_2,
+                "banner_image_url_3": banner_url_3,
                 "logo_url": logo_url,
                 "address": address.strip() or None,
                 "contact_name": contact_name.strip() or None,
@@ -200,14 +207,21 @@ def update_event_images(
     request: Request,
     event_id: str,
     banner_image: UploadFile | None = File(None),
+    banner_image_2: UploadFile | None = File(None),
+    banner_image_3: UploadFile | None = File(None),
     logo_image: UploadFile | None = File(None),
     remove_banner_image: str = Form(""),
+    remove_banner_image_2: str = Form(""),
+    remove_banner_image_3: str = Form(""),
     remove_logo_image: str = Form(""),
 ) -> Response:
     banner_url, banner_error = _maybe_upload_image(banner_image, event_id, "Banner image")
+    banner_url_2, banner_error_2 = _maybe_upload_image(banner_image_2, event_id, "Banner image 2")
+    banner_url_3, banner_error_3 = _maybe_upload_image(banner_image_3, event_id, "Banner image 3")
     logo_url, logo_error = _maybe_upload_image(logo_image, event_id, "Logo")
-    if banner_error or logo_error:
-        return _events_page(request, error=banner_error or logo_error, status_code=400)
+    upload_error = banner_error or banner_error_2 or banner_error_3 or logo_error
+    if upload_error:
+        return _events_page(request, error=upload_error, status_code=400)
 
     # A file input can't be pre-filled with "the current image", so "no new
     # file chosen" has to mean leave-as-is, not clear -- clearing needs the
@@ -216,14 +230,16 @@ def update_event_images(
     # wipe an existing image every time the admin only meant to change the
     # other one.
     updates: dict[str, Any] = {}
-    if banner_url:
-        updates["banner_image_url"] = banner_url
-    elif remove_banner_image:
-        updates["banner_image_url"] = None
-    if logo_url:
-        updates["logo_url"] = logo_url
-    elif remove_logo_image:
-        updates["logo_url"] = None
+    for field, new_url, remove in (
+        ("banner_image_url", banner_url, remove_banner_image),
+        ("banner_image_url_2", banner_url_2, remove_banner_image_2),
+        ("banner_image_url_3", banner_url_3, remove_banner_image_3),
+        ("logo_url", logo_url, remove_logo_image),
+    ):
+        if new_url:
+            updates[field] = new_url
+        elif remove:
+            updates[field] = None
 
     if updates:
         EVENTS().update_item(

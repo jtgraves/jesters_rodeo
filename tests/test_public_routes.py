@@ -70,6 +70,37 @@ def test_event_page_renders_banner_and_logo_when_set(dynamodb_tables):
     assert 'src="https://example.com/logo.png"' in resp.text
 
 
+def test_event_page_rotates_between_multiple_banner_images(dynamodb_tables):
+    _put_event(
+        banner_image_url="https://example.com/b1.jpg",
+        banner_image_url_2="https://example.com/b2.jpg",
+        banner_image_url_3="https://example.com/b3.jpg",
+    )
+    resp = client.get("/")
+    assert "event-hero-rotator event-hero-rotator--3" in resp.text
+    for n in (1, 2, 3):
+        assert f'src="https://example.com/b{n}.jpg"' in resp.text
+    assert "event-hero--fallback" not in resp.text
+
+
+def test_event_page_uses_plain_hero_for_a_single_banner_image(dynamodb_tables):
+    _put_event(banner_image_url="https://example.com/only.jpg")
+    resp = client.get("/")
+    assert 'src="https://example.com/only.jpg"' in resp.text
+    assert "event-hero-rotator" not in resp.text
+
+
+def test_event_page_rotator_skips_empty_banner_slots(dynamodb_tables):
+    _put_event(
+        banner_image_url="https://example.com/b1.jpg",
+        banner_image_url_3="https://example.com/b3.jpg",
+    )
+    resp = client.get("/")
+    assert "event-hero-rotator--2" in resp.text
+    assert 'src="https://example.com/b1.jpg"' in resp.text
+    assert 'src="https://example.com/b3.jpg"' in resp.text
+
+
 def test_event_page_shows_banner_when_set(dynamodb_tables):
     _put_event(banner_message="This event has been cancelled.", banner_style="urgent")
     resp = client.get("/")

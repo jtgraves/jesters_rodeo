@@ -180,6 +180,41 @@ th, td {
   background-image: linear-gradient(135deg, var(--color-accent), #2d1b45);
 }
 
+/* Two or three banner images cross-fade on a timed loop, no JS. The images
+   are stacked absolutely; each runs the same keyframe with a staggered
+   animation-delay so exactly one is at full opacity at a time. */
+.event-hero-rotator {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  background-color: var(--color-surface);
+}
+.event-hero-rotator .event-hero {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  opacity: 0;
+  animation: heroFade3 18s linear infinite;
+}
+.event-hero-rotator--2 .event-hero { animation-name: heroFade2; animation-duration: 12s; }
+.event-hero-rotator--2 .event-hero:nth-child(2),
+.event-hero-rotator--3 .event-hero:nth-child(2) { animation-delay: 6s; }
+.event-hero-rotator--3 .event-hero:nth-child(3) { animation-delay: 12s; }
+
+/* Each image gets one 6s slot: ~1s fade in, ~4s hold, ~1s fade out. */
+@keyframes heroFade2 {
+  0%, 50%, 100% { opacity: 0; }
+  8%, 42% { opacity: 1; }
+}
+@keyframes heroFade3 {
+  0%, 33.34%, 100% { opacity: 0; }
+  5%, 28% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .event-hero-rotator .event-hero { animation: none; }
+  .event-hero-rotator .event-hero:first-child { opacity: 1; }
+}
+
 .event-header { position: relative; padding-top: var(--space-2); }
 .event-logo {
   width: 72px;
