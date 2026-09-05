@@ -208,18 +208,36 @@ th, td {
 }
 .event-description { white-space: pre-line; }
 
-.ticket-card {
+.ticket-card,
+.register-panel {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: var(--space-2);
 }
+.register-panel { max-width: 32rem; margin: var(--space-2) auto 0; }
 .ticket-price { font-size: 1.3rem; font-weight: 600; margin: 0 0 var(--space-2); }
 .ticket-price span { font-size: 0.85rem; font-weight: normal; color: var(--color-muted); }
-.ticket-card form label { display: block; margin-bottom: var(--space-1); font-size: 0.9rem; }
+.ticket-card form label,
+.register-panel form label { display: block; margin-bottom: var(--space-1); font-size: 0.9rem; }
 .ticket-card form input,
-.ticket-card form textarea { display: block; width: 100%; margin-top: 0.25rem; }
-.ticket-card form button { width: 100%; margin-top: var(--space-1); }
+.ticket-card form textarea,
+.register-panel form input,
+.register-panel form textarea { display: block; width: 100%; margin-top: 0.25rem; }
+.ticket-card form button,
+.register-panel form button { width: 100%; margin-top: var(--space-1); }
+
+.ticket-cta {
+  display: block;
+  text-align: center;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  text-decoration: none;
+  font-weight: 600;
+}
+.register-cancel { color: var(--color-muted); }
 
 .mobile-cta-bar { display: none; }
 

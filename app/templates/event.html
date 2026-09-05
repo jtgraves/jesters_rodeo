@@ -1,27 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ event.name }}{% endblock %}
 
-{% block full_width %}
-{% if event.banner_message %}
-<div class="event-banner event-banner--{{ event.banner_style or 'notice' }}" role="alert">{{ event.banner_message }}</div>
-{% endif %}
-{% if event.banner_image_url %}
-<img class="event-hero" src="{{ event.banner_image_url }}" alt="">
-{% else %}
-<div class="event-hero event-hero--fallback"></div>
-{% endif %}
-{% endblock %}
+{% block full_width %}{% include "_event_hero.html" %}{% endblock %}
 
 {% block body_class %}has-mobile-cta{% endblock %}
 
 {% block content %}
-<div class="event-header">
-  {% if event.logo_url %}
-    <img class="event-logo" src="{{ event.logo_url }}" alt="{{ event.name }} logo">
-  {% endif %}
-  <h1>{{ event.name }}</h1>
-  <p class="event-meta"><span>🗓 {{ event.date }}</span><span>📍 {{ event.location }}</span></p>
-</div>
+{% include "_event_header.html" %}
 
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
@@ -39,15 +24,7 @@
     {% elif not event.registration_open %}
       <p>Registration is not currently open.</p>
     {% else %}
-    <form method="post" action="/checkout">
-      <input type="hidden" name="event_id" value="{{ event.event_id }}">
-      <label>Quantity <input type="number" name="quantity" value="1" min="1" max="20" required></label>
-      <label>Your name <input type="text" name="buyer_name" required></label>
-      <label>Your email <input type="email" name="buyer_email" required></label>
-      <label>Additional attendee names (one per line, optional)<textarea name="attendee_names"></textarea></label>
-      <label>Discount code (optional) <input type="text" name="discount_code"></label>
-      <button type="submit">Register</button>
-    </form>
+      <a class="ticket-cta" href="/register?event_id={{ event.event_id }}">Get Tickets</a>
     {% endif %}
   </aside>
 </div>

@@ -90,12 +90,24 @@ def _event_page(request: Request, event: dict, error: str | None):
     return templates.TemplateResponse(request, "event.html", {"event": event, "error": error})
 
 
+def _register_page(request: Request, event: dict, error: str | None):
+    return templates.TemplateResponse(request, "register.html", {"event": event, "error": error})
+
+
 @router.get("/")
 def event_page(request: Request):
     event = _find_open_event()
     if not event:
         return templates.TemplateResponse(request, "no_event.html", {"error": None})
     return _event_page(request, event, None)
+
+
+@router.get("/register")
+def register_page(request: Request, event_id: str = ""):
+    event = EVENTS().get_item(Key={"event_id": event_id}).get("Item") if event_id else None
+    if not event:
+        return templates.TemplateResponse(request, "no_event.html", {"error": None})
+    return _register_page(request, event, None)
 
 
 @router.post("/checkout")
@@ -120,7 +132,7 @@ def checkout(
 
     valid, err = validate_quantity(quantity, remaining)
     if not valid:
-        return _event_page(request, event, err)
+        return _register_page(request, event, err)
 
     # Resolve the discount code BEFORE reserving capacity, so a rejected code
     # never leaves a phantom reservation behind.
@@ -132,15 +144,15 @@ def checkout(
             # validate_discount_code(None, ...) is valid-by-design so that "no
             # code supplied" is legal. A failed *lookup* must be caught here or
             # a typo silently charges full price with no message shown.
-            return _event_page(request, event, "We don't recognize that discount code.")
+            return _register_page(request, event, "We don't recognize that discount code.")
         code_obj = DiscountCode(**code_item)
         valid, err = validate_discount_code(code_obj, event_id)
         if not valid:
-            return _event_page(request, event, err)
+            return _register_page(request, event, err)
 
     if not _reserve_capacity(event_id, quantity, capacity):
         fresh = EVENTS().get_item(Key={"event_id": event_id}).get("Item", event)
-        return _event_page(request, fresh, "Sorry — those tickets were just claimed.")
+        return _register_page(request, fresh, "Sorry — those tickets were just claimed.")
 
     total = compute_total(unit_price, quantity, code_obj)
 
@@ -204,7 +216,7 @@ def checkout(
             ExpressionAttributeValues={":canceled": "canceled"},
         )
         fresh = EVENTS().get_item(Key={"event_id": event_id}).get("Item", event)
-        return _event_page(
+        return _register_page(
             request, fresh, "We could not start checkout just now. Please try again."
         )
 

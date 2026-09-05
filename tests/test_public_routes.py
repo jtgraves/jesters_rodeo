@@ -77,6 +77,42 @@ def test_event_page_shows_banner_when_set(dynamodb_tables):
     assert "event-banner--urgent" in resp.text
 
 
+def test_event_page_links_to_register_and_has_no_inline_form(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert 'href="/register?event_id=evt_2026"' in resp.text
+    assert 'action="/checkout"' not in resp.text  # the form moved to its own page
+
+
+def test_register_page_shows_form_header_and_cancel(dynamodb_tables):
+    _put_event()
+    resp = client.get("/register?event_id=evt_2026")
+    assert resp.status_code == 200
+    assert 'action="/checkout"' in resp.text
+    assert "Jester's Rodeo Ball" in html.unescape(resp.text)  # same header
+    assert 'href="/"' in resp.text  # Cancel link back to the main page
+
+
+def test_register_page_unknown_event_shows_no_event(dynamodb_tables):
+    resp = client.get("/register?event_id=nope")
+    assert resp.status_code == 200
+    assert "no event" in resp.text.lower() or "not currently open" in resp.text.lower()
+
+
+def test_register_page_sold_out_shows_waitlist_not_form(dynamodb_tables):
+    _put_event(capacity=1, tickets_sold_count=1)
+    resp = client.get("/register?event_id=evt_2026")
+    assert "sold out" in resp.text.lower()
+    assert 'action="/checkout"' not in resp.text
+
+
+def test_register_page_not_open_shows_message_not_form(dynamodb_tables):
+    _put_event(registration_open=False)
+    resp = client.get("/register?event_id=evt_2026")
+    assert "not currently open" in resp.text.lower()
+    assert 'action="/checkout"' not in resp.text
+
+
 def test_closed_event_with_banner_still_shows_on_homepage(dynamodb_tables):
     """Closing registration must not hide a cancellation notice behind the
     generic "no event" page -- that would defeat the point of the banner.

@@ -1,0 +1,7 @@
+<div class="event-header">
+  {% if event.logo_url %}
+    <img class="event-logo" src="{{ event.logo_url }}" alt="{{ event.name }} logo">
+  {% endif %}
+  <h1>{{ event.name }}</h1>
+  <p class="event-meta"><span>🗓 {{ event.date }}</span><span>📍 {{ event.location }}</span></p>
+</div>
