@@ -219,7 +219,11 @@ def test_admin_can_edit_event_details(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "New Name", "description": "New description.", "location": "Baton Rouge"},
+        data={
+            "name": "New Name", "description": "New description.", "location": "Baton Rouge",
+            "address": "1 Main St", "contact_name": "Jo", "contact_email": "jo@x.test",
+            "contact_phone": "555-9",
+        },
         follow_redirects=False,
     )
     assert resp.status_code == 303
@@ -227,6 +231,38 @@ def test_admin_can_edit_event_details(admin_client):
     assert event["name"] == "New Name"
     assert event["description"] == "New description."
     assert event["location"] == "Baton Rouge"
+    assert event["address"] == "1 Main St"
+    assert event["contact_name"] == "Jo"
+    assert event["contact_email"] == "jo@x.test"
+    assert event["contact_phone"] == "555-9"
+
+
+def test_admin_edit_event_details_clears_blank_contact_fields(admin_client):
+    _put_event(address="old addr", contact_name="Old Contact")
+    admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "description": "D", "location": "L"},  # contact fields omitted
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("address") is None
+    assert event.get("contact_name") is None
+
+
+def test_admin_can_create_event_with_contact_details(admin_client):
+    admin_client.post(
+        "/admin/events",
+        data=_create_event_form(
+            address="9 Canal St", contact_name="Sam", contact_email="sam@x.test",
+            contact_phone="555-1",
+        ),
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2027"})["Item"]
+    assert event["address"] == "9 Canal St"
+    assert event["contact_name"] == "Sam"
+    assert event["contact_email"] == "sam@x.test"
+    assert event["contact_phone"] == "555-1"
 
 
 def test_admin_edit_event_details_rejects_blank_fields(admin_client):

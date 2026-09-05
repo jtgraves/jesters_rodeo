@@ -123,6 +123,10 @@ def create_event(
     description: str = Form(...),
     ticket_price_cents: int = Form(...),
     capacity: int = Form(...),
+    address: str = Form(""),
+    contact_name: str = Form(""),
+    contact_email: str = Form(""),
+    contact_phone: str = Form(""),
     banner_image: UploadFile | None = File(None),
     logo_image: UploadFile | None = File(None),
 ) -> Response:
@@ -142,6 +146,10 @@ def create_event(
                 "registration_opens_at": None, "registration_closes_at": None,
                 "banner_image_url": banner_url,
                 "logo_url": logo_url,
+                "address": address.strip() or None,
+                "contact_name": contact_name.strip() or None,
+                "contact_email": contact_email.strip() or None,
+                "contact_phone": contact_phone.strip() or None,
             },
             # An unconditional put on an existing year resets tickets_sold_count
             # to 0 and status to draft while the paid orders for that event
@@ -223,6 +231,10 @@ def update_event_details(
     name: str = Form(...),
     description: str = Form(...),
     location: str = Form(...),
+    address: str = Form(""),
+    contact_name: str = Form(""),
+    contact_email: str = Form(""),
+    contact_phone: str = Form(""),
 ) -> Response:
     name, description, location = name.strip(), description.strip(), location.strip()
     if not name or not description or not location:
@@ -232,9 +244,18 @@ def update_event_details(
     EVENTS().update_item(
         Key={"event_id": event_id},
         # name and location are both DynamoDB reserved words, hence the aliases.
-        UpdateExpression="SET #n = :n, description = :d, #l = :l",
+        UpdateExpression=(
+            "SET #n = :n, description = :d, #l = :l, address = :addr, "
+            "contact_name = :cn, contact_email = :ce, contact_phone = :cp"
+        ),
         ExpressionAttributeNames={"#n": "name", "#l": "location"},
-        ExpressionAttributeValues={":n": name, ":d": description, ":l": location},
+        ExpressionAttributeValues={
+            ":n": name, ":d": description, ":l": location,
+            ":addr": address.strip() or None,
+            ":cn": contact_name.strip() or None,
+            ":ce": contact_email.strip() or None,
+            ":cp": contact_phone.strip() or None,
+        },
     )
     return RedirectResponse("/admin/events", status_code=303)
 

@@ -84,6 +84,35 @@ def test_event_page_links_to_register_and_has_no_inline_form(dynamodb_tables):
     assert 'action="/checkout"' not in resp.text  # the form moved to its own page
 
 
+def test_event_page_embeds_a_map_for_the_address(dynamodb_tables):
+    _put_event(address="123 Bourbon St, New Orleans, LA")
+    resp = client.get("/")
+    assert "google.com/maps?q=123" in resp.text
+    assert "output=embed" in resp.text
+
+
+def test_event_page_map_falls_back_to_location_without_address(dynamodb_tables):
+    _put_event()  # location is "New Orleans", no address
+    resp = client.get("/")
+    assert "google.com/maps?q=New" in resp.text
+
+
+def test_event_page_shows_contact_section_when_set(dynamodb_tables):
+    _put_event(
+        contact_name="Jane Krewe", contact_email="jane@krewe.org", contact_phone="555-1234",
+    )
+    resp = client.get("/")
+    assert "Jane Krewe" in resp.text
+    assert 'href="mailto:jane@krewe.org"' in resp.text
+    assert 'href="tel:555-1234"' in resp.text
+
+
+def test_event_page_has_no_contact_section_without_contact_fields(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "event-contact" not in resp.text
+
+
 def test_register_page_shows_form_header_and_cancel(dynamodb_tables):
     _put_event()
     resp = client.get("/register?event_id=evt_2026")

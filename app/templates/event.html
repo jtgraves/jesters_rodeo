@@ -28,6 +28,26 @@
     {% endif %}
   </aside>
 </div>
+
+{% set map_query = event.address or event.location %}
+{% if map_query %}
+<section class="event-map">
+  <h2>Location</h2>
+  <p>{{ event.address or event.location }}</p>
+  {# Keyless Google Maps embed -- no API key / billing, just an iframe. #}
+  <iframe title="Map of {{ event.location }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+          src="https://www.google.com/maps?q={{ map_query | urlencode }}&output=embed"></iframe>
+</section>
+{% endif %}
+
+{% if event.contact_name or event.contact_email or event.contact_phone %}
+<section class="event-contact">
+  <h2>Contact</h2>
+  {% if event.contact_name %}<p>{{ event.contact_name }}</p>{% endif %}
+  {% if event.contact_email %}<p><a href="mailto:{{ event.contact_email }}">{{ event.contact_email }}</a></p>{% endif %}
+  {% if event.contact_phone %}<p><a href="tel:{{ event.contact_phone }}">{{ event.contact_phone }}</a></p>{% endif %}
+</section>
+{% endif %}
 {% endblock %}
 
 {% block footer %}

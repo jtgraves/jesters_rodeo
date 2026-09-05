@@ -35,6 +35,12 @@ class Event(BaseModel):
     # of registration_open/status -- see _find_open_event's banner fallback.
     banner_message: str | None = None
     banner_style: Literal["notice", "urgent"] = "notice"
+    # `location` is the short label ("New Orleans"); `address` is the specific
+    # street address the map on the event page is centred on.
+    address: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
 
 
 class Order(BaseModel):

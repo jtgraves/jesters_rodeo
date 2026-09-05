@@ -14,7 +14,11 @@
     <form method="post" action="/admin/events/{{ e.event_id }}/details" class="event-images-form">
       <label>Name <input type="text" name="name" value="{{ e.name }}" required></label>
       <label>Location <input type="text" name="location" value="{{ e.location }}" required></label>
+      <label>Address <input type="text" name="address" value="{{ e.address or '' }}"></label>
       <label>Description <textarea name="description" required>{{ e.description }}</textarea></label>
+      <label>Contact name <input type="text" name="contact_name" value="{{ e.contact_name or '' }}"></label>
+      <label>Contact email <input type="email" name="contact_email" value="{{ e.contact_email or '' }}"></label>
+      <label>Contact phone <input type="tel" name="contact_phone" value="{{ e.contact_phone or '' }}"></label>
       <button type="submit">Save details</button>
     </form>
     <form method="post" action="/admin/events/{{ e.event_id }}/images" enctype="multipart/form-data" class="event-images-form">
@@ -49,9 +53,13 @@
   <input name="name" placeholder="Name" required>
   <input name="date" placeholder="Date (YYYY-MM-DD)" required>
   <input name="location" placeholder="Location" required>
+  <input name="address" placeholder="Address (optional, for the map)">
   <textarea name="description" placeholder="Description" required></textarea>
   <input name="ticket_price_cents" placeholder="Price (cents)" required>
   <input name="capacity" placeholder="Capacity" required>
+  <input name="contact_name" placeholder="Contact name (optional)">
+  <input type="email" name="contact_email" placeholder="Contact email (optional)">
+  <input type="tel" name="contact_phone" placeholder="Contact phone (optional)">
   <label>Banner image (optional) <input type="file" name="banner_image" accept="image/jpeg,image/png,image/gif,image/webp"></label>
   <label>Logo (optional) <input type="file" name="logo_image" accept="image/jpeg,image/png,image/gif,image/webp"></label>
   <button type="submit">Create</button>
