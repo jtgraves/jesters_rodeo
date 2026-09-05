@@ -353,6 +353,66 @@ def test_checkin_rejects_voided_ticket(admin_client):
     assert TICKETS().get_item(Key={"ticket_id": "tkt_refunded"})["Item"]["checked_in"] is False
 
 
+def test_checkin_from_a_browser_form_redirects_instead_of_returning_json(admin_client):
+    """The name/email search results' Check In button is a plain HTML form
+    submit, not the JS scanner's fetch -- it should behave like every other
+    admin form (redirect back to the page), not hand back a raw JSON body.
+    """
+    _put_ticket("tkt_abc")
+    resp = admin_client.post(
+        "/admin/checkin/tkt_abc?event_id=evt_2026&q=jane",
+        headers={"accept": "text/html"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/checkin?event_id=evt_2026&q=jane"
+
+
+def test_checkin_search_finds_by_buyer_name_and_email(admin_client):
+    _put_order("ord_1", buyer_name="Jane Doe", buyer_email="jane@example.com")
+    _put_ticket("tkt_1", order_id="ord_1", attendee_name="Jane Doe")
+
+    by_name = admin_client.get("/admin/checkin?event_id=evt_2026&q=jane doe")
+    assert "Jane Doe" in by_name.text
+
+    by_email = admin_client.get("/admin/checkin?event_id=evt_2026&q=jane@example.com")
+    assert "Jane Doe" in by_email.text
+
+
+def test_checkin_search_finds_by_attendee_name_even_when_buyer_differs(admin_client):
+    _put_order("ord_1", buyer_name="Jane Doe", buyer_email="jane@example.com")
+    _put_ticket("tkt_1", order_id="ord_1", attendee_name="Someone Else")
+
+    resp = admin_client.get("/admin/checkin?event_id=evt_2026&q=someone else")
+    assert "Someone Else" in resp.text
+
+
+def test_checkin_search_excludes_other_events(admin_client):
+    _put_order("ord_1", event_id="evt_2025", buyer_name="Jane Doe")
+    _put_ticket("tkt_1", event_id="evt_2025", order_id="ord_1")
+
+    resp = admin_client.get("/admin/checkin?event_id=evt_2026&q=jane")
+    assert "Jane Doe" not in resp.text
+
+
+def test_checkin_search_shows_no_matches_message(admin_client):
+    resp = admin_client.get("/admin/checkin?event_id=evt_2026&q=nobody-like-this")
+    assert "No matches" in resp.text
+
+
+@patch("app.routes.admin.send_confirmation_email")
+def test_resend_email_from_checkin_redirects_back_to_search(mock_send, admin_client):
+    _put_order("ord_1")
+    _put_ticket("tkt_1", order_id="ord_1")
+
+    resp = admin_client.post(
+        "/admin/checkin/ord_1/resend-email?q=jane", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/checkin?event_id=evt_2026&q=jane"
+    mock_send.assert_called_once()
+
+
 @patch("app.routes.admin.stripe.Refund.create")
 def test_refund_marks_refunded_voids_tickets_and_frees_capacity(mock_refund, admin_client):
     _put_event(tickets_sold_count=5)

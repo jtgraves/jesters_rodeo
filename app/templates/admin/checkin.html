@@ -9,6 +9,46 @@
   <input id="manual-ticket-id" placeholder="Ticket ID (manual entry)">
   <button id="manual-submit">Check In</button>
 </p>
+
+<h2>Look up by name or email</h2>
+<form method="get" action="/admin/checkin">
+  <input type="hidden" name="event_id" value="{{ event_id }}">
+  <input type="text" name="q" value="{{ q }}" placeholder="Name or email">
+  <button type="submit">Search</button>
+</form>
+{% if q %}
+<div class="table-scroll">
+<table>
+<tr><th>Attendee</th><th>Buyer</th><th>Email</th><th>Status</th><th></th></tr>
+{% for m in matches %}
+<tr>
+  <td>{{ m.attendee_name or m.buyer_name }}</td>
+  <td>{{ m.buyer_name }}</td>
+  <td>{{ m.buyer_email }}</td>
+  <td>
+    {% if m.voided %}Voided
+    {% elif m.checked_in %}Checked in
+    {% else %}Not checked in
+    {% endif %}
+  </td>
+  <td>
+    {% if not m.voided and not m.checked_in %}
+    <form method="post" action="/admin/checkin/{{ m.ticket_id }}?event_id={{ event_id }}&q={{ q | urlencode }}" style="display:inline">
+      <button type="submit">Check In</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/admin/checkin/{{ m.order_id }}/resend-email?q={{ q | urlencode }}" style="display:inline">
+      <button type="submit">Resend email</button>
+    </form>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="5">No matches.</td></tr>
+{% endfor %}
+</table>
+</div>
+{% endif %}
+
 <script src="/static/html5-qrcode.min.js"></script>
 <script>
   const EVENT_ID = {{ event_id | tojson }};

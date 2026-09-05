@@ -6,6 +6,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
 import boto3
 import stripe
@@ -377,11 +378,16 @@ def export_orders(request: Request, event_id: str = "") -> Response:
     )
 
 
-@router.post("/orders/{order_id}/resend-email")
-def resend_email(order_id: str) -> RedirectResponse:
+def _resend_confirmation_email(order_id: str) -> dict:
     order_item = _get_order_or_404(order_id)
     tickets = [Ticket(**t) for t in _tickets_for_order(order_id)]
     send_confirmation_email(Order(**order_item), tickets)
+    return order_item
+
+
+@router.post("/orders/{order_id}/resend-email")
+def resend_email(order_id: str) -> RedirectResponse:
+    order_item = _resend_confirmation_email(order_id)
     return RedirectResponse(f"/admin/orders?event_id={order_item['event_id']}", status_code=303)
 
 
@@ -539,33 +545,90 @@ def notify_waitlist_entry(waitlist_id: str, event_id: str = Form(...)) -> Redire
     return RedirectResponse(f"/admin/waitlist?event_id={event_id}", status_code=303)
 
 
+def _search_checkin(event_id: str, q: str) -> list[dict]:
+    """Every ticket for this event whose attendee name, or whose order's
+    buyer name/email, matches -- for door staff working from a name or email
+    instead of a scannable QR code or a written-down ticket ID.
+    """
+    needle = q.strip().lower()
+    if not needle:
+        return []
+
+    orders_by_id = {
+        o["order_id"]: o
+        for o in paginate(
+            ORDERS().query,
+            IndexName="event_id-index",
+            KeyConditionExpression="event_id = :e",
+            ExpressionAttributeValues={":e": event_id},
+        )
+    }
+    tickets = paginate(TICKETS().scan, FilterExpression=Attr("event_id").eq(event_id))
+
+    matches = []
+    for ticket in tickets:
+        order = orders_by_id.get(ticket["order_id"])
+        if not order:
+            continue
+        haystack = " ".join(filter(None, [
+            order.get("buyer_name"), order.get("buyer_email"), ticket.get("attendee_name"),
+        ])).lower()
+        if needle in haystack:
+            matches.append({
+                **ticket,
+                "buyer_name": order["buyer_name"],
+                "buyer_email": order["buyer_email"],
+            })
+    return matches
+
+
 @router.get("/checkin")
-def checkin_page(request: Request, event_id: str = "") -> Response:
+def checkin_page(request: Request, event_id: str = "", q: str = "") -> Response:
     redirect = _resolve_event_id(request, event_id, "/admin/checkin")
     if redirect is not None:
         return redirect
-    return templates.TemplateResponse(request, "admin/checkin.html", {"event_id": event_id})
+    return templates.TemplateResponse(
+        request, "admin/checkin.html",
+        {"event_id": event_id, "q": q, "matches": _search_checkin(event_id, q)},
+    )
+
+
+def _checkin_response(request: Request, result: dict, event_id: str, q: str) -> Response:
+    # Same content-negotiation convention as app.auth._not_authenticated:
+    # a browser requesting an HTML page (the name/email search results' Check
+    # In button, a plain form submit) gets redirected back to a fresh
+    # rendering; anything else -- the JS scanner's fetch, which sets
+    # Accept: application/json, and any client that sends no Accept header at
+    # all -- gets the JSON result directly.
+    if "text/html" in request.headers.get("accept", ""):
+        suffix = f"&q={quote(q)}" if q else ""
+        return RedirectResponse(f"/admin/checkin?event_id={event_id}{suffix}", status_code=303)
+    return JSONResponse(result)
 
 
 @router.post("/checkin/{ticket_id}")
-def checkin_ticket(ticket_id: str, event_id: str) -> JSONResponse:
+def checkin_ticket(request: Request, ticket_id: str, event_id: str, q: str = "") -> Response:
     ticket = TICKETS().get_item(Key={"ticket_id": ticket_id}).get("Item")
     if not ticket:
-        return JSONResponse({"status": "invalid"})
+        return _checkin_response(request, {"status": "invalid"}, event_id, q)
 
     # Tickets from previous years are still live rows in this table.
     if ticket["event_id"] != event_id:
-        return JSONResponse({"status": "wrong_event", "attendee_name": ticket["attendee_name"]})
+        return _checkin_response(
+            request, {"status": "wrong_event", "attendee_name": ticket["attendee_name"]}, event_id, q
+        )
 
     if ticket.get("voided"):
-        return JSONResponse({"status": "voided", "attendee_name": ticket["attendee_name"]})
+        return _checkin_response(
+            request, {"status": "voided", "attendee_name": ticket["attendee_name"]}, event_id, q
+        )
 
     if ticket["checked_in"]:
-        return JSONResponse({
+        return _checkin_response(request, {
             "status": "already_checked_in",
             "attendee_name": ticket["attendee_name"],
             "checked_in_at": ticket["checked_in_at"],
-        })
+        }, event_id, q)
 
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -578,13 +641,22 @@ def checkin_ticket(ticket_id: str, event_id: str) -> JSONResponse:
         )
     except ClientError as exc:
         if _is_conditional_failure(exc):
-            return JSONResponse({
-                "status": "already_checked_in",
-                "attendee_name": ticket["attendee_name"],
-            })
+            return _checkin_response(
+                request, {"status": "already_checked_in", "attendee_name": ticket["attendee_name"]},
+                event_id, q,
+            )
         raise
 
-    return JSONResponse({"status": "checked_in", "attendee_name": ticket["attendee_name"]})
+    return _checkin_response(
+        request, {"status": "checked_in", "attendee_name": ticket["attendee_name"]}, event_id, q
+    )
+
+
+@router.post("/checkin/{order_id}/resend-email")
+def resend_email_from_checkin(order_id: str, q: str = "") -> RedirectResponse:
+    order_item = _resend_confirmation_email(order_id)
+    suffix = f"&q={quote(q)}" if q else ""
+    return RedirectResponse(f"/admin/checkin?event_id={order_item['event_id']}{suffix}", status_code=303)
 
 
 def _invoke_announcement_lambda(announcement_id: str) -> None:
