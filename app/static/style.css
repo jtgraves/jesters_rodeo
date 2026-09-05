@@ -149,6 +149,40 @@ th, td {
   .nav-toggle-checkbox:checked ~ .nav-links { display: flex; }
 }
 
+/* ---- Public nav: no bar of its own -- on pages with a banner it floats
+   over the top of it (body.has-hero). Reuses the hamburger mechanics above
+   (.nav-toggle-*, .nav-links). ---- */
+.public-nav {
+  position: relative; /* anchors the mobile dropdown */
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+body.has-hero .public-nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  border-bottom: none;
+}
+body.has-hero .public-nav .brand,
+body.has-hero .public-nav .nav-links a {
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+body.has-hero .public-nav .nav-toggle-label { color: #fff; }
+
+@media (max-width: 640px) {
+  /* Open hamburger panel over a photo: dark ground keeps the links legible. */
+  body.has-hero .public-nav .nav-links { background: rgba(0, 0, 0, 0.92); }
+  body.has-hero .public-nav .nav-links a { border-bottom-color: rgba(255, 255, 255, 0.15); }
+}
+
 .site-footer {
   text-align: center;
   padding: var(--space-3) var(--space-2);
@@ -285,13 +319,14 @@ img.event-hero { opacity: 0.5; }
 /* Clickable, swipeable, JS-free image carousel: a scroll-snap track plus
    in-page anchor links (arrows + dots) that smooth-scroll each slide into
    view. Each slide carries an optional caption below the image. */
-.charity-carousel { margin-bottom: var(--space-3); }
+/* Rendered in the full-width block as a top-of-page banner, like the event
+   hero -- edge to edge, same height, square corners. */
+.charity-carousel { margin-bottom: var(--space-2); }
 .charity-carousel-track {
   display: flex;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
-  border-radius: var(--radius);
 }
 .charity-slide {
   position: relative;
@@ -302,7 +337,7 @@ img.event-hero { opacity: 0.5; }
 .charity-slide img {
   display: block;
   width: 100%;
-  height: 320px;
+  height: 280px;
   object-fit: cover;
   background: var(--color-surface);
 }
@@ -313,7 +348,7 @@ img.event-hero { opacity: 0.5; }
 }
 .charity-carousel-arrow {
   position: absolute;
-  top: 160px;
+  top: 140px;
   transform: translateY(-50%);
   display: flex;
   align-items: center;

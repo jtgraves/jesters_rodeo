@@ -360,6 +360,9 @@ def test_charity_page_no_carousel_without_banner_images(dynamodb_tables):
     _put_event(charity_name="Habitat NOLA")
     resp = client.get("/charity")
     assert "charity-carousel" not in resp.text
+    # still a banner area (fallback gradient) so the floating nav has a backdrop
+    assert "event-hero--fallback" in resp.text
+    assert "has-hero" in resp.text
 
 
 def test_event_page_links_to_charity_when_set(dynamodb_tables):
@@ -375,15 +378,18 @@ def test_public_pages_have_a_nav_between_event_and_charity(dynamodb_tables):
     _put_event(charity_name="Habitat NOLA")
     for path in ("/", "/charity", "/register?event_id=evt_2026"):
         resp = client.get(path)
-        assert 'class="site-nav"' in resp.text, path
+        assert 'class="public-nav"' in resp.text, path
         assert 'href="/charity">Charity</a>' in resp.text, path
         assert 'href="/">Event</a>' in resp.text, path
+        # pages with a banner mark the body so the nav floats over it
+        assert "has-hero" in resp.text, path
 
 
-def test_no_event_page_still_has_the_nav(dynamodb_tables):
+def test_no_event_page_has_a_plain_nav_no_hero(dynamodb_tables):
     resp = client.get("/")
     assert "no event" in resp.text.lower() or "not currently open" in resp.text.lower()
-    assert 'class="site-nav"' in resp.text
+    assert 'class="public-nav"' in resp.text
+    assert "has-hero" not in resp.text
 
 
 def test_event_page_has_no_charity_section_when_unset(dynamodb_tables):

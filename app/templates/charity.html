@@ -3,7 +3,9 @@
 {% if event and event.charity_name %}{{ event.charity_name }}{% else %}Our charity partner{% endif %}
 {% endblock %}
 
-{% block content %}
+{% block body_class %}{% if event and event.charity_name %}has-hero{% endif %}{% endblock %}
+
+{% block full_width %}
 {% if event and event.charity_name %}
 {% set slide_data = [
   {'url': event.charity_banner_image_url, 'caption': event.charity_banner_caption},
@@ -33,7 +35,14 @@
   </div>
   {% endif %}
 </section>
+{% else %}
+<div class="event-hero event-hero--fallback"></div>
 {% endif %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if event and event.charity_name %}
 <section class="charity-detail">
   <p class="charity-kicker">This year's event will be benefitting</p>
   {% if event.charity_logo_url %}

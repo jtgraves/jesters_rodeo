@@ -8,19 +8,18 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
 {% block nav %}
-<header class="site-nav">
-  <div class="site-nav-bar">
-    <a class="brand" href="/">Jester's Rodeo</a>
-    {# Pure-CSS hamburger: a checkbox + label toggle the menu, no JS
-       (same pattern as the admin nav). #}
-    <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox">
-    <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">☰</label>
-    <nav class="nav-links">
-      <a href="/">Event</a>
-      <a href="/charity">Charity</a>
-    </nav>
+{# Floats over the page banner rather than sitting in its own bar -- see
+   .public-nav / body.has-hero in style.css. Pure-CSS hamburger (checkbox +
+   label), the same mechanic as the admin nav. #}
+<nav class="public-nav">
+  <a class="brand" href="/">Jester's Rodeo</a>
+  <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox">
+  <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">☰</label>
+  <div class="nav-links">
+    <a href="/">Event</a>
+    <a href="/charity">Charity</a>
   </div>
-</header>
+</nav>
 {% endblock %}
 {% block full_width %}{% endblock %}
 <main class="page">
