@@ -22,7 +22,7 @@
     <label>Your name <input type="text" name="buyer_name" required></label>
     <label>Your email <input type="email" name="buyer_email" required></label>
     <label>
-      {% if event.charity_name %}Donation to {{ event.charity_name }}{% else %}Donation{% endif %}
+      {% if event.charity_name %}Additional Donation to {{ event.charity_name }}{% else %}Additional Donation{% endif %}
       (optional, whole dollars)
       <input type="number" name="donation_dollars" min="0" step="1" inputmode="numeric" placeholder="0">
     </label>
