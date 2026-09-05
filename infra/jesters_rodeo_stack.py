@@ -16,6 +16,7 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_route53 as route53,
     aws_route53_targets as route53_targets,
+    aws_s3 as s3,
     aws_ses as ses,
 )
 from constructs import Construct
@@ -67,6 +68,24 @@ class JestersRodeoStack(Stack):
         secure_param_prefix = f"/jesters-rodeo/{self.stack_name}"
         common_env["SECURE_PARAM_PREFIX"] = secure_param_prefix
 
+        # Admin-uploaded banner/logo images. Public read via a bucket policy
+        # (not ACLs, which S3 discourages/blocks by default on new buckets) --
+        # these images are rendered on the public registration page, so they
+        # have to be reachable by a plain, permanent URL. A private bucket
+        # would mean presigned URLs, which expire and would silently break
+        # the page days later.
+        images_bucket = s3.Bucket(
+            self, "EventImagesBucket",
+            block_public_access=s3.BlockPublicAccess(
+                block_public_acls=True,
+                ignore_public_acls=True,
+                block_public_policy=False,
+                restrict_public_buckets=False,
+            ),
+            public_read_access=True,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+
         # INFO-level, JSON-formatted logs. At 100-500 tickets/year the volume
         # is negligible, and mangum's request-level "METHOD path status" line
         # is what makes a stuck checkout/webhook diagnosable at all from
@@ -109,7 +128,11 @@ class JestersRodeoStack(Stack):
             code=self._bundled_code(),
             timeout=Duration.seconds(15),
             memory_size=512,
-            environment={**common_env, "ANNOUNCEMENT_LAMBDA_NAME": announcement_lambda.function_name},
+            environment={
+                **common_env,
+                "ANNOUNCEMENT_LAMBDA_NAME": announcement_lambda.function_name,
+                "EVENT_IMAGES_BUCKET": images_bucket.bucket_name,
+            },
             **log_settings,
         )
         cleanup_lambda = _lambda.Function(
@@ -142,6 +165,7 @@ class JestersRodeoStack(Stack):
             )
 
         announcement_lambda.grant_invoke(app_lambda)
+        images_bucket.grant_write(app_lambda)
 
         for function in (app_lambda, cleanup_lambda):
             function.add_to_role_policy(

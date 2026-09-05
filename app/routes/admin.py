@@ -11,7 +11,7 @@ import boto3
 import stripe
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
@@ -56,6 +56,49 @@ def _csv_safe(value: Any) -> Any:
     return "'" + text if text.startswith(CSV_FORMULA_PREFIXES) else text
 
 
+IMAGE_EXTENSIONS_BY_CONTENT_TYPE = {
+    "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp",
+}
+MAX_IMAGE_BYTES = 2 * 1024 * 1024  # 2MB: generous for a compressed banner/logo, and Create
+                                    # Event can upload two of these in one request, so this
+                                    # keeps that combined well under Lambda's payload ceiling.
+
+
+class _ImageUploadError(Exception):
+    pass
+
+
+def _upload_event_image(file: UploadFile, event_id: str, label: str) -> str:
+    if file.content_type not in IMAGE_EXTENSIONS_BY_CONTENT_TYPE:
+        raise _ImageUploadError(f"{label} must be a JPEG, PNG, GIF, or WebP image.")
+    data = file.file.read()
+    if len(data) > MAX_IMAGE_BYTES:
+        raise _ImageUploadError(f"{label} must be under 2MB.")
+
+    ext = IMAGE_EXTENSIONS_BY_CONTENT_TYPE[file.content_type]
+    key = f"{event_id}/{label.lower().replace(' ', '-')}-{uuid.uuid4().hex}.{ext}"
+    boto3.client("s3", region_name=settings.aws_region).put_object(
+        Bucket=settings.event_images_bucket, Key=key, Body=data, ContentType=file.content_type,
+    )
+    return f"https://{settings.event_images_bucket}.s3.{settings.aws_region}.amazonaws.com/{key}"
+
+
+def _maybe_upload_image(
+    file: UploadFile | None, event_id: str, label: str
+) -> tuple[str | None, str | None]:
+    """Returns (url, error). Both None means "no file was chosen" -- distinct
+    from an upload that failed validation, and from a deliberate removal,
+    which callers handle separately (a file input can't submit "please clear
+    the existing image", only "no new file").
+    """
+    if not file or not file.filename:
+        return None, None
+    try:
+        return _upload_event_image(file, event_id, label), None
+    except _ImageUploadError as exc:
+        return None, str(exc)
+
+
 def _events_page(request: Request, error: str | None = None, status_code: int = 200) -> Response:
     events = sorted(paginate(EVENTS().scan), key=lambda e: int(e["year"]), reverse=True)
     return templates.TemplateResponse(
@@ -79,19 +122,25 @@ def create_event(
     description: str = Form(...),
     ticket_price_cents: int = Form(...),
     capacity: int = Form(...),
-    banner_image_url: str = Form(""),
-    logo_url: str = Form(""),
+    banner_image: UploadFile | None = File(None),
+    logo_image: UploadFile | None = File(None),
 ) -> Response:
+    event_id = f"evt_{year}"
+    banner_url, banner_error = _maybe_upload_image(banner_image, event_id, "Banner image")
+    logo_url, logo_error = _maybe_upload_image(logo_image, event_id, "Logo")
+    if banner_error or logo_error:
+        return _events_page(request, error=banner_error or logo_error, status_code=400)
+
     try:
         EVENTS().put_item(
             Item={
-                "event_id": f"evt_{year}", "year": year, "name": name, "date": date,
+                "event_id": event_id, "year": year, "name": name, "date": date,
                 "location": location, "description": description,
                 "ticket_price_cents": ticket_price_cents, "capacity": capacity,
                 "tickets_sold_count": 0, "registration_open": False, "status": "draft",
                 "registration_opens_at": None, "registration_closes_at": None,
-                "banner_image_url": banner_image_url.strip() or None,
-                "logo_url": logo_url.strip() or None,
+                "banner_image_url": banner_url,
+                "logo_url": logo_url,
             },
             # An unconditional put on an existing year resets tickets_sold_count
             # to 0 and status to draft while the paid orders for that event
@@ -129,20 +178,40 @@ def close_event(event_id: str) -> RedirectResponse:
 
 @router.post("/events/{event_id}/images")
 def update_event_images(
+    request: Request,
     event_id: str,
-    banner_image_url: str = Form(""),
-    logo_url: str = Form(""),
-) -> RedirectResponse:
-    # No condition needed: this is cosmetic metadata, not capacity/status, so
-    # there's no race to guard against. A blank field clears the URL.
-    EVENTS().update_item(
-        Key={"event_id": event_id},
-        UpdateExpression="SET banner_image_url = :b, logo_url = :l",
-        ExpressionAttributeValues={
-            ":b": banner_image_url.strip() or None,
-            ":l": logo_url.strip() or None,
-        },
-    )
+    banner_image: UploadFile | None = File(None),
+    logo_image: UploadFile | None = File(None),
+    remove_banner_image: str = Form(""),
+    remove_logo_image: str = Form(""),
+) -> Response:
+    banner_url, banner_error = _maybe_upload_image(banner_image, event_id, "Banner image")
+    logo_url, logo_error = _maybe_upload_image(logo_image, event_id, "Logo")
+    if banner_error or logo_error:
+        return _events_page(request, error=banner_error or logo_error, status_code=400)
+
+    # A file input can't be pre-filled with "the current image", so "no new
+    # file chosen" has to mean leave-as-is, not clear -- clearing needs the
+    # explicit Remove checkbox instead. Only touch fields that are actually
+    # changing: a bare SET on every field, unconditionally, would silently
+    # wipe an existing image every time the admin only meant to change the
+    # other one.
+    updates: dict[str, Any] = {}
+    if banner_url:
+        updates["banner_image_url"] = banner_url
+    elif remove_banner_image:
+        updates["banner_image_url"] = None
+    if logo_url:
+        updates["logo_url"] = logo_url
+    elif remove_logo_image:
+        updates["logo_url"] = None
+
+    if updates:
+        EVENTS().update_item(
+            Key={"event_id": event_id},
+            UpdateExpression="SET " + ", ".join(f"{k} = :{k}" for k in updates),
+            ExpressionAttributeValues={f":{k}": v for k, v in updates.items()},
+        )
     return RedirectResponse("/admin/events", status_code=303)
 
 

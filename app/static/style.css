@@ -258,7 +258,7 @@ th, td {
   body.has-mobile-cta { padding-bottom: 4rem; }
 }
 
-/* ---- Admin: inline per-row image-URL form ---- */
+/* ---- Admin: inline per-row image-upload form ---- */
 .event-images-form {
   display: inline-flex;
   flex-wrap: wrap;
@@ -272,4 +272,14 @@ th, td {
   flex-direction: column;
   gap: 0.2rem;
 }
-.event-images-form input { width: 220px; }
+.event-images-form label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+}
+.event-image-preview {
+  max-height: 48px;
+  max-width: 96px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
