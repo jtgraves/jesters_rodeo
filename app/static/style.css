@@ -176,13 +176,28 @@ th, td {
   object-fit: cover;
   background-color: var(--color-surface);
 }
+/* Photos sit at half opacity so the centred transparent-PNG logo reads
+   clearly over them; the fallback gradient stays full strength. */
+img.event-hero { opacity: 0.5; }
 .event-hero--fallback {
   background-image: linear-gradient(135deg, var(--color-accent), #2d1b45);
 }
 
+.event-hero-wrap { position: relative; }
+.event-hero-logo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(240px, 55%);
+  height: auto;
+  z-index: 2;
+  pointer-events: none;
+}
+
 /* Two or three banner images cross-fade on a timed loop, no JS. The images
    are stacked absolutely; each runs the same keyframe with a staggered
-   animation-delay so exactly one is at full opacity at a time. */
+   animation-delay so exactly one is visible (at 0.5 opacity) at a time. */
 .event-hero-rotator {
   position: relative;
   width: 100%;
@@ -201,33 +216,22 @@ th, td {
 .event-hero-rotator--3 .event-hero:nth-child(2) { animation-delay: 6s; }
 .event-hero-rotator--3 .event-hero:nth-child(3) { animation-delay: 12s; }
 
-/* Each image gets one 6s slot: ~1s fade in, ~4s hold, ~1s fade out. */
+/* Each image gets one 6s slot: ~1s fade in, ~4s hold, ~1s fade out. Peak
+   opacity is 0.5 to match the static single-photo case above. */
 @keyframes heroFade2 {
   0%, 50%, 100% { opacity: 0; }
-  8%, 42% { opacity: 1; }
+  8%, 42% { opacity: 0.5; }
 }
 @keyframes heroFade3 {
   0%, 33.34%, 100% { opacity: 0; }
-  5%, 28% { opacity: 1; }
+  5%, 28% { opacity: 0.5; }
 }
 @media (prefers-reduced-motion: reduce) {
   .event-hero-rotator .event-hero { animation: none; }
-  .event-hero-rotator .event-hero:first-child { opacity: 1; }
+  .event-hero-rotator .event-hero:first-child { opacity: 0.5; }
 }
 
 .event-header { position: relative; padding-top: var(--space-2); }
-.event-logo {
-  width: 72px;
-  height: 72px;
-  object-fit: cover;
-  border-radius: var(--radius);
-  border: 3px solid var(--color-surface);
-  background: var(--color-surface);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-  margin-top: -54px; /* overlaps the hero */
-  margin-bottom: var(--space-1);
-  display: block;
-}
 .event-meta {
   color: var(--color-muted);
   display: flex;

@@ -2,6 +2,7 @@
 <div class="event-banner event-banner--{{ event.banner_style or 'notice' }}" role="alert">{{ event.banner_message }}</div>
 {% endif %}
 {% set banner_images = [event.banner_image_url, event.banner_image_url_2, event.banner_image_url_3] | select | list %}
+<div class="event-hero-wrap">
 {% if banner_images | length > 1 %}
 {# Two or three banners cross-fade on a pure-CSS timed loop -- see .event-hero-rotator. #}
 <div class="event-hero-rotator event-hero-rotator--{{ banner_images | length }}">
@@ -12,3 +13,7 @@
 {% else %}
 <div class="event-hero event-hero--fallback"></div>
 {% endif %}
+{% if event.logo_url %}
+<img class="event-hero-logo" src="{{ event.logo_url }}" alt="{{ event.name }} logo">
+{% endif %}
+</div>

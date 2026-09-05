@@ -68,6 +68,10 @@ def test_event_page_renders_banner_and_logo_when_set(dynamodb_tables):
     resp = client.get("/")
     assert 'src="https://example.com/banner.jpg"' in resp.text
     assert 'src="https://example.com/logo.png"' in resp.text
+    # The logo is overlaid on the hero, not in the header column: it carries
+    # the overlay class and appears before the event-header block.
+    assert 'class="event-hero-logo"' in resp.text
+    assert resp.text.index("event-hero-logo") < resp.text.index('class="event-header"')
 
 
 def test_event_page_rotates_between_multiple_banner_images(dynamodb_tables):
