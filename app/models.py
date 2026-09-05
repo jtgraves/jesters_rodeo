@@ -28,6 +28,9 @@ class Event(BaseModel):
     registration_opens_at: str | None = None
     registration_closes_at: str | None = None
     status: Literal["draft", "open", "closed", "archived"] = "draft"
+    # Pasted URLs, not uploads -- the admin hosts these wherever they like.
+    banner_image_url: str | None = None
+    logo_url: str | None = None
 
 
 class Order(BaseModel):

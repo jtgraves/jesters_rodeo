@@ -76,6 +76,8 @@ def create_event(
     description: str = Form(...),
     ticket_price_cents: int = Form(...),
     capacity: int = Form(...),
+    banner_image_url: str = Form(""),
+    logo_url: str = Form(""),
 ) -> Response:
     try:
         EVENTS().put_item(
@@ -85,6 +87,8 @@ def create_event(
                 "ticket_price_cents": ticket_price_cents, "capacity": capacity,
                 "tickets_sold_count": 0, "registration_open": False, "status": "draft",
                 "registration_opens_at": None, "registration_closes_at": None,
+                "banner_image_url": banner_image_url.strip() or None,
+                "logo_url": logo_url.strip() or None,
             },
             # An unconditional put on an existing year resets tickets_sold_count
             # to 0 and status to draft while the paid orders for that event
@@ -117,6 +121,25 @@ def open_event(event_id: str) -> RedirectResponse:
 @router.post("/events/{event_id}/close")
 def close_event(event_id: str) -> RedirectResponse:
     _set_event_open(event_id, False)
+    return RedirectResponse("/admin/events", status_code=303)
+
+
+@router.post("/events/{event_id}/images")
+def update_event_images(
+    event_id: str,
+    banner_image_url: str = Form(""),
+    logo_url: str = Form(""),
+) -> RedirectResponse:
+    # No condition needed: this is cosmetic metadata, not capacity/status, so
+    # there's no race to guard against. A blank field clears the URL.
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        UpdateExpression="SET banner_image_url = :b, logo_url = :l",
+        ExpressionAttributeValues={
+            ":b": banner_image_url.strip() or None,
+            ":l": logo_url.strip() or None,
+        },
+    )
     return RedirectResponse("/admin/events", status_code=303)
 
 

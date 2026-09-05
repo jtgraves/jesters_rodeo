@@ -11,6 +11,11 @@
     <a href="/admin/checkin?event_id={{ e.event_id }}">Check-in</a>
     <form method="post" action="/admin/events/{{ e.event_id }}/open" style="display:inline"><button>Open</button></form>
     <form method="post" action="/admin/events/{{ e.event_id }}/close" style="display:inline"><button>Close</button></form>
+    <form method="post" action="/admin/events/{{ e.event_id }}/images" class="event-images-form">
+      <label>Banner URL <input type="url" name="banner_image_url" value="{{ e.banner_image_url or '' }}" placeholder="https://..."></label>
+      <label>Logo URL <input type="url" name="logo_url" value="{{ e.logo_url or '' }}" placeholder="https://..."></label>
+      <button type="submit">Save images</button>
+    </form>
   </li>
 {% endfor %}
 </ul>
@@ -20,9 +25,11 @@
   <input name="name" placeholder="Name" required>
   <input name="date" placeholder="Date (YYYY-MM-DD)" required>
   <input name="location" placeholder="Location" required>
-  <input name="description" placeholder="Description" required>
+  <textarea name="description" placeholder="Description" required></textarea>
   <input name="ticket_price_cents" placeholder="Price (cents)" required>
   <input name="capacity" placeholder="Capacity" required>
+  <input type="url" name="banner_image_url" placeholder="Banner image URL (optional)">
+  <input type="url" name="logo_url" placeholder="Logo image URL (optional)">
   <button type="submit">Create</button>
 </form>
 {% endblock %}

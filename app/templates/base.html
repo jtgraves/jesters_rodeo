@@ -6,8 +6,9 @@
 <title>{% block title %}Jester's Rodeo{% endblock %}</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 {% block nav %}{% endblock %}
+{% block full_width %}{% endblock %}
 <main class="page">
 {% block content %}{% endblock %}
 </main>

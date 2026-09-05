@@ -52,6 +52,25 @@ def test_get_event_page_no_open_event(dynamodb_tables):
     assert "no event" in resp.text.lower() or "not currently open" in resp.text.lower()
 
 
+def test_event_page_falls_back_to_gradient_without_banner(dynamodb_tables):
+    """Most events won't have a banner/logo set -- the page must not look broken."""
+    _put_event()
+    resp = client.get("/")
+    assert "event-hero--fallback" in resp.text
+    assert "event-logo" not in resp.text
+
+
+def test_event_page_renders_banner_and_logo_when_set(dynamodb_tables):
+    _put_event(
+        banner_image_url="https://example.com/banner.jpg",
+        logo_url="https://example.com/logo.png",
+    )
+    resp = client.get("/")
+    assert 'src="https://example.com/banner.jpg"' in resp.text
+    assert 'src="https://example.com/logo.png"' in resp.text
+    assert "event-hero--fallback" not in resp.text
+
+
 @patch("app.routes.public.stripe.checkout.Session.create")
 def test_checkout_creates_pending_order_and_redirects(mock_create, dynamodb_tables):
     _put_event()

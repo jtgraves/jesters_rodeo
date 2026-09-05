@@ -1,26 +1,59 @@
 {% extends "base.html" %}
 {% block title %}{{ event.name }}{% endblock %}
+
+{% block full_width %}
+{% if event.banner_image_url %}
+<img class="event-hero" src="{{ event.banner_image_url }}" alt="">
+{% else %}
+<div class="event-hero event-hero--fallback"></div>
+{% endif %}
+{% endblock %}
+
+{% block body_class %}has-mobile-cta{% endblock %}
+
 {% block content %}
-<h1>{{ event.name }}</h1>
-<p>{{ event.date }} — {{ event.location }}</p>
-<p>{{ event.description }}</p>
-<p>${{ "%.2f"|format(event.ticket_price_cents / 100) }} per ticket</p>
+<div class="event-header">
+  {% if event.logo_url %}
+    <img class="event-logo" src="{{ event.logo_url }}" alt="{{ event.name }} logo">
+  {% endif %}
+  <h1>{{ event.name }}</h1>
+  <p class="event-meta"><span>🗓 {{ event.date }}</span><span>📍 {{ event.location }}</span></p>
+</div>
 
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
-{% if event.tickets_sold_count >= event.capacity %}
-  <p>This event is sold out. <a href="/waitlist?event_id={{ event.event_id }}">Join the waitlist</a>.</p>
-{% elif not event.registration_open %}
-  <p>Registration is not currently open.</p>
-{% else %}
-<form method="post" action="/checkout">
-  <input type="hidden" name="event_id" value="{{ event.event_id }}">
-  <label>Quantity <input type="number" name="quantity" value="1" min="1" max="20" required></label>
-  <label>Your name <input type="text" name="buyer_name" required></label>
-  <label>Your email <input type="email" name="buyer_email" required></label>
-  <label>Attendee names (one per line, optional)<textarea name="attendee_names"></textarea></label>
-  <label>Discount code (optional) <input type="text" name="discount_code"></label>
-  <button type="submit">Register</button>
-</form>
-{% endif %}
+<div class="event-layout">
+  <div class="event-main">
+    <h2>About this event</h2>
+    <p class="event-description">{{ event.description }}</p>
+  </div>
+
+  <aside class="ticket-card" id="tickets">
+    <p class="ticket-price">${{ "%.2f"|format(event.ticket_price_cents / 100) }} <span>per ticket</span></p>
+
+    {% if event.tickets_sold_count >= event.capacity %}
+      <p>This event is sold out. <a href="/waitlist?event_id={{ event.event_id }}">Join the waitlist</a>.</p>
+    {% elif not event.registration_open %}
+      <p>Registration is not currently open.</p>
+    {% else %}
+    <form method="post" action="/checkout">
+      <input type="hidden" name="event_id" value="{{ event.event_id }}">
+      <label>Quantity <input type="number" name="quantity" value="1" min="1" max="20" required></label>
+      <label>Your name <input type="text" name="buyer_name" required></label>
+      <label>Your email <input type="email" name="buyer_email" required></label>
+      <label>Attendee names (one per line, optional)<textarea name="attendee_names"></textarea></label>
+      <label>Discount code (optional) <input type="text" name="discount_code"></label>
+      <button type="submit">Register</button>
+    </form>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
+
+{% block footer %}
+<div class="mobile-cta-bar">
+  <span>${{ "%.2f"|format(event.ticket_price_cents / 100) }}</span>
+  <a href="#tickets" class="mobile-cta-link">Get Tickets</a>
+</div>
+{{ super() }}
 {% endblock %}

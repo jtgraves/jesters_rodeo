@@ -156,3 +156,110 @@ th, td {
   font-size: 0.85rem;
 }
 .site-footer a { color: var(--color-muted); }
+
+/* ---- Event page: hero, header, two-column ticket layout ---- */
+
+.event-hero {
+  display: block;
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+  background-color: var(--color-surface);
+}
+.event-hero--fallback {
+  background-image: linear-gradient(135deg, var(--color-accent), #2d1b45);
+}
+
+.event-header { position: relative; padding-top: var(--space-2); }
+.event-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 3px solid var(--color-surface);
+  background: var(--color-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  margin-top: -54px; /* overlaps the hero */
+  margin-bottom: var(--space-1);
+  display: block;
+}
+.event-meta {
+  color: var(--color-muted);
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.event-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.event-description { white-space: pre-line; }
+
+.ticket-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+}
+.ticket-price { font-size: 1.3rem; font-weight: 600; margin: 0 0 var(--space-2); }
+.ticket-price span { font-size: 0.85rem; font-weight: normal; color: var(--color-muted); }
+.ticket-card form label { display: block; margin-bottom: var(--space-1); font-size: 0.9rem; }
+.ticket-card form input,
+.ticket-card form textarea { display: block; width: 100%; margin-top: 0.25rem; }
+.ticket-card form button { width: 100%; margin-top: var(--space-1); }
+
+.mobile-cta-bar { display: none; }
+
+@media (min-width: 800px) {
+  .event-layout { grid-template-columns: 2fr 1fr; align-items: start; }
+  /* No --nav-height offset here: public pages, unlike admin ones, have no
+     fixed nav bar above the content to leave room for. */
+  .ticket-card { position: sticky; top: var(--space-2); }
+}
+
+@media (max-width: 799px) {
+  .mobile-cta-bar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-1) var(--space-2);
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    z-index: 2;
+  }
+  .mobile-cta-link {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius);
+    text-decoration: none;
+  }
+  /* Scoped to the event page only (via body.has-mobile-cta), not every page
+     -- a body-wide selector here would pad the bottom of admin pages, the
+     confirmation page, etc. for no reason. */
+  body.has-mobile-cta { padding-bottom: 4rem; }
+}
+
+/* ---- Admin: inline per-row image-URL form ---- */
+.event-images-form {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: end;
+  margin-top: var(--space-1);
+}
+.event-images-form label {
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.event-images-form input { width: 220px; }
