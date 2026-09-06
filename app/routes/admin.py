@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
 
-from app.auth import require_admin
+from app.auth import ADMIN_GROUP, require_admin, require_member
 from app.config import settings
 from app.db import ANNOUNCEMENTS, DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST, paginate
 from app.emails import send_confirmation_email
@@ -29,7 +29,11 @@ from app.templating import templates
 logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.stripe_secret_key
+# Admin-only by default -- a new route is locked down unless it's deliberately
+# put on member_router below.
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
+# Pages members ("clowns" without admin rights) share with admins.
+member_router = APIRouter(prefix="/admin", dependencies=[Depends(require_member)])
 
 CSV_FORMULA_PREFIXES = ("=", "+", "-", "@")
 
@@ -429,7 +433,7 @@ def _get_order_or_404(order_id: str) -> dict:
     return order
 
 
-@router.get("/orders")
+@member_router.get("/orders")
 def list_orders(request: Request, event_id: str = "", q: str = "", status: str = "") -> Response:
     redirect = _resolve_event_id(request, event_id, "/admin/orders")
     if redirect is not None:
@@ -441,7 +445,7 @@ def list_orders(request: Request, event_id: str = "", q: str = "", status: str =
     )
 
 
-@router.get("/orders/export")
+@member_router.get("/orders/export")
 def export_orders(request: Request, event_id: str = "") -> Response:
     # Redirect to the human-readable page rather than back to /export itself,
     # so a missing event_id doesn't turn into a download loop.
@@ -475,7 +479,7 @@ def _resend_confirmation_email(order_id: str) -> dict:
     return order_item
 
 
-@router.post("/orders/{order_id}/resend-email")
+@member_router.post("/orders/{order_id}/resend-email")
 def resend_email(order_id: str) -> RedirectResponse:
     order_item = _resend_confirmation_email(order_id)
     return RedirectResponse(f"/admin/orders?event_id={order_item['event_id']}", status_code=303)
@@ -697,7 +701,7 @@ def deactivate_discount_code(code: str, event_id: str = Form(...)) -> RedirectRe
     return RedirectResponse(f"/admin/discount-codes?event_id={event_id}", status_code=303)
 
 
-@router.get("/waitlist")
+@member_router.get("/waitlist")
 def list_waitlist(request: Request, event_id: str = "") -> Response:
     redirect = _resolve_event_id(request, event_id, "/admin/waitlist")
     if redirect is not None:
@@ -708,7 +712,7 @@ def list_waitlist(request: Request, event_id: str = "") -> Response:
     )
 
 
-@router.post("/waitlist/{waitlist_id}/notify")
+@member_router.post("/waitlist/{waitlist_id}/notify")
 def notify_waitlist_entry(waitlist_id: str, event_id: str = Form(...)) -> RedirectResponse:
     WAITLIST().update_item(
         Key={"waitlist_id": waitlist_id},
@@ -755,7 +759,7 @@ def _search_checkin(event_id: str, q: str) -> list[dict]:
     return matches
 
 
-@router.get("/checkin")
+@member_router.get("/checkin")
 def checkin_page(request: Request, event_id: str = "", q: str = "") -> Response:
     redirect = _resolve_event_id(request, event_id, "/admin/checkin")
     if redirect is not None:
@@ -779,7 +783,7 @@ def _checkin_response(request: Request, result: dict, event_id: str, q: str) -> 
     return JSONResponse(result)
 
 
-@router.post("/checkin/{ticket_id}")
+@member_router.post("/checkin/{ticket_id}")
 def checkin_ticket(request: Request, ticket_id: str, event_id: str, q: str = "") -> Response:
     ticket = TICKETS().get_item(Key={"ticket_id": ticket_id}).get("Item")
     if not ticket:
@@ -825,7 +829,7 @@ def checkin_ticket(request: Request, ticket_id: str, event_id: str, q: str = "")
     )
 
 
-@router.post("/checkin/{order_id}/resend-email")
+@member_router.post("/checkin/{order_id}/resend-email")
 def resend_email_from_checkin(order_id: str, q: str = "") -> RedirectResponse:
     order_item = _resend_confirmation_email(order_id)
     suffix = f"&q={quote(q)}" if q else ""
@@ -993,33 +997,43 @@ def update_charity(
     return RedirectResponse(f"/admin/charity?event_id={event_id}", status_code=303)
 
 
-# ---- Administrators (Cognito users) ----
+# ---- Clown management (Cognito users) ----
+# Everyone in the pool is a clown (member). The ones in the ADMIN_GROUP are
+# clowns with admin privileges.
 
 def _cognito():
     return boto3.client("cognito-idp", region_name=settings.aws_region)
 
 
-def _list_admins() -> list[dict]:
+def _admin_usernames() -> set[str]:
+    resp = _cognito().list_users_in_group(
+        UserPoolId=settings.cognito_user_pool_id, GroupName=ADMIN_GROUP
+    )
+    return {u["Username"] for u in resp.get("Users", [])}
+
+
+def _list_clowns() -> list[dict]:
     users = _cognito().list_users(UserPoolId=settings.cognito_user_pool_id).get("Users", [])
-    admins = []
+    admin_usernames = _admin_usernames()
+    clowns = []
     for u in users:
         attrs = {a["Name"]: a["Value"] for a in u.get("Attributes", [])}
-        admins.append({
+        clowns.append({
             # Username is the opaque sub on this pool (sign-in is by email alias).
             "username": u["Username"],
             "email": attrs.get("email", u["Username"]),
             "status": u.get("UserStatus", ""),
             "created": u.get("UserCreateDate"),
+            "is_admin": u["Username"] in admin_usernames,
         })
-    admins.sort(key=lambda a: a["email"].lower())
-    return admins
+    clowns.sort(key=lambda c: c["email"].lower())
+    return clowns
 
 
-def _create_admin(email: str) -> None:
+def _create_clown(email: str, make_admin: bool) -> None:
     # No temporary password / no SUPPRESS: Cognito emails the invitation with a
-    # generated password, and the new admin sets a real one on first sign-in --
-    # the same flow the first admin went through.
-    _cognito().admin_create_user(
+    # generated password, and the new clown sets a real one on first sign-in.
+    resp = _cognito().admin_create_user(
         UserPoolId=settings.cognito_user_pool_id,
         Username=email,
         UserAttributes=[
@@ -1027,66 +1041,87 @@ def _create_admin(email: str) -> None:
             {"Name": "email_verified", "Value": "true"},
         ],
     )
+    if make_admin:
+        _promote_clown(resp["User"]["Username"])
 
 
-def _delete_admin(username: str) -> None:
+def _promote_clown(username: str) -> None:
+    _cognito().admin_add_user_to_group(
+        UserPoolId=settings.cognito_user_pool_id,
+        Username=username,
+        GroupName=ADMIN_GROUP,
+    )
+
+
+def _delete_clown(username: str) -> None:
     _cognito().admin_delete_user(
         UserPoolId=settings.cognito_user_pool_id, Username=username
     )
 
 
-def _administrators_page(
+def _clowns_page(
     request: Request, current_sub: str, error: str | None = None, status_code: int = 200
 ) -> Response:
     return templates.TemplateResponse(
-        request, "admin/administrators.html",
-        {"admins": _list_admins(), "current_sub": current_sub, "error": error},
+        request, "admin/clowns.html",
+        {"clowns": _list_clowns(), "current_sub": current_sub, "error": error},
         status_code=status_code,
     )
 
 
-@router.get("/administrators")
-def list_administrators(
+@router.get("/clowns")
+def list_clowns(
     request: Request, current_admin: dict = Depends(require_admin)
 ) -> Response:
-    return _administrators_page(request, current_admin.get("sub"))
+    return _clowns_page(request, current_admin.get("sub"))
 
 
-@router.post("/administrators")
-def create_administrator(
+@router.post("/clowns")
+def create_clown(
     request: Request,
     current_admin: dict = Depends(require_admin),
     email: str = Form(...),
+    make_admin: str = Form(""),
 ) -> Response:
     email = email.strip()
     if not email:
-        return _administrators_page(
+        return _clowns_page(
             request, current_admin.get("sub"), error="Email is required.", status_code=400
         )
     try:
-        _create_admin(email)
+        _create_clown(email, make_admin=bool(make_admin))
     except ClientError as exc:
         code = exc.response["Error"]["Code"]
         if code == "UsernameExistsException":
-            msg = "There's already an admin with that email."
+            msg = "There's already a clown with that email."
         elif code in ("InvalidParameterException", "InvalidEmailRoleAccessPolicyException"):
             msg = "That doesn't look like a valid email address."
         else:
             raise
-        return _administrators_page(request, current_admin.get("sub"), error=msg, status_code=400)
-    return RedirectResponse("/admin/administrators", status_code=303)
+        return _clowns_page(request, current_admin.get("sub"), error=msg, status_code=400)
+    return RedirectResponse("/admin/clowns", status_code=303)
 
 
-@router.post("/administrators/{username}/delete")
-def delete_administrator(
+@router.post("/clowns/{username}/promote")
+def promote_clown(
+    request: Request,
+    username: str,
+    current_admin: dict = Depends(require_admin),
+) -> Response:
+    _promote_clown(username)
+    return RedirectResponse("/admin/clowns", status_code=303)
+
+
+@router.post("/clowns/{username}/delete")
+def delete_clown(
     request: Request,
     username: str,
     current_admin: dict = Depends(require_admin),
 ) -> Response:
     if username == current_admin.get("sub"):
-        return _administrators_page(
+        return _clowns_page(
             request, current_admin.get("sub"),
-            error="You can't remove your own admin account.", status_code=400,
+            error="You can't remove your own account.", status_code=400,
         )
-    _delete_admin(username)
-    return RedirectResponse("/admin/administrators", status_code=303)
+    _delete_clown(username)
+    return RedirectResponse("/admin/clowns", status_code=303)

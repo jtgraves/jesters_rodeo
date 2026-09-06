@@ -11,6 +11,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(public.router)
 app.include_router(webhooks.router)
 app.include_router(auth_routes.router)
+app.include_router(admin.member_router)
 app.include_router(admin.router)
 
 handler = Mangum(app)

@@ -208,3 +208,35 @@ def test_require_admin_401s_api_clients():
     with pytest.raises(HTTPException) as exc:
         auth.require_admin(_request(accept="application/json"))
     assert exc.value.status_code == 401
+
+
+def _signed_in(groups: list[str], accept: str = "text/html") -> Request:
+    signed = auth.issue_session("tok")
+    return _request({settings.session_cookie_name: signed}, accept=accept)
+
+
+def test_is_admin_reads_the_cognito_group():
+    assert auth.is_admin({"cognito:groups": ["admins"]}) is True
+    assert auth.is_admin({"cognito:groups": ["other"]}) is False
+    assert auth.is_admin({}) is False
+
+
+def test_require_member_accepts_any_signed_in_clown():
+    with patch.object(auth, "verify_cognito_token", return_value={"sub": "m", "cognito:groups": []}):
+        claims = auth.require_member(_signed_in([]))
+    assert claims["sub"] == "m"
+
+
+def test_require_admin_bounces_a_non_admin_clown_to_orders():
+    with patch.object(auth, "verify_cognito_token", return_value={"sub": "m", "cognito:groups": []}):
+        with pytest.raises(HTTPException) as exc:
+            auth.require_admin(_signed_in([], accept="text/html"))
+    assert exc.value.status_code == 303
+    assert exc.value.headers["Location"] == "/admin/orders"
+
+
+def test_require_admin_403s_a_non_admin_api_client():
+    with patch.object(auth, "verify_cognito_token", return_value={"sub": "m", "cognito:groups": []}):
+        with pytest.raises(HTTPException) as exc:
+            auth.require_admin(_signed_in([], accept="application/json"))
+    assert exc.value.status_code == 403

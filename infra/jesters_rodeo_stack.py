@@ -167,13 +167,24 @@ class JestersRodeoStack(Stack):
         announcement_lambda.grant_invoke(app_lambda)
         images_bucket.grant_write(app_lambda)
 
-        # The admin "Administrators" page manages Cognito users in this pool.
+        # The admin "Clown Management" page manages Cognito users in this pool:
+        # every user is a clown (member); the ones in the "admins" group are
+        # clowns with full admin privileges.
+        cognito.CfnUserPoolGroup(
+            self, "AdminsGroup",
+            user_pool_id=user_pool.user_pool_id,
+            group_name="admins",
+            description="Clowns with full admin privileges",
+        )
         app_lambda.add_to_role_policy(
             iam.PolicyStatement(
                 actions=[
                     "cognito-idp:ListUsers",
+                    "cognito-idp:ListUsersInGroup",
                     "cognito-idp:AdminCreateUser",
                     "cognito-idp:AdminDeleteUser",
+                    "cognito-idp:AdminAddUserToGroup",
+                    "cognito-idp:AdminRemoveUserFromGroup",
                 ],
                 resources=[user_pool.user_pool_arn],
             )

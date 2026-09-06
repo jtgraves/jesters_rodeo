@@ -13,13 +13,27 @@ from app.main import app
 
 @pytest.fixture
 def admin_client(dynamodb_tables):
-    """A client carrying a valid session cookie, with token verification stubbed.
+    """A client signed in as an admin (a clown in the "admins" group).
 
     Token verification itself is covered end-to-end in tests/test_auth.py
     against real RS256 signatures; stubbing it here keeps these tests about
     the routes.
     """
-    with patch.object(auth, "verify_cognito_token", return_value={"sub": "admin-1"}):
+    with patch.object(
+        auth, "verify_cognito_token",
+        return_value={"sub": "admin-1", "cognito:groups": ["admins"]},
+    ):
+        client = TestClient(app)
+        client.cookies.set(settings.session_cookie_name, auth.issue_session("fake-id-token"))
+        yield client
+
+
+@pytest.fixture
+def member_client(dynamodb_tables):
+    """A client signed in as a plain clown -- no admin group membership."""
+    with patch.object(
+        auth, "verify_cognito_token", return_value={"sub": "member-1", "cognito:groups": []},
+    ):
         client = TestClient(app)
         client.cookies.set(settings.session_cookie_name, auth.issue_session("fake-id-token"))
         yield client
@@ -1047,96 +1061,137 @@ def test_orders_export_has_donation_column_not_attendees(admin_client):
     assert "25.00" in resp.text
 
 
-# ---- Administrators (Cognito users) ----
+# ---- Clown management (Cognito users) ----
 
-_FAKE_ADMINS = [
-    {"username": "admin-1", "email": "me@example.com", "status": "CONFIRMED", "created": None},
+_FAKE_CLOWNS = [
+    {"username": "admin-1", "email": "me@example.com", "status": "CONFIRMED",
+     "created": None, "is_admin": True},
     {"username": "sub-2", "email": "other@example.com", "status": "FORCE_CHANGE_PASSWORD",
-     "created": None},
+     "created": None, "is_admin": False},
 ]
 
 
-def test_administrators_page_lists_admins(admin_client):
-    with patch("app.routes.admin._list_admins", return_value=_FAKE_ADMINS):
-        resp = admin_client.get("/admin/administrators")
+def test_clowns_page_lists_clowns_with_roles(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=_FAKE_CLOWNS):
+        resp = admin_client.get("/admin/clowns")
     assert resp.status_code == 200
-    assert "me@example.com" in resp.text
-    assert "other@example.com" in resp.text
-    # The current admin can't remove their own row.
-    assert 'action="/admin/administrators/sub-2/delete"' in resp.text
-    assert 'action="/admin/administrators/admin-1/delete"' not in resp.text
+    assert "Clown Management" in resp.text
+    assert "me@example.com" in resp.text and "other@example.com" in resp.text
+    assert "Admin" in resp.text and "Clown" in resp.text
+    # promote button only for the non-admin clown
+    assert 'action="/admin/clowns/sub-2/promote"' in resp.text
+    assert 'action="/admin/clowns/admin-1/promote"' not in resp.text
+    # can't remove yourself
+    assert 'action="/admin/clowns/sub-2/delete"' in resp.text
+    assert 'action="/admin/clowns/admin-1/delete"' not in resp.text
 
 
-def test_create_administrator_calls_cognito(admin_client):
-    with patch("app.routes.admin._list_admins", return_value=[]), \
-         patch("app.routes.admin._create_admin") as mock_create:
+def test_invite_clown_calls_cognito(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._create_clown") as mock_create:
         resp = admin_client.post(
-            "/admin/administrators", data={"email": "  new@example.com "},
-            follow_redirects=False,
+            "/admin/clowns", data={"email": "  new@example.com "}, follow_redirects=False,
         )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/admin/administrators"
-    mock_create.assert_called_once_with("new@example.com")
+    assert resp.headers["location"] == "/admin/clowns"
+    mock_create.assert_called_once_with("new@example.com", make_admin=False)
 
 
-def test_create_administrator_rejects_blank_email(admin_client):
-    with patch("app.routes.admin._list_admins", return_value=[]), \
-         patch("app.routes.admin._create_admin") as mock_create:
+def test_invite_clown_as_admin_passes_the_flag(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._create_clown") as mock_create:
+        admin_client.post(
+            "/admin/clowns", data={"email": "boss@example.com", "make_admin": "1"},
+            follow_redirects=False,
+        )
+    mock_create.assert_called_once_with("boss@example.com", make_admin=True)
+
+
+def test_invite_clown_rejects_blank_email(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._create_clown") as mock_create:
         resp = admin_client.post(
-            "/admin/administrators", data={"email": "   "}, follow_redirects=False
+            "/admin/clowns", data={"email": "   "}, follow_redirects=False
         )
     assert resp.status_code == 400
     assert "Email is required." in resp.text
     mock_create.assert_not_called()
 
 
-def test_create_administrator_handles_duplicate(admin_client):
+def test_invite_clown_handles_duplicate(admin_client):
     err = ClientError(
-        {"Error": {"Code": "UsernameExistsException", "Message": "exists"}},
-        "AdminCreateUser",
+        {"Error": {"Code": "UsernameExistsException", "Message": "exists"}}, "AdminCreateUser",
     )
-    with patch("app.routes.admin._list_admins", return_value=[]), \
-         patch("app.routes.admin._create_admin", side_effect=err):
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._create_clown", side_effect=err):
         resp = admin_client.post(
-            "/admin/administrators", data={"email": "dupe@example.com"},
-            follow_redirects=False,
+            "/admin/clowns", data={"email": "dupe@example.com"}, follow_redirects=False,
         )
     assert resp.status_code == 400
-    assert "already an admin" in resp.text
+    assert "already a clown" in resp.text
 
 
-def test_create_administrator_handles_invalid_email(admin_client):
-    err = ClientError(
-        {"Error": {"Code": "InvalidParameterException", "Message": "bad"}},
-        "AdminCreateUser",
-    )
-    with patch("app.routes.admin._list_admins", return_value=[]), \
-         patch("app.routes.admin._create_admin", side_effect=err):
-        resp = admin_client.post(
-            "/admin/administrators", data={"email": "not-an-email"},
-            follow_redirects=False,
-        )
-    assert resp.status_code == 400
-    assert "valid email address" in resp.text
-
-
-def test_delete_administrator_calls_cognito(admin_client):
-    with patch("app.routes.admin._list_admins", return_value=[]), \
-         patch("app.routes.admin._delete_admin") as mock_delete:
-        resp = admin_client.post(
-            "/admin/administrators/sub-2/delete", follow_redirects=False
-        )
+def test_promote_clown_calls_cognito(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._promote_clown") as mock_promote:
+        resp = admin_client.post("/admin/clowns/sub-2/promote", follow_redirects=False)
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/admin/administrators"
+    assert resp.headers["location"] == "/admin/clowns"
+    mock_promote.assert_called_once_with("sub-2")
+
+
+def test_delete_clown_calls_cognito(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._delete_clown") as mock_delete:
+        resp = admin_client.post("/admin/clowns/sub-2/delete", follow_redirects=False)
+    assert resp.status_code == 303
     mock_delete.assert_called_once_with("sub-2")
 
 
-def test_delete_administrator_blocks_self(admin_client):
-    with patch("app.routes.admin._list_admins", return_value=_FAKE_ADMINS), \
-         patch("app.routes.admin._delete_admin") as mock_delete:
-        resp = admin_client.post(
-            "/admin/administrators/admin-1/delete", follow_redirects=False
-        )
+def test_delete_clown_blocks_self(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=_FAKE_CLOWNS), \
+         patch("app.routes.admin._delete_clown") as mock_delete:
+        resp = admin_client.post("/admin/clowns/admin-1/delete", follow_redirects=False)
     assert resp.status_code == 400
-    assert "your own admin account" in resp.text
+    assert "your own account" in resp.text
     mock_delete.assert_not_called()
+
+
+# ---- Member (clown without admin rights) access ----
+
+def test_member_can_reach_shared_pages(member_client):
+    _put_event(status="open")
+    for path in ("/admin/orders", "/admin/checkin", "/admin/waitlist"):
+        resp = member_client.get(path, follow_redirects=True)
+        assert resp.status_code == 200, path
+
+
+def test_member_is_bounced_from_admin_only_pages(member_client):
+    _put_event(status="open")
+    for path in ("/admin/events", "/admin/clowns", "/admin/charity", "/admin/give-tickets"):
+        resp = member_client.get(path, headers={"accept": "text/html"}, follow_redirects=False)
+        assert resp.status_code == 303, path
+        assert resp.headers["location"] == "/admin/orders", path
+
+
+def test_member_cannot_refund(member_client):
+    _put_event()
+    _put_order("ord_x")
+    resp = member_client.post(
+        "/admin/orders/ord_x/refund", headers={"accept": "application/json"}
+    )
+    assert resp.status_code == 403
+
+
+def test_member_nav_hides_admin_links(member_client):
+    _put_event(status="open")
+    resp = member_client.get("/admin/orders")
+    assert 'href="/admin/checkin"' in resp.text
+    assert 'href="/admin/events"' not in resp.text
+    assert 'href="/admin/clowns"' not in resp.text
+
+
+def test_admin_nav_shows_clowns_link(admin_client):
+    _put_event()
+    resp = admin_client.get("/admin/orders?event_id=evt_2026")
+    assert 'href="/admin/clowns"' in resp.text

@@ -1,0 +1,42 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Clown Management</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<form method="post" action="/admin/clowns">
+  <input type="email" name="email" placeholder="new-clown@example.com" required>
+  <label><input type="checkbox" name="make_admin" value="1"> Make them an admin</label>
+  <button type="submit">Invite clown</button>
+</form>
+<p>They get an email from Cognito with a temporary password and set a real one on first sign-in.
+   Admins are clowns with extra privileges; every clown can reach Orders, Check-in and Waitlist.</p>
+
+<div class="table-scroll">
+<table>
+<tr><th>Email</th><th>Role</th><th>Status</th><th>Added</th><th></th></tr>
+{% for c in clowns %}
+<tr>
+  <td>{{ c.email }}</td>
+  <td>{% if c.is_admin %}Admin{% else %}Clown{% endif %}</td>
+  <td>{{ c.status }}</td>
+  <td>{{ c.created }}</td>
+  <td>
+    {% if not c.is_admin %}
+      <form method="post" action="/admin/clowns/{{ c.username }}/promote" style="display:inline">
+        <button type="submit">Make admin</button>
+      </form>
+    {% endif %}
+    {% if c.username == current_sub %}
+      <em>you</em>
+    {% else %}
+      <form method="post" action="/admin/clowns/{{ c.username }}/delete" style="display:inline"
+            onsubmit="return confirm('Remove this clown?')">
+        <button type="submit">Remove</button>
+      </form>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</table>
+</div>
+{% endblock %}

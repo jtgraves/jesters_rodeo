@@ -135,17 +135,48 @@ def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(settings.session_cookie_name, path="/admin")
 
 
+# Every user in the pool is a "clown" (member). The ones in this Cognito group
+# are also admins -- clowns with full privileges.
+ADMIN_GROUP = "admins"
+
+
 def _not_authenticated(request: Request) -> HTTPException:
     if "text/html" in request.headers.get("accept", ""):
         return HTTPException(status_code=303, headers={"Location": "/admin/login"})
     return HTTPException(status_code=401, detail="Not authenticated")
 
 
-def require_admin(request: Request) -> dict:
+def is_admin(claims: dict) -> bool:
+    return ADMIN_GROUP in (claims.get("cognito:groups") or [])
+
+
+def _authenticated_claims(request: Request) -> dict:
     token = read_session(request)
     if token is None:
         raise _not_authenticated(request)
     try:
-        return verify_cognito_token(token)
+        claims = verify_cognito_token(token)
     except HTTPException:
         raise _not_authenticated(request)
+    # Stashed so templates (the shared admin nav) can vary by role without
+    # every route threading it through the context dict.
+    request.state.is_admin = is_admin(claims)
+    return claims
+
+
+def require_member(request: Request) -> dict:
+    """Any signed-in clown. Gates the pages members share with admins
+    (orders, check-in, waitlist)."""
+    return _authenticated_claims(request)
+
+
+def require_admin(request: Request) -> dict:
+    """A clown in the admins group. Gates everything else under /admin."""
+    claims = _authenticated_claims(request)
+    if not is_admin(claims):
+        # A signed-in clown without admin rights -- not a login problem, so
+        # don't bounce them to /admin/login. Send them to a page they can use.
+        if "text/html" in request.headers.get("accept", ""):
+            raise HTTPException(status_code=303, headers={"Location": "/admin/orders"})
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return claims
