@@ -149,38 +149,54 @@ th, td {
   .nav-toggle-checkbox:checked ~ .nav-links { display: flex; }
 }
 
-/* ---- Public nav: no bar of its own -- on pages with a banner it floats
-   over the top of it (body.has-hero). Reuses the hamburger mechanics above
-   (.nav-toggle-*, .nav-links). ---- */
+/* ---- Public nav: no bar of its own, no wordmark -- just a hamburger in the
+   top-right at every width. On pages with a banner (body.has-hero) it floats
+   over the top of it. Reuses the .nav-toggle-* / .nav-links mechanics. ---- */
 .public-nav {
-  position: relative; /* anchors the mobile dropdown */
+  position: relative; /* anchors the dropdown */
   z-index: 10;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: var(--space-1) var(--space-2);
+}
+.public-nav .nav-toggle-label { display: block; }  /* hamburger shown at all widths */
+.public-nav .nav-links {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: var(--space-2);
+  min-width: 10rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.public-nav .nav-links a {
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--color-border);
 }
+.public-nav .nav-links a:last-child { border-bottom: none; }
+.public-nav .nav-toggle-checkbox:checked ~ .nav-links { display: flex; }
+
 body.has-hero .public-nav {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
-  border-bottom: none;
-}
-body.has-hero .public-nav .brand,
-body.has-hero .public-nav .nav-links a {
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 body.has-hero .public-nav .nav-toggle-label { color: #fff; }
-
-@media (max-width: 640px) {
-  /* Open hamburger panel over a photo: dark ground keeps the links legible. */
-  body.has-hero .public-nav .nav-links { background: rgba(0, 0, 0, 0.92); }
-  body.has-hero .public-nav .nav-links a { border-bottom-color: rgba(255, 255, 255, 0.15); }
+body.has-hero .public-nav .nav-links {
+  /* dark panel so links stay legible when it opens over a photo */
+  background: rgba(0, 0, 0, 0.92);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+body.has-hero .public-nav .nav-links a {
+  color: #fff;
+  border-bottom-color: rgba(255, 255, 255, 0.15);
 }
 
 .site-footer {
