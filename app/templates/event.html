@@ -29,6 +29,20 @@
   </aside>
 </div>
 
+{% if event.timeline %}
+<section class="event-timeline">
+  <h2>Timeline</h2>
+  <ul class="timeline-list">
+    {% for item in event.timeline %}
+    <li>
+      {% if item.time %}<strong class="timeline-time">{{ item.time }}</strong> - {% endif %}{{ item.activity }}
+      {% if item.details %}<ul><li>{{ item.details }}</li></ul>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 {% if event.charity_name %}
 <section class="event-charity">
   <h2>This year's event will be benefitting</h2>

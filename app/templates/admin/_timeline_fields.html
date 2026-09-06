@@ -1,0 +1,48 @@
+{# Repeatable timeline rows. Set `timeline_rows` (a list of
+   {time, activity, details}) before including; omit it for a blank form.
+   The three inputs post as parallel arrays that _parse_timeline() zips. #}
+{% set timeline_rows = timeline_rows or [] %}
+<fieldset class="timeline-fields">
+  <legend>Timeline</legend>
+  <div class="timeline-rows">
+    {% for item in timeline_rows %}
+    <div class="timeline-row">
+      <input type="text" name="timeline_time" value="{{ item.time or '' }}" placeholder="7:30pm">
+      <input type="text" name="timeline_activity" value="{{ item.activity or '' }}" placeholder="Activity">
+      <input type="text" name="timeline_details" value="{{ item.details or '' }}" placeholder="Details (optional)">
+      <button type="button" class="timeline-remove" aria-label="Remove activity">&times;</button>
+    </div>
+    {% endfor %}
+    <div class="timeline-row">
+      <input type="text" name="timeline_time" placeholder="7:30pm">
+      <input type="text" name="timeline_activity" placeholder="Activity">
+      <input type="text" name="timeline_details" placeholder="Details (optional)">
+      <button type="button" class="timeline-remove" aria-label="Remove activity">&times;</button>
+    </div>
+  </div>
+  <button type="button" class="timeline-add">+ Add activity</button>
+</fieldset>
+<script>
+// Delegated + self-guarded, so including this partial once per event on the
+// events list still wires the handler exactly once.
+if (!window.__jrTimelineInit) {
+  window.__jrTimelineInit = true;
+  document.addEventListener("click", function (e) {
+    var add = e.target.closest(".timeline-add");
+    if (add) {
+      var rows = add.closest(".timeline-fields").querySelector(".timeline-rows");
+      var clone = rows.lastElementChild.cloneNode(true);
+      clone.querySelectorAll("input").forEach(function (i) { i.value = ""; });
+      rows.appendChild(clone);
+      return;
+    }
+    var rm = e.target.closest(".timeline-remove");
+    if (rm) {
+      var container = rm.closest(".timeline-rows");
+      if (container.querySelectorAll(".timeline-row").length > 1) {
+        rm.closest(".timeline-row").remove();
+      }
+    }
+  });
+}
+</script>

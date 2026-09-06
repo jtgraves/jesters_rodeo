@@ -99,6 +99,24 @@ def _maybe_upload_image(
         return None, str(exc)
 
 
+def _parse_timeline(
+    times: list[str], activities: list[str], details: list[str]
+) -> list[dict]:
+    """Zip the three parallel form arrays into timeline rows, dropping any row
+    with no activity (that's the trailing blank the 'Add activity' UI leaves)."""
+    rows = []
+    for time, activity, detail in zip(times, activities, details):
+        activity = activity.strip()
+        if not activity:
+            continue
+        rows.append({
+            "time": time.strip(),
+            "activity": activity,
+            "details": detail.strip(),
+        })
+    return rows
+
+
 def _events_page(request: Request, error: str | None = None, status_code: int = 200) -> Response:
     events = sorted(paginate(EVENTS().scan), key=lambda e: int(e["year"]), reverse=True)
     return templates.TemplateResponse(
@@ -141,6 +159,9 @@ def create_event(
     banner_image_2: UploadFile | None = File(None),
     banner_image_3: UploadFile | None = File(None),
     logo_image: UploadFile | None = File(None),
+    timeline_time: list[str] = Form([]),
+    timeline_activity: list[str] = Form([]),
+    timeline_details: list[str] = Form([]),
 ) -> Response:
     event_id = f"evt_{year}"
     banner_url, banner_error = _maybe_upload_image(banner_image, event_id, "Banner image")
@@ -167,6 +188,7 @@ def create_event(
                 "contact_name": contact_name.strip() or None,
                 "contact_email": contact_email.strip() or None,
                 "contact_phone": contact_phone.strip() or None,
+                "timeline": _parse_timeline(timeline_time, timeline_activity, timeline_details),
             },
             # An unconditional put on an existing year resets tickets_sold_count
             # to 0 and status to draft while the paid orders for that event
@@ -300,6 +322,23 @@ def update_event_banner(
         ExpressionAttributeValues={
             ":m": banner_message.strip() or None,
             ":s": banner_style if banner_style in ("notice", "urgent") else "notice",
+        },
+    )
+    return RedirectResponse("/admin/events", status_code=303)
+
+
+@router.post("/events/{event_id}/timeline")
+def update_event_timeline(
+    event_id: str,
+    timeline_time: list[str] = Form([]),
+    timeline_activity: list[str] = Form([]),
+    timeline_details: list[str] = Form([]),
+) -> RedirectResponse:
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        UpdateExpression="SET timeline = :t",
+        ExpressionAttributeValues={
+            ":t": _parse_timeline(timeline_time, timeline_activity, timeline_details),
         },
     )
     return RedirectResponse("/admin/events", status_code=303)

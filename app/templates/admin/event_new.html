@@ -19,6 +19,7 @@
   <label>Banner image 2 (optional) <input type="file" name="banner_image_2" accept="image/jpeg,image/png,image/gif,image/webp"></label>
   <label>Banner image 3 (optional) <input type="file" name="banner_image_3" accept="image/jpeg,image/png,image/gif,image/webp"></label>
   <label>Logo (optional) <input type="file" name="logo_image" accept="image/jpeg,image/png,image/gif,image/webp"></label>
+  {% include "admin/_timeline_fields.html" %}
   <button type="submit">Create</button>
 </form>
 {% include "admin/_image_size_guard.html" %}

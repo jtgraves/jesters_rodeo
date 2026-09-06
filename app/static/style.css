@@ -308,6 +308,28 @@ img.event-hero { opacity: 0.5; }
 .event-contact { margin-top: var(--space-3); }
 .event-contact p { margin: 0.25rem 0; }
 
+.event-timeline { margin-top: var(--space-3); }
+.timeline-list { list-style: none; padding-left: 0; margin: 0; }
+.timeline-list > li { margin-bottom: 0.6rem; }
+.timeline-list .timeline-time {
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.15rem;
+}
+.timeline-list ul {
+  margin: 0.15rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--color-muted);
+}
+
+/* Admin: repeatable timeline entry rows */
+.timeline-fields { margin: var(--space-1) 0; border: 1px solid var(--color-border); padding: var(--space-1); }
+.timeline-fields legend { font-size: 0.85rem; padding: 0 0.4rem; }
+.timeline-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem; }
+.timeline-row input[name="timeline_time"] { flex: 0 0 5rem; }
+.timeline-row input[name="timeline_activity"] { flex: 1 1 10rem; }
+.timeline-row input[name="timeline_details"] { flex: 2 1 14rem; }
+.timeline-remove { flex: 0 0 auto; }
+
 .event-charity {
   margin-top: var(--space-3);
   padding: var(--space-2);

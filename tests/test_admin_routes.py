@@ -131,6 +131,55 @@ def test_new_event_page_has_the_create_form(admin_client):
     assert 'name="year"' in resp.text
 
 
+def test_admin_event_forms_have_timeline_fields(admin_client):
+    _put_event()
+    for path in ("/admin/events/new", "/admin/events"):
+        resp = admin_client.get(path)
+        assert 'name="timeline_activity"' in resp.text, path
+        assert 'class="timeline-add"' in resp.text, path
+
+
+def test_create_event_stores_timeline_rows(admin_client):
+    data = {
+        **_create_event_form(),
+        # httpx encodes list values as repeated form fields
+        "timeline_time": ["7:30pm", "8:00pm", ""],
+        "timeline_activity": ["Cocktails", "Dinner", ""],  # last row blank -> dropped
+        "timeline_details": ["On the veranda", "", ""],
+    }
+    resp = admin_client.post("/admin/events", data=data, follow_redirects=False)
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2027"})["Item"]
+    assert event["timeline"] == [
+        {"time": "7:30pm", "activity": "Cocktails", "details": "On the veranda"},
+        {"time": "8:00pm", "activity": "Dinner", "details": ""},
+    ]
+
+
+def test_update_event_timeline_replaces_and_can_clear(admin_client):
+    _put_event(timeline=[{"time": "6pm", "activity": "Old", "details": ""}])
+    admin_client.post(
+        "/admin/events/evt_2026/timeline",
+        data={
+            "timeline_time": ["9:00pm"], "timeline_activity": ["Afterparty"],
+            "timeline_details": ["Rooftop"],
+        },
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["timeline"] == [
+        {"time": "9:00pm", "activity": "Afterparty", "details": "Rooftop"}
+    ]
+
+    admin_client.post(
+        "/admin/events/evt_2026/timeline",
+        data={"timeline_time": [""], "timeline_activity": [""], "timeline_details": [""]},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["timeline"] == []
+
+
 def test_events_list_page_has_no_create_form_but_links_to_it(admin_client):
     _put_event()
     resp = admin_client.get("/admin/events")

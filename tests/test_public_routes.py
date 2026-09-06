@@ -392,6 +392,25 @@ def test_no_event_page_has_a_plain_nav_no_hero(dynamodb_tables):
     assert "has-hero" not in resp.text
 
 
+def test_event_page_renders_timeline_section(dynamodb_tables):
+    _put_event(timeline=[
+        {"time": "7:30pm", "activity": "Cocktails", "details": "On the veranda"},
+        {"time": "8:00pm", "activity": "Dinner", "details": ""},
+    ])
+    resp = client.get("/")
+    body = html.unescape(resp.text)
+    assert ">Timeline<" in resp.text
+    assert "7:30pm" in body and "Cocktails" in body
+    assert "On the veranda" in body
+    assert "8:00pm" in body and "Dinner" in body
+
+
+def test_event_page_has_no_timeline_section_when_empty(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "event-timeline" not in resp.text
+
+
 def test_event_page_has_no_charity_section_when_unset(dynamodb_tables):
     _put_event()
     resp = client.get("/")

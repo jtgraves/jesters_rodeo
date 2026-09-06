@@ -55,6 +55,11 @@
       </label>
       <button type="submit">Save banner</button>
     </form>
+    <form method="post" action="/admin/events/{{ e.event_id }}/timeline">
+      {% set timeline_rows = e.timeline or [] %}
+      {% include "admin/_timeline_fields.html" %}
+      <button type="submit">Save timeline</button>
+    </form>
   </li>
 {% endfor %}
 </ul>
