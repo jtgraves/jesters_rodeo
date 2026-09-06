@@ -21,16 +21,21 @@
   <td>{{ c.status }}</td>
   <td>{{ c.created }}</td>
   <td>
-    {% if not c.is_admin %}
-      <form method="post" action="/admin/clowns/{{ c.username }}/promote" style="display:inline">
-        <button type="submit">Make admin</button>
-      </form>
-    {% endif %}
     {% if c.username == current_sub %}
       <em>you</em>
     {% else %}
+      {% if c.is_admin %}
+        <form method="post" action="/admin/clowns/{{ c.username }}/demote" style="display:inline"
+              onsubmit="return confirm('Remove admin rights from this clown?')">
+          <button type="submit">Make clown</button>
+        </form>
+      {% else %}
+        <form method="post" action="/admin/clowns/{{ c.username }}/promote" style="display:inline">
+          <button type="submit">Make admin</button>
+        </form>
+      {% endif %}
       <form method="post" action="/admin/clowns/{{ c.username }}/delete" style="display:inline"
-            onsubmit="return confirm('Remove this clown?')">
+            onsubmit="return confirm('Remove this clown entirely?')">
         <button type="submit">Remove</button>
       </form>
     {% endif %}

@@ -1053,6 +1053,14 @@ def _promote_clown(username: str) -> None:
     )
 
 
+def _demote_clown(username: str) -> None:
+    _cognito().admin_remove_user_from_group(
+        UserPoolId=settings.cognito_user_pool_id,
+        Username=username,
+        GroupName=ADMIN_GROUP,
+    )
+
+
 def _delete_clown(username: str) -> None:
     _cognito().admin_delete_user(
         UserPoolId=settings.cognito_user_pool_id, Username=username
@@ -1109,6 +1117,21 @@ def promote_clown(
     current_admin: dict = Depends(require_admin),
 ) -> Response:
     _promote_clown(username)
+    return RedirectResponse("/admin/clowns", status_code=303)
+
+
+@router.post("/clowns/{username}/demote")
+def demote_clown(
+    request: Request,
+    username: str,
+    current_admin: dict = Depends(require_admin),
+) -> Response:
+    if username == current_admin.get("sub"):
+        return _clowns_page(
+            request, current_admin.get("sub"),
+            error="You can't remove your own admin rights.", status_code=400,
+        )
+    _demote_clown(username)
     return RedirectResponse("/admin/clowns", status_code=303)
 
 

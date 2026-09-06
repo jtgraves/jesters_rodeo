@@ -1066,6 +1066,8 @@ def test_orders_export_has_donation_column_not_attendees(admin_client):
 _FAKE_CLOWNS = [
     {"username": "admin-1", "email": "me@example.com", "status": "CONFIRMED",
      "created": None, "is_admin": True},
+    {"username": "admin-2", "email": "boss@example.com", "status": "CONFIRMED",
+     "created": None, "is_admin": True},
     {"username": "sub-2", "email": "other@example.com", "status": "FORCE_CHANGE_PASSWORD",
      "created": None, "is_admin": False},
 ]
@@ -1080,9 +1082,13 @@ def test_clowns_page_lists_clowns_with_roles(admin_client):
     assert "Admin" in resp.text and "Clown" in resp.text
     # promote button only for the non-admin clown
     assert 'action="/admin/clowns/sub-2/promote"' in resp.text
-    assert 'action="/admin/clowns/admin-1/promote"' not in resp.text
-    # can't remove yourself
+    assert 'action="/admin/clowns/admin-2/promote"' not in resp.text
+    # demote ("Make clown") only for another admin, not yourself
+    assert 'action="/admin/clowns/admin-2/demote"' in resp.text
+    assert 'action="/admin/clowns/admin-1/demote"' not in resp.text
+    # can't remove yourself; can remove anyone else
     assert 'action="/admin/clowns/sub-2/delete"' in resp.text
+    assert 'action="/admin/clowns/admin-2/delete"' in resp.text
     assert 'action="/admin/clowns/admin-1/delete"' not in resp.text
 
 
@@ -1138,6 +1144,24 @@ def test_promote_clown_calls_cognito(admin_client):
     assert resp.status_code == 303
     assert resp.headers["location"] == "/admin/clowns"
     mock_promote.assert_called_once_with("sub-2")
+
+
+def test_demote_clown_calls_cognito(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._demote_clown") as mock_demote:
+        resp = admin_client.post("/admin/clowns/admin-2/demote", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/clowns"
+    mock_demote.assert_called_once_with("admin-2")
+
+
+def test_demote_clown_blocks_self(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=_FAKE_CLOWNS), \
+         patch("app.routes.admin._demote_clown") as mock_demote:
+        resp = admin_client.post("/admin/clowns/admin-1/demote", follow_redirects=False)
+    assert resp.status_code == 400
+    assert "your own admin rights" in resp.text
+    mock_demote.assert_not_called()
 
 
 def test_delete_clown_calls_cognito(admin_client):
