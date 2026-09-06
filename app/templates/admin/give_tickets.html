@@ -1,0 +1,28 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Give tickets</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+{% if not events %}
+<p>Create an event first.</p>
+{% else %}
+<p>Issues comped tickets: creates a paid $0 order and emails the recipient
+   their tickets with QR codes. No payment, no donation.</p>
+<form method="post" action="/admin/give-tickets">
+  <label>Event
+    <select name="event_id" required>
+      {% for e in events %}
+      <option value="{{ e.event_id }}" {% if e.event_id == preselect %}selected{% endif %}>
+        {{ e.year }} — {{ e.name }} ({{ e.tickets_sold_count }}/{{ e.capacity }} sold)
+      </option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Quantity <input type="number" name="quantity" value="1" min="1" max="20" required></label>
+  <label>Recipient name <input type="text" name="buyer_name" required></label>
+  <label>Recipient email <input type="email" name="buyer_email" required></label>
+  <label>Discount code (optional) <input type="text" name="discount_code"></label>
+  <button type="submit">Give tickets</button>
+</form>
+{% endif %}
+{% endblock %}

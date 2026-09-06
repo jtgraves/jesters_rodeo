@@ -51,7 +51,7 @@ def test_webhook_marks_order_paid_and_creates_tickets(mock_construct, dynamodb_t
     _put_order("ord_1")
     mock_construct.return_value = _stripe_event("ord_1")
 
-    with patch("app.routes.webhooks.send_confirmation_email") as mock_email:
+    with patch("app.fulfillment.send_confirmation_email") as mock_email:
         resp = _post_webhook()
 
     assert resp.status_code == 200
@@ -72,7 +72,7 @@ def test_webhook_ignores_replay_of_an_already_paid_order(mock_construct, dynamod
     _put_order("ord_2", status="paid", stripe_payment_intent_id="pi_existing")
     mock_construct.return_value = _stripe_event("ord_2")
 
-    with patch("app.routes.webhooks.send_confirmation_email") as mock_email:
+    with patch("app.fulfillment.send_confirmation_email") as mock_email:
         resp = _post_webhook()
 
     assert resp.status_code == 200
@@ -92,7 +92,7 @@ def test_webhook_delivered_twice_fulfils_exactly_once(mock_construct, dynamodb_t
     _put_order("ord_dup")
     mock_construct.return_value = _stripe_event("ord_dup")
 
-    with patch("app.routes.webhooks.send_confirmation_email") as mock_email:
+    with patch("app.fulfillment.send_confirmation_email") as mock_email:
         first = _post_webhook()
         second = _post_webhook()
 
@@ -111,7 +111,7 @@ def test_webhook_increments_discount_code_usage(mock_construct, dynamodb_tables)
     _put_order("ord_3", quantity=1, total_cents=12000, discount_code="MEMBER20")
     mock_construct.return_value = _stripe_event("ord_3")
 
-    with patch("app.routes.webhooks.send_confirmation_email"):
+    with patch("app.fulfillment.send_confirmation_email"):
         _post_webhook()
 
     code = DISCOUNT_CODES().get_item(Key={"code": "MEMBER20"})["Item"]
@@ -158,7 +158,7 @@ def test_late_payment_on_an_expired_order_still_fulfils_and_reclaims_capacity(
     _put_order("ord_late", status="expired")
     mock_construct.return_value = _stripe_event("ord_late")
 
-    with patch("app.routes.webhooks.send_confirmation_email") as mock_email:
+    with patch("app.fulfillment.send_confirmation_email") as mock_email:
         resp = _post_webhook()
 
     assert resp.status_code == 200
@@ -182,7 +182,7 @@ def test_fulfilment_failure_is_flagged_not_retried(mock_construct, dynamodb_tabl
     mock_construct.return_value = _stripe_event("ord_broken")
 
     with patch(
-        "app.routes.webhooks.send_confirmation_email",
+        "app.fulfillment.send_confirmation_email",
         side_effect=RuntimeError("SES is down"),
     ):
         resp = _post_webhook()
@@ -199,7 +199,7 @@ def test_successful_fulfilment_sets_no_error_flag(mock_construct, dynamodb_table
     _put_order("ord_ok")
     mock_construct.return_value = _stripe_event("ord_ok")
 
-    with patch("app.routes.webhooks.send_confirmation_email"):
+    with patch("app.fulfillment.send_confirmation_email"):
         _post_webhook()
 
     order = ORDERS().get_item(Key={"order_id": "ord_ok"})["Item"]

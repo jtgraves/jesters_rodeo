@@ -19,7 +19,8 @@
 {% for o in orders %}
 <tr>
   <td>{{ o.buyer_name }}</td><td>{{ o.buyer_email }}</td><td>{{ o.quantity }}</td>
-  <td>${{ "%.2f"|format(o.total_cents / 100) }}</td><td>{{ o.status }}</td>
+  <td>${{ "%.2f"|format(o.total_cents / 100) }}</td>
+  <td>{{ o.status }}{% if o.comp %} (comp){% endif %}</td>
   <td>
     {% if o.status == "paid" %}
     <form method="post" action="/admin/orders/{{ o.order_id }}/resend-email" style="display:inline"><button>Resend</button></form>

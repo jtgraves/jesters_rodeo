@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -20,8 +21,12 @@ from app.auth import require_admin
 from app.config import settings
 from app.db import ANNOUNCEMENTS, DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST, paginate
 from app.emails import send_confirmation_email
+from app.fulfillment import fulfill_order, flag_fulfillment_error
 from app.models import Announcement, DiscountCode, Order, Ticket, normalize_code
+from app.pricing import MAX_TICKETS_PER_ORDER
 from app.templating import templates
+
+logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
@@ -498,17 +503,22 @@ def refund_order(order_id: str) -> Response:
             )
         raise
 
-    try:
-        stripe.Refund.create(payment_intent=order_item["stripe_payment_intent_id"])
-    except Exception:
-        # Put the order back so the admin can retry; nothing else has changed.
-        ORDERS().update_item(
-            Key={"order_id": order_id},
-            UpdateExpression="SET #s = :paid",
-            ExpressionAttributeNames={"#s": "status"},
-            ExpressionAttributeValues={":paid": "paid"},
-        )
-        raise HTTPException(status_code=502, detail="Stripe refund failed. Nothing was changed.")
+    # A comped order has no Stripe payment behind it -- "refunding" it just
+    # voids the tickets and frees the seats, which the code below already does.
+    if not order_item.get("comp"):
+        try:
+            stripe.Refund.create(payment_intent=order_item["stripe_payment_intent_id"])
+        except Exception:
+            # Put the order back so the admin can retry; nothing else has changed.
+            ORDERS().update_item(
+                Key={"order_id": order_id},
+                UpdateExpression="SET #s = :paid",
+                ExpressionAttributeNames={"#s": "status"},
+                ExpressionAttributeValues={":paid": "paid"},
+            )
+            raise HTTPException(
+                status_code=502, detail="Stripe refund failed. Nothing was changed."
+            )
 
     now = datetime.now(timezone.utc).isoformat()
     for ticket in _tickets_for_order(order_id):
@@ -524,6 +534,84 @@ def refund_order(order_id: str) -> Response:
         ExpressionAttributeValues={":q": int(order_item["quantity"])},
     )
     return RedirectResponse(f"/admin/orders?event_id={order_item['event_id']}", status_code=303)
+
+
+# ---- Give tickets (admin-issued comps) ----
+
+def _give_tickets_page(
+    request: Request, preselect: str = "", error: str | None = None, status_code: int = 200
+) -> Response:
+    events = sorted(paginate(EVENTS().scan), key=lambda e: int(e["year"]), reverse=True)
+    return templates.TemplateResponse(
+        request, "admin/give_tickets.html",
+        {"events": events, "preselect": preselect, "error": error},
+        status_code=status_code,
+    )
+
+
+@router.get("/give-tickets")
+def give_tickets_page(request: Request, event_id: str = "") -> Response:
+    return _give_tickets_page(request, preselect=event_id)
+
+
+@router.post("/give-tickets")
+def give_tickets(
+    request: Request,
+    event_id: str = Form(...),
+    quantity: int = Form(...),
+    buyer_name: str = Form(...),
+    buyer_email: str = Form(...),
+    discount_code: str = Form(""),
+) -> Response:
+    event = EVENTS().get_item(Key={"event_id": event_id}).get("Item")
+    if not event:
+        return _give_tickets_page(request, error="Choose a valid event.", status_code=400)
+
+    buyer_name, buyer_email = buyer_name.strip(), buyer_email.strip()
+    if not 1 <= quantity <= MAX_TICKETS_PER_ORDER:
+        return _give_tickets_page(
+            request, event_id,
+            f"Quantity must be between 1 and {MAX_TICKETS_PER_ORDER}.", status_code=400,
+        )
+    if not buyer_name or not buyer_email:
+        return _give_tickets_page(
+            request, event_id, "Recipient name and email are required.", status_code=400
+        )
+
+    # Comped seats still count against capacity so the event can't oversell
+    # without the admin seeing it. No open-registration check -- an admin can
+    # comp tickets whenever they like.
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        UpdateExpression="SET tickets_sold_count = tickets_sold_count + :q",
+        ExpressionAttributeValues={":q": quantity},
+    )
+
+    order_id = f"ord_{uuid.uuid4().hex}"
+    order_item = {
+        "order_id": order_id, "event_id": event_id,
+        "buyer_name": buyer_name, "buyer_email": buyer_email,
+        "quantity": quantity, "unit_price_cents": 0,
+        "discount_code": discount_code.strip() or None,
+        "donation_cents": 0, "total_cents": 0,
+        "stripe_checkout_session_id": None, "stripe_payment_intent_id": None,
+        "status": "paid", "comp": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    ORDERS().put_item(Item=order_item)
+
+    try:
+        fulfill_order(order_id, order_item)
+    except Exception:
+        logger.exception("Comp fulfilment failed for order %s", order_id)
+        flag_fulfillment_error(order_id)
+        return _give_tickets_page(
+            request, event_id,
+            error="The tickets were recorded, but the email may not have sent. "
+                  "Use Resend on the Orders page.",
+            status_code=500,
+        )
+    return RedirectResponse(f"/admin/orders?event_id={event_id}", status_code=303)
 
 
 def _discount_codes_page(

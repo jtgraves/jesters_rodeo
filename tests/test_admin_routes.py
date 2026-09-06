@@ -626,6 +626,104 @@ def test_refund_unknown_order_404s(admin_client):
     assert resp.status_code == 404
 
 
+# ---- Give tickets (comps) ----
+
+def test_give_tickets_page_lists_events(admin_client):
+    _put_event()
+    resp = admin_client.get("/admin/give-tickets")
+    assert resp.status_code == 200
+    assert 'action="/admin/give-tickets"' in resp.text
+    assert 'value="evt_2026"' in resp.text
+    assert 'name="donation' not in resp.text  # no donation on the comp form
+
+
+def test_give_tickets_creates_paid_comp_order_with_tickets(admin_client):
+    _put_event(tickets_sold_count=5, capacity=300)
+    with patch("app.fulfillment.send_confirmation_email") as mock_email:
+        resp = admin_client.post(
+            "/admin/give-tickets",
+            data={
+                "event_id": "evt_2026", "quantity": "3",
+                "buyer_name": "  Guest of Honor  ", "buyer_email": " vip@example.com ",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/orders?event_id=evt_2026"
+
+    orders = ORDERS().scan()["Items"]
+    assert len(orders) == 1
+    order = orders[0]
+    assert order["status"] == "paid"
+    assert order["comp"] is True
+    assert int(order["total_cents"]) == 0
+    assert int(order["unit_price_cents"]) == 0
+    assert order["buyer_name"] == "Guest of Honor"
+    assert order["buyer_email"] == "vip@example.com"
+    assert order["stripe_payment_intent_id"] is None
+
+    tickets = [t for t in TICKETS().scan()["Items"] if t["order_id"] == order["order_id"]]
+    assert len(tickets) == 3
+    mock_email.assert_called_once()
+
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert int(event["tickets_sold_count"]) == 8, "comped seats count against capacity"
+
+
+def test_give_tickets_rejects_bad_input(admin_client):
+    _put_event()
+    for bad in (
+        {"event_id": "evt_2026", "quantity": "0", "buyer_name": "A", "buyer_email": "a@x.com"},
+        {"event_id": "evt_2026", "quantity": "2", "buyer_name": " ", "buyer_email": "a@x.com"},
+        {"event_id": "evt_nope", "quantity": "2", "buyer_name": "A", "buyer_email": "a@x.com"},
+    ):
+        resp = admin_client.post("/admin/give-tickets", data=bad, follow_redirects=False)
+        assert resp.status_code == 400, bad
+    assert ORDERS().scan()["Items"] == []
+
+
+def test_give_tickets_flags_order_when_fulfilment_fails(admin_client):
+    _put_event()
+    with patch(
+        "app.routes.admin.fulfill_order", side_effect=RuntimeError("SES down")
+    ):
+        resp = admin_client.post(
+            "/admin/give-tickets",
+            data={
+                "event_id": "evt_2026", "quantity": "1",
+                "buyer_name": "Guest", "buyer_email": "g@example.com",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 500
+    assert "may not have sent" in resp.text
+    order = ORDERS().scan()["Items"][0]
+    assert order["fulfillment_error"] is True
+
+
+@patch("app.routes.admin.stripe.Refund.create")
+def test_refunding_a_comp_skips_stripe_but_voids_tickets(mock_refund, admin_client):
+    _put_event(tickets_sold_count=5)
+    _put_order("ord_comp", comp=True, total_cents=0, unit_price_cents=0,
+               stripe_payment_intent_id=None)
+    _put_ticket("tkt_c1", order_id="ord_comp")
+
+    resp = admin_client.post("/admin/orders/ord_comp/refund", follow_redirects=False)
+
+    assert resp.status_code == 303
+    mock_refund.assert_not_called()
+    assert ORDERS().get_item(Key={"order_id": "ord_comp"})["Item"]["status"] == "refunded"
+    assert TICKETS().get_item(Key={"ticket_id": "tkt_c1"})["Item"]["voided"] is True
+    assert int(EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["tickets_sold_count"]) == 3
+
+
+def test_orders_list_badges_comp_orders(admin_client):
+    _put_event()
+    _put_order("ord_comp", comp=True, total_cents=0)
+    resp = admin_client.get("/admin/orders?event_id=evt_2026")
+    assert "(comp)" in resp.text
+
+
 def test_orders_page_never_puts_a_buyer_name_in_a_js_string(admin_client):
     """buyer_name is public input rendered into an admin's authenticated page.
 

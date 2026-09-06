@@ -88,6 +88,9 @@ class Order(BaseModel):
     # discount tally, confirmation email) did not. Absent on every order that
     # went through cleanly.
     fulfillment_error: bool = False
+    # An order created by an admin from the "give tickets" page: paid, $0, no
+    # Stripe payment behind it.
+    comp: bool = False
 
 
 class Ticket(BaseModel):
