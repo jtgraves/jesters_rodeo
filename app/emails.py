@@ -37,7 +37,7 @@ def send_confirmation_email(order: Order, tickets: list[Ticket]) -> None:
     # text/plain and text/html as direct siblings of the images makes clients
     # treat them as two separate body parts to display, not as alternatives.
     msg = MIMEMultipart("related")
-    msg["Subject"] = "Your Jester's Rodeo tickets"
+    msg["Subject"] = "Your Jester's Reaux-de-Eaux tickets"
     msg["From"] = settings.ses_sender_email
     msg["To"] = order.buyer_email
 

@@ -9,7 +9,7 @@ from app.main import app
 client = TestClient(app)
 
 OPEN_EVENT = {
-    "event_id": "evt_2026", "year": 2026, "name": "Jester's Rodeo Parade",
+    "event_id": "evt_2026", "year": 2026, "name": "Jester's Reaux-de-Eaux Parade",
     "date": "2026-03-14", "location": "New Orleans", "description": "Fun",
     "ticket_price_cents": 15000, "capacity": 300, "tickets_sold_count": 0,
     "registration_open": True, "status": "open",
@@ -43,7 +43,7 @@ def test_get_event_page_shows_open_event(dynamodb_tables):
     # Autoescaping renders the apostrophe as an entity; unescape before
     # asserting so the test checks what the reader sees, not which entity
     # form Jinja happened to pick.
-    assert "Jester's Rodeo Parade" in html.unescape(resp.text)
+    assert "Jester's Reaux-de-Eaux Parade" in html.unescape(resp.text)
 
 
 def test_get_event_page_no_open_event(dynamodb_tables):
@@ -160,7 +160,7 @@ def test_register_page_shows_form_header_and_cancel(dynamodb_tables):
     resp = client.get("/register?event_id=evt_2026")
     assert resp.status_code == 200
     assert 'action="/checkout"' in resp.text
-    assert "Jester's Rodeo Parade" in html.unescape(resp.text)  # same header
+    assert "Jester's Reaux-de-Eaux Parade" in html.unescape(resp.text)  # same header
     assert 'href="/"' in resp.text  # Cancel link back to the main page
 
 

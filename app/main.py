@@ -6,7 +6,7 @@ from mangum import Mangum
 
 from app.routes import admin, auth_routes, public, webhooks
 
-app = FastAPI(title="Jester's Rodeo")
+app = FastAPI(title="Jester's Reaux-de-Eaux")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(public.router)
 app.include_router(webhooks.router)
