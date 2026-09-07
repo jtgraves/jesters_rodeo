@@ -392,6 +392,18 @@ def test_no_event_page_has_a_plain_nav_no_hero(dynamodb_tables):
     assert "has-hero" not in resp.text
 
 
+def test_no_event_page_shows_the_krewe_mascot(dynamodb_tables):
+    resp = client.get("/")
+    assert 'src="/static/img/jester-rider.png"' in resp.text
+
+
+def test_static_image_assets_are_served(dynamodb_tables):
+    for name in ("fleur.png", "jester-rider.png", "bronco.png"):
+        resp = client.get(f"/static/img/{name}")
+        assert resp.status_code == 200, name
+        assert resp.headers["content-type"] == "image/png"
+
+
 def _put_beneficiary(beneficiary_id, **overrides):
     item = {
         "beneficiary_id": beneficiary_id, "name": "A Charity", "description": None,
@@ -407,6 +419,7 @@ def test_beneficiaries_page_empty_state(dynamodb_tables):
     assert resp.status_code == 200
     assert "Past Beneficiaries" in resp.text
     assert "here soon" in resp.text
+    assert 'src="/static/img/jester-rider.png"' in resp.text
 
 
 def test_beneficiaries_page_lists_sorted_with_details(dynamodb_tables):

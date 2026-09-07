@@ -206,6 +206,42 @@ body.has-hero .public-nav .nav-links a {
   font-size: 0.85rem;
 }
 .site-footer a { color: var(--color-muted); }
+.site-footer a::before {
+  content: "";
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.4em;
+  vertical-align: -0.15em;
+  background: url("/static/img/fleur.png") center / contain no-repeat;
+  opacity: 0.5;
+}
+
+/* --- Krewe embellishments (transparent-PNG silhouettes in /static/img) --- */
+
+/* Centred fleur-de-lis ornament before each section that follows the ticket
+   block on the public event page -- a section break, rendered only for the
+   sections that actually exist. The charity box keeps its own spacing so the
+   ornament doesn't land inside its border. */
+.event-layout ~ section:not(.event-charity) { margin-top: 0; }
+.event-layout ~ section:not(.event-charity)::before {
+  content: "";
+  display: block;
+  width: 46px;
+  height: 30px;
+  margin: var(--space-3) auto var(--space-2);
+  background: url("/static/img/fleur.png") center / contain no-repeat;
+  opacity: 0.35;
+}
+
+/* Mascot for sparse "nothing here yet" pages. */
+.empty-state-mascot {
+  display: block;
+  width: min(220px, 55%);
+  height: auto;
+  margin: var(--space-3) auto var(--space-2);
+  opacity: 0.85;
+}
 
 /* ---- Event page: hero, header, two-column ticket layout ---- */
 
@@ -230,7 +266,21 @@ body.has-hero .public-nav .nav-links a {
    clearly over them; the fallback gradient stays full strength. */
 img.event-hero { opacity: 0.5; }
 .event-hero--fallback {
+  position: relative;
+  overflow: hidden;
   background-image: linear-gradient(135deg, var(--color-accent), #2d1b45);
+}
+/* A faint bronco-rider watermark so a bannerless event still feels like ours.
+   The source PNG is a black silhouette; brightness(0) invert(1) turns it white
+   without disturbing the transparency. */
+.event-hero--fallback::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("/static/img/bronco.png") center / auto 80% no-repeat;
+  filter: brightness(0) invert(1);
+  opacity: 0.13;
+  pointer-events: none;
 }
 
 .event-hero-wrap { position: relative; }
@@ -354,11 +404,17 @@ img.event-hero { opacity: 0.5; }
 .charity-contact { margin-top: var(--space-2); }
 .charity-contact p { margin: 0.25rem 0; }
 
-/* Public "Past Beneficiaries" list -- one section per charity. */
-.beneficiary {
-  margin-top: var(--space-3);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--color-border);
+/* Public "Past Beneficiaries" list -- one section per charity, separated by a
+   fleur-de-lis ornament instead of a plain rule. */
+.beneficiary { margin-top: var(--space-3); }
+.beneficiary::before {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 28px;
+  margin: 0 auto var(--space-2);
+  background: url("/static/img/fleur.png") center / contain no-repeat;
+  opacity: 0.3;
 }
 .beneficiary h2 { margin: 0 0 0.25rem; }
 .beneficiary-year { color: var(--color-muted); font-weight: 400; }
