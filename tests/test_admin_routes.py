@@ -129,7 +129,7 @@ def test_missing_event_id_with_no_events_shows_a_page_not_json(admin_client):
 
 def _create_event_form(**overrides):
     data = {
-        "year": "2027", "name": "Next Year Ball", "date": "2027-03-06",
+        "year": "2027", "name": "Next Year Parade", "date": "2027-03-06",
         "location": "NOLA", "description": "d", "ticket_price_cents": "15000",
         "capacity": "300",
     }

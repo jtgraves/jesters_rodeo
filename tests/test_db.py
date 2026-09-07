@@ -5,10 +5,10 @@ def test_event_defaults():
     event = Event(
         event_id="evt_2026",
         year=2026,
-        name="Jester's Rodeo Ball",
+        name="Jester's Rodeo Parade",
         date="2026-03-14",
         location="New Orleans, LA",
-        description="Annual krewe ball",
+        description="Annual krewe parade",
         ticket_price_cents=15000,
         capacity=300,
     )
