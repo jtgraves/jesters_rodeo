@@ -1,7 +1,24 @@
 {% extends "admin/_base.html" %}
 {% block content %}
-<h1>Announcements</h1>
+<h1>Announcements &amp; Alerts</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<h2>On-site alert banner</h2>
+<p>Shows across the top of the public event page. A blank message removes it.</p>
+<form method="post" action="/admin/events/{{ event_id }}/banner">
+  <label>Banner message
+    <textarea name="banner_message" placeholder="e.g. This event has been cancelled...">{{ (event.banner_message if event else '') or '' }}</textarea>
+  </label>
+  <label>Style
+    <select name="banner_style">
+      <option value="notice" {% if not event or event.banner_style != "urgent" %}selected{% endif %}>Notice</option>
+      <option value="urgent" {% if event and event.banner_style == "urgent" %}selected{% endif %}>Cancelled/Urgent</option>
+    </select>
+  </label>
+  <button type="submit">Save banner</button>
+</form>
+
+<h2>Email announcement</h2>
 <form method="post" action="/admin/announcements">
   <input type="hidden" name="event_id" value="{{ event_id }}">
   <label><input type="checkbox" name="audience" value="attendees"> Ticket buyers</label>

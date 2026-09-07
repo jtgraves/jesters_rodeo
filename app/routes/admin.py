@@ -349,7 +349,7 @@ def update_event_banner(
             ":s": banner_style if banner_style in ("notice", "urgent") else "notice",
         },
     )
-    return RedirectResponse("/admin/events", status_code=303)
+    return RedirectResponse(f"/admin/announcements?event_id={event_id}", status_code=303)
 
 
 @router.post("/events/{event_id}/timeline")
@@ -865,9 +865,10 @@ def _announcements_page(
 ) -> Response:
     items = paginate(ANNOUNCEMENTS().scan, FilterExpression=Attr("event_id").eq(event_id))
     items.sort(key=lambda a: a["created_at"], reverse=True)
+    event = EVENTS().get_item(Key={"event_id": event_id}).get("Item")
     return templates.TemplateResponse(
         request, "admin/announcements.html",
-        {"announcements": items, "event_id": event_id, "error": error},
+        {"announcements": items, "event": event, "event_id": event_id, "error": error},
         status_code=status_code,
     )
 

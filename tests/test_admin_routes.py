@@ -442,9 +442,23 @@ def test_admin_can_set_event_banner(admin_client):
         follow_redirects=False,
     )
     assert resp.status_code == 303
+    # The banner form now lives on the Announcements & Alerts page.
+    assert resp.headers["location"] == "/admin/announcements?event_id=evt_2026"
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
     assert event["banner_message"] == "This event has been cancelled."
     assert event["banner_style"] == "urgent"
+
+
+def test_alert_banner_form_is_on_the_announcements_page_not_events(admin_client):
+    _put_event(banner_message="Heads up", banner_style="urgent")
+
+    ann = admin_client.get("/admin/announcements?event_id=evt_2026")
+    assert "Announcements &amp; Alerts" in ann.text
+    assert 'action="/admin/events/evt_2026/banner"' in ann.text
+    assert ">Heads up</textarea>" in ann.text  # pre-filled from the current event
+
+    events = admin_client.get("/admin/events")
+    assert 'action="/admin/events/evt_2026/banner"' not in events.text
 
 
 def test_admin_can_clear_event_banner(admin_client):
