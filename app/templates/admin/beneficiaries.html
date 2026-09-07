@@ -1,0 +1,40 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Past Beneficiaries</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<p>Shown on the public <a href="/beneficiaries" target="_blank" rel="noopener">Past Beneficiaries</a> page.
+   To fix an entry, delete it and add it again.</p>
+
+<div class="table-scroll">
+<table>
+<tr><th>Year</th><th>Name</th><th>Amount</th><th>Website</th><th>Logo</th><th></th></tr>
+{% for b in beneficiaries %}
+<tr>
+  <td>{{ b.year or "" }}</td>
+  <td>{{ b.name }}</td>
+  <td>{% if b.amount_cents %}${{ "{:,}".format(b.amount_cents // 100) }}{% endif %}</td>
+  <td>{% if b.website_url %}<a href="{{ b.website_url }}" target="_blank" rel="noopener">link</a>{% endif %}</td>
+  <td>{% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" class="event-image-preview">{% endif %}</td>
+  <td>
+    <form method="post" action="/admin/beneficiaries/{{ b.beneficiary_id }}/delete"
+          onsubmit="return confirm('Delete this beneficiary?')">
+      <button type="submit">Delete</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+<h2>Add a beneficiary</h2>
+<form method="post" action="/admin/beneficiaries" enctype="multipart/form-data" class="event-images-form">
+  <label>Name <input type="text" name="name" required></label>
+  <label>Year <input type="number" name="year" placeholder="2025"></label>
+  <label>Amount donated (whole dollars) <input type="number" name="amount_dollars" min="0" step="1" placeholder="0"></label>
+  <label>Website link <input type="url" name="website_url" placeholder="https://..."></label>
+  <label>Description <textarea name="description"></textarea></label>
+  <label>Logo <input type="file" name="logo" accept="image/jpeg,image/png,image/gif,image/webp"></label>
+  <button type="submit">Add</button>
+</form>
+{% include "admin/_image_size_guard.html" %}
+{% endblock %}

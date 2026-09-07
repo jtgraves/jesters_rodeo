@@ -135,3 +135,16 @@ class Announcement(BaseModel):
     sent_count: int = 0
     error: str | None = None
     created_at: str
+
+
+class PastBeneficiary(BaseModel):
+    """A charity the krewe has donated to in a prior year. Entered by hand on
+    the admin side; shown on the public "Past Beneficiaries" page."""
+    beneficiary_id: str
+    name: str
+    description: str | None = None
+    website_url: str | None = None
+    logo_url: str | None = None
+    amount_cents: int = 0
+    year: int | None = None
+    created_at: str

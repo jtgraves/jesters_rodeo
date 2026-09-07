@@ -19,10 +19,26 @@ from pydantic import ValidationError
 
 from app.auth import ADMIN_GROUP, require_admin, require_member
 from app.config import settings
-from app.db import ANNOUNCEMENTS, DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST, paginate
+from app.db import (
+    ANNOUNCEMENTS,
+    DISCOUNT_CODES,
+    EVENTS,
+    ORDERS,
+    PAST_BENEFICIARIES,
+    TICKETS,
+    WAITLIST,
+    paginate,
+)
 from app.emails import send_confirmation_email
 from app.fulfillment import fulfill_order, flag_fulfillment_error
-from app.models import Announcement, DiscountCode, Order, Ticket, normalize_code
+from app.models import (
+    Announcement,
+    DiscountCode,
+    Order,
+    PastBeneficiary,
+    Ticket,
+    normalize_code,
+)
 from app.pricing import MAX_TICKETS_PER_ORDER
 from app.templating import templates
 
@@ -995,6 +1011,102 @@ def update_charity(
         ExpressionAttributeValues={f":{k}": v for k, v in values.items()},
     )
     return RedirectResponse(f"/admin/charity?event_id={event_id}", status_code=303)
+
+
+# ---- Past beneficiaries (public "Past Beneficiaries" page) ----
+
+def _sorted_beneficiaries() -> list[dict]:
+    items = paginate(PAST_BENEFICIARIES().scan)
+    # Most recent year first; entries with no year sink to the bottom, then by name.
+    return sorted(
+        items,
+        key=lambda b: (-(int(b["year"]) if b.get("year") else 0), (b.get("name") or "").lower()),
+    )
+
+
+def _beneficiaries_page(
+    request: Request, error: str | None = None, status_code: int = 200
+) -> Response:
+    return templates.TemplateResponse(
+        request, "admin/beneficiaries.html",
+        {"beneficiaries": _sorted_beneficiaries(), "error": error},
+        status_code=status_code,
+    )
+
+
+@router.get("/beneficiaries")
+def list_beneficiaries(request: Request) -> Response:
+    return _beneficiaries_page(request)
+
+
+@router.post("/beneficiaries")
+def create_beneficiary(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(""),
+    website_url: str = Form(""),
+    year: str = Form(""),
+    amount_dollars: str = Form(""),
+    logo: UploadFile | None = File(None),
+) -> Response:
+    name = name.strip()
+    website = website_url.strip()
+    if not name:
+        return _beneficiaries_page(request, error="Name is required.", status_code=400)
+    if website and not website.startswith(("http://", "https://")):
+        return _beneficiaries_page(
+            request, error="The website link must start with http:// or https://.",
+            status_code=400,
+        )
+
+    year_value: int | None = None
+    if year.strip():
+        try:
+            year_value = int(year.strip())
+        except ValueError:
+            return _beneficiaries_page(request, error="Year must be a number.", status_code=400)
+
+    amount_cents = 0
+    if amount_dollars.strip():
+        try:
+            dollars = int(amount_dollars.strip())
+        except ValueError:
+            return _beneficiaries_page(
+                request, error="Amount must be a whole dollar number.", status_code=400
+            )
+        if dollars < 0:
+            return _beneficiaries_page(
+                request, error="Amount can't be negative.", status_code=400
+            )
+        amount_cents = dollars * 100
+
+    logo_url, logo_error = _maybe_upload_image(logo, "beneficiaries", "Beneficiary logo")
+    if logo_error:
+        return _beneficiaries_page(request, error=logo_error, status_code=400)
+
+    item = {
+        "beneficiary_id": f"ben_{uuid.uuid4().hex}",
+        "name": name,
+        "description": description.strip() or None,
+        "website_url": website or None,
+        "logo_url": logo_url,
+        "amount_cents": amount_cents,
+        "year": year_value,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        PastBeneficiary(**item)
+    except ValidationError:
+        return _beneficiaries_page(request, error="Invalid beneficiary.", status_code=400)
+
+    PAST_BENEFICIARIES().put_item(Item=item)
+    return RedirectResponse("/admin/beneficiaries", status_code=303)
+
+
+@router.post("/beneficiaries/{beneficiary_id}/delete")
+def delete_beneficiary(beneficiary_id: str) -> RedirectResponse:
+    PAST_BENEFICIARIES().delete_item(Key={"beneficiary_id": beneficiary_id})
+    return RedirectResponse("/admin/beneficiaries", status_code=303)
 
 
 # ---- Clown management (Cognito users) ----

@@ -7,7 +7,15 @@ from fastapi.testclient import TestClient
 
 from app import auth
 from app.config import settings
-from app.db import ANNOUNCEMENTS, DISCOUNT_CODES, EVENTS, ORDERS, TICKETS, WAITLIST
+from app.db import (
+    ANNOUNCEMENTS,
+    DISCOUNT_CODES,
+    EVENTS,
+    ORDERS,
+    PAST_BENEFICIARIES,
+    TICKETS,
+    WAITLIST,
+)
 from app.main import app
 
 
@@ -1061,6 +1069,79 @@ def test_orders_export_has_donation_column_not_attendees(admin_client):
     assert "25.00" in resp.text
 
 
+# ---- Past beneficiaries ----
+
+def test_beneficiaries_admin_page_renders(admin_client):
+    PAST_BENEFICIARIES().put_item(Item={
+        "beneficiary_id": "ben_x", "name": "Habitat NOLA", "year": 2024,
+        "amount_cents": 500000, "description": None, "website_url": None,
+        "logo_url": None, "created_at": "2026-01-01T00:00:00Z",
+    })
+    resp = admin_client.get("/admin/beneficiaries")
+    assert resp.status_code == 200
+    assert "Habitat NOLA" in resp.text
+    assert "$5,000" in resp.text
+
+
+def test_create_beneficiary_stores_everything(admin_client):
+    resp = admin_client.post(
+        "/admin/beneficiaries",
+        data={
+            "name": "  Habitat NOLA  ", "year": "2024", "amount_dollars": "15000",
+            "website_url": "https://habitat.example", "description": "Builds homes.",
+        },
+        files={"logo": ("logo.png", b"fake-png-bytes", "image/png")},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/beneficiaries"
+    item = PAST_BENEFICIARIES().scan()["Items"][0]
+    assert item["name"] == "Habitat NOLA"
+    assert int(item["year"]) == 2024
+    assert int(item["amount_cents"]) == 1500000
+    assert item["website_url"] == "https://habitat.example"
+    assert item["description"] == "Builds homes."
+    assert item["logo_url"].startswith("https://event-images-test.s3.")
+
+    key = item["logo_url"].split(".amazonaws.com/", 1)[1]
+    obj = boto3.client("s3", region_name="us-east-1").get_object(
+        Bucket="event-images-test", Key=key
+    )
+    assert obj["Body"].read() == b"fake-png-bytes"
+
+
+def test_create_beneficiary_requires_a_name(admin_client):
+    resp = admin_client.post(
+        "/admin/beneficiaries", data={"name": "  "}, follow_redirects=False
+    )
+    assert resp.status_code == 400
+    assert "Name is required." in resp.text
+    assert PAST_BENEFICIARIES().scan()["Items"] == []
+
+
+def test_create_beneficiary_rejects_bad_website_and_negative_amount(admin_client):
+    for bad in (
+        {"name": "X", "website_url": "habitat.example"},
+        {"name": "X", "amount_dollars": "-5"},
+        {"name": "X", "amount_dollars": "12.50"},
+        {"name": "X", "year": "not-a-year"},
+    ):
+        resp = admin_client.post("/admin/beneficiaries", data=bad, follow_redirects=False)
+        assert resp.status_code == 400, bad
+    assert PAST_BENEFICIARIES().scan()["Items"] == []
+
+
+def test_delete_beneficiary(admin_client):
+    PAST_BENEFICIARIES().put_item(Item={
+        "beneficiary_id": "ben_del", "name": "Old", "amount_cents": 0,
+        "description": None, "website_url": None, "logo_url": None, "year": None,
+        "created_at": "2026-01-01T00:00:00Z",
+    })
+    resp = admin_client.post("/admin/beneficiaries/ben_del/delete", follow_redirects=False)
+    assert resp.status_code == 303
+    assert PAST_BENEFICIARIES().scan()["Items"] == []
+
+
 # ---- Clown management (Cognito users) ----
 
 _FAKE_CLOWNS = [
@@ -1192,7 +1273,10 @@ def test_member_can_reach_shared_pages(member_client):
 
 def test_member_is_bounced_from_admin_only_pages(member_client):
     _put_event(status="open")
-    for path in ("/admin/events", "/admin/clowns", "/admin/charity", "/admin/give-tickets"):
+    for path in (
+        "/admin/events", "/admin/clowns", "/admin/charity",
+        "/admin/give-tickets", "/admin/beneficiaries",
+    ):
         resp = member_client.get(path, headers={"accept": "text/html"}, follow_redirects=False)
         assert resp.status_code == 303, path
         assert resp.headers["location"] == "/admin/orders", path

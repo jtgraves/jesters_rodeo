@@ -12,7 +12,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from app.config import settings
-from app.db import DISCOUNT_CODES, EVENTS, ORDERS, WAITLIST, paginate
+from app.db import DISCOUNT_CODES, EVENTS, ORDERS, PAST_BENEFICIARIES, WAITLIST, paginate
 from app.models import DiscountCode, normalize_code
 from app.pricing import (
     MAX_TICKETS_PER_ORDER,
@@ -105,6 +105,19 @@ def event_page(request: Request):
 def charity_page(request: Request):
     event = _find_open_event()
     return templates.TemplateResponse(request, "charity.html", {"event": event})
+
+
+@router.get("/beneficiaries")
+def beneficiaries_page(request: Request):
+    items = paginate(PAST_BENEFICIARIES().scan)
+    # Most recent year first; year-less entries last, then by name.
+    beneficiaries = sorted(
+        items,
+        key=lambda b: (-(int(b["year"]) if b.get("year") else 0), (b.get("name") or "").lower()),
+    )
+    return templates.TemplateResponse(
+        request, "beneficiaries.html", {"beneficiaries": beneficiaries}
+    )
 
 
 @router.get("/register")

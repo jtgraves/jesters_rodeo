@@ -14,6 +14,7 @@ os.environ.setdefault("DISCOUNT_CODES_TABLE", "DiscountCodes")
 os.environ.setdefault("WAITLIST_TABLE", "Waitlist")
 os.environ.setdefault("ANNOUNCEMENTS_TABLE", "Announcements")
 os.environ.setdefault("ANNOUNCEMENT_LAMBDA_NAME", "test-announcement-lambda")
+os.environ.setdefault("PAST_BENEFICIARIES_TABLE", "PastBeneficiaries")
 os.environ.setdefault("EVENT_IMAGES_BUCKET", "event-images-test")
 os.environ.setdefault("SES_SENDER_EMAIL", "noreply@example.com")
 os.environ.setdefault("COGNITO_USER_POOL_ID", "us-east-1_dummy")
@@ -84,6 +85,12 @@ def dynamodb_tables():
             TableName="Announcements",
             KeySchema=[{"AttributeName": "announcement_id", "KeyType": "HASH"}],
             AttributeDefinitions=[{"AttributeName": "announcement_id", "AttributeType": "S"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        client.create_table(
+            TableName="PastBeneficiaries",
+            KeySchema=[{"AttributeName": "beneficiary_id", "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": "beneficiary_id", "AttributeType": "S"}],
             BillingMode="PAY_PER_REQUEST",
         )
         boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="event-images-test")

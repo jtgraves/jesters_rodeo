@@ -354,6 +354,26 @@ img.event-hero { opacity: 0.5; }
 .charity-contact { margin-top: var(--space-2); }
 .charity-contact p { margin: 0.25rem 0; }
 
+/* Public "Past Beneficiaries" list -- one section per charity. */
+.beneficiary {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+.beneficiary h2 { margin: 0 0 0.25rem; }
+.beneficiary-year { color: var(--color-muted); font-weight: 400; }
+.beneficiary-amount { font-weight: 600; margin: 0.25rem 0; }
+.beneficiary-description { white-space: pre-line; }
+.beneficiary-logo {
+  display: block;
+  max-width: 200px;
+  max-height: 120px;
+  width: auto;
+  height: auto;
+  margin-bottom: var(--space-1);
+  object-fit: contain;
+}
+
 /* Clickable, swipeable, JS-free image carousel: a scroll-snap track plus
    in-page anchor links (arrows + dots) that smooth-scroll each slide into
    view. Each slide carries an optional caption below the image. */

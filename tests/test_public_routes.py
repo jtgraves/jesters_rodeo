@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.db import DISCOUNT_CODES, EVENTS, ORDERS, WAITLIST
+from app.db import DISCOUNT_CODES, EVENTS, ORDERS, PAST_BENEFICIARIES, WAITLIST
 from app.main import app
 
 client = TestClient(app)
@@ -390,6 +390,47 @@ def test_no_event_page_has_a_plain_nav_no_hero(dynamodb_tables):
     assert "no event" in resp.text.lower() or "not currently open" in resp.text.lower()
     assert 'class="public-nav"' in resp.text
     assert "has-hero" not in resp.text
+
+
+def _put_beneficiary(beneficiary_id, **overrides):
+    item = {
+        "beneficiary_id": beneficiary_id, "name": "A Charity", "description": None,
+        "website_url": None, "logo_url": None, "amount_cents": 0, "year": None,
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+    item.update(overrides)
+    PAST_BENEFICIARIES().put_item(Item=item)
+
+
+def test_beneficiaries_page_empty_state(dynamodb_tables):
+    resp = client.get("/beneficiaries")
+    assert resp.status_code == 200
+    assert "Past Beneficiaries" in resp.text
+    assert "here soon" in resp.text
+
+
+def test_beneficiaries_page_lists_sorted_with_details(dynamodb_tables):
+    _put_beneficiary("ben_1", name="Habitat NOLA", year=2024, amount_cents=1500000,
+                     description="Builds homes.", website_url="https://habitat.example",
+                     logo_url="https://img.example/h.png")
+    _put_beneficiary("ben_2", name="Food Bank", year=2025, amount_cents=250000)
+    _put_beneficiary("ben_3", name="No Year Fund", year=None, amount_cents=100)
+
+    resp = client.get("/beneficiaries")
+    body = resp.text
+    assert "$15,000 donated" in body
+    assert "$2,500 donated" in body
+    assert "Builds homes." in body
+    assert 'href="https://habitat.example"' in body
+    assert 'src="https://img.example/h.png"' in body
+    # 2025 before 2024 before the year-less entry
+    assert body.index("Food Bank") < body.index("Habitat NOLA") < body.index("No Year Fund")
+
+
+def test_beneficiaries_nav_link_on_public_pages(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert 'href="/beneficiaries">Past Beneficiaries</a>' in resp.text
 
 
 def test_event_page_renders_timeline_section(dynamodb_tables):

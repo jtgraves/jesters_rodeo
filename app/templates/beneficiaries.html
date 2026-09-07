@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Past Beneficiaries{% endblock %}
+
+{% block content %}
+<h1>Past Beneficiaries</h1>
+
+{% if not beneficiaries %}
+<p>We'll list the charities this event has supported here soon.</p>
+{% else %}
+<p>Every year's ball benefits a local cause. Here's where the money has gone.</p>
+{% for b in beneficiaries %}
+<section class="beneficiary">
+  {% if b.logo_url %}
+  <img class="beneficiary-logo" src="{{ b.logo_url }}" alt="{{ b.name }}">
+  {% endif %}
+  <h2>{{ b.name }}{% if b.year %} <span class="beneficiary-year">({{ b.year }})</span>{% endif %}</h2>
+  {% if b.amount_cents %}
+  <p class="beneficiary-amount">${{ "{:,}".format(b.amount_cents // 100) }} donated</p>
+  {% endif %}
+  {% if b.description %}<p class="beneficiary-description">{{ b.description }}</p>{% endif %}
+  {% if b.website_url %}
+  <p><a href="{{ b.website_url }}" target="_blank" rel="noopener">Visit {{ b.name }}'s website</a></p>
+  {% endif %}
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

@@ -74,3 +74,7 @@ def WAITLIST() -> Any:
 
 def ANNOUNCEMENTS() -> Any:
     return get_table(settings.announcements_table)
+
+
+def PAST_BENEFICIARIES() -> Any:
+    return get_table(settings.past_beneficiaries_table)
