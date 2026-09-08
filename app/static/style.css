@@ -226,7 +226,8 @@ body.has-hero .public-nav .nav-links a {
    spacing so the ornament doesn't land inside its border. */
 .event-layout ~ section:not(.event-charity) { margin-top: 0; }
 .event-layout ~ section:not(.event-charity)::before,
-.beneficiary::before {
+.beneficiary::before,
+.faq-item::before {
   content: "";
   display: block;
   width: 72px;
@@ -238,11 +239,14 @@ body.has-hero .public-nav .nav-links a {
   opacity: 0.4;
 }
 .event-layout ~ section:not(.event-charity):nth-of-type(3n+1)::before,
-.beneficiary:nth-of-type(3n+1)::before { background-image: url("/static/img/jester-rider.png"); }
+.beneficiary:nth-of-type(3n+1)::before,
+.faq-item:nth-of-type(3n+1)::before { background-image: url("/static/img/jester-rider.png"); }
 .event-layout ~ section:not(.event-charity):nth-of-type(3n+2)::before,
-.beneficiary:nth-of-type(3n+2)::before { background-image: url("/static/img/bronco.png"); }
+.beneficiary:nth-of-type(3n+2)::before,
+.faq-item:nth-of-type(3n+2)::before { background-image: url("/static/img/bronco.png"); }
 .event-layout ~ section:not(.event-charity):nth-of-type(3n)::before,
-.beneficiary:nth-of-type(3n)::before { background-image: url("/static/img/bronco-alt.png"); }
+.beneficiary:nth-of-type(3n)::before,
+.faq-item:nth-of-type(3n)::before { background-image: url("/static/img/bronco-alt.png"); }
 
 /* Mascot for sparse "nothing here yet" pages. */
 .empty-state-mascot {
@@ -419,21 +423,29 @@ img.event-hero { opacity: 0.5; }
 .beneficiary { margin-top: var(--space-3); }
 .beneficiary h2 { margin: 0 0 0.25rem; }
 
-/* Public FAQ: native <details> accordion, no JS. */
+/* Public FAQ: native <details> accordion, no JS. Entries are separated by the
+   rotating silhouette ornament (see .faq-item::before above). */
 .faq-item {
-  border-bottom: 1px solid var(--color-border);
   padding: var(--space-1) 0;
+  overflow-wrap: anywhere;
 }
 .faq-item summary {
   cursor: pointer;
   font-weight: 600;
-  list-style-position: outside;
 }
 .faq-answer {
   margin-top: var(--space-1);
   color: var(--color-muted);
   white-space: pre-line;
+  overflow-wrap: anywhere;
 }
+
+/* Admin FAQ table: inline edit form + reorder arrows per row. */
+.faq-edit-form label { display: block; margin-bottom: 0.3rem; }
+.faq-edit-form input[type="text"],
+.faq-edit-form textarea { width: 100%; box-sizing: border-box; }
+.faq-move { white-space: nowrap; text-align: center; }
+.faq-move form { display: inline; }
 .beneficiary-year { color: var(--color-muted); font-weight: 400; }
 .beneficiary-amount { font-weight: 600; margin: 0.25rem 0; }
 .beneficiary-description { white-space: pre-line; }

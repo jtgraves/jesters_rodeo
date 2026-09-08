@@ -1132,29 +1132,32 @@ def list_faq(request: Request) -> Response:
     return _faq_page(request)
 
 
+def _write_faq_order(ids: list[str]) -> None:
+    """Renumber sort_order to match list position (0, 1, 2, ...)."""
+    for position, faq_id in enumerate(ids):
+        FAQ_ENTRIES().update_item(
+            Key={"faq_id": faq_id},
+            UpdateExpression="SET sort_order = :s",
+            ExpressionAttributeValues={":s": position},
+        )
+
+
 @router.post("/faq")
 def create_faq(
     request: Request,
     question: str = Form(...),
     answer: str = Form(...),
-    sort_order: str = Form(""),
 ) -> Response:
     question, answer = question.strip(), answer.strip()
     if not question or not answer:
         return _faq_page(request, error="Question and answer are both required.", status_code=400)
 
-    order_value = 0
-    if sort_order.strip():
-        try:
-            order_value = int(sort_order.strip())
-        except ValueError:
-            return _faq_page(request, error="Sort order must be a number.", status_code=400)
-
     item = {
         "faq_id": f"faq_{uuid.uuid4().hex}",
         "question": question,
         "answer": answer,
-        "sort_order": order_value,
+        # New entries land at the bottom; reorder with the arrows.
+        "sort_order": len(_sorted_faq_entries()),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
@@ -1166,9 +1169,40 @@ def create_faq(
     return RedirectResponse("/admin/faq", status_code=303)
 
 
+@router.post("/faq/{faq_id}")
+def update_faq(
+    request: Request,
+    faq_id: str,
+    question: str = Form(...),
+    answer: str = Form(...),
+) -> Response:
+    question, answer = question.strip(), answer.strip()
+    if not question or not answer:
+        return _faq_page(request, error="Question and answer are both required.", status_code=400)
+    FAQ_ENTRIES().update_item(
+        Key={"faq_id": faq_id},
+        UpdateExpression="SET question = :q, answer = :a",
+        ExpressionAttributeValues={":q": question, ":a": answer},
+    )
+    return RedirectResponse("/admin/faq", status_code=303)
+
+
+@router.post("/faq/{faq_id}/move")
+def move_faq(faq_id: str, direction: str = Form(...)) -> RedirectResponse:
+    ids = [e["faq_id"] for e in _sorted_faq_entries()]
+    if faq_id in ids:
+        i = ids.index(faq_id)
+        j = i - 1 if direction == "up" else i + 1
+        if 0 <= j < len(ids):
+            ids[i], ids[j] = ids[j], ids[i]
+            _write_faq_order(ids)
+    return RedirectResponse("/admin/faq", status_code=303)
+
+
 @router.post("/faq/{faq_id}/delete")
 def delete_faq(faq_id: str) -> RedirectResponse:
     FAQ_ENTRIES().delete_item(Key={"faq_id": faq_id})
+    _write_faq_order([e["faq_id"] for e in _sorted_faq_entries()])
     return RedirectResponse("/admin/faq", status_code=303)
 
 

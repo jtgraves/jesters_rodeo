@@ -1159,50 +1159,97 @@ def test_delete_beneficiary(admin_client):
 
 # ---- FAQ ----
 
-def test_faq_admin_page_renders(admin_client):
+def _put_faq_admin(faq_id, question="Q?", answer="A.", sort_order=0):
     FAQ_ENTRIES().put_item(Item={
-        "faq_id": "faq_x", "question": "Where do I park?", "answer": "On the street.",
-        "sort_order": 3, "created_at": "2026-01-01T00:00:00Z",
+        "faq_id": faq_id, "question": question, "answer": answer,
+        "sort_order": sort_order, "created_at": f"2026-01-0{sort_order + 1}T00:00:00Z",
     })
+
+
+def test_faq_admin_page_renders_editable_rows(admin_client):
+    _put_faq_admin("faq_x", question="Where do I park?", answer="On the street.", sort_order=3)
     resp = admin_client.get("/admin/faq")
     assert resp.status_code == 200
-    assert "Where do I park?" in resp.text
-    assert "On the street." in resp.text
+    assert 'value="Where do I park?"' in resp.text   # editable input, not read-only text
+    assert ">On the street.</textarea>" in resp.text
+    assert 'action="/admin/faq/faq_x/move"' in resp.text  # reorder arrows
 
 
-def test_create_faq_entry(admin_client):
+def test_create_faq_entry_appends_to_the_bottom(admin_client):
+    _put_faq_admin("faq_a", sort_order=0)
     resp = admin_client.post(
         "/admin/faq",
-        data={"question": "  Is it free?  ", "answer": "  Yes.  ", "sort_order": "5"},
+        data={"question": "  Is it free?  ", "answer": "  Yes.  "},
         follow_redirects=False,
     )
     assert resp.status_code == 303
     assert resp.headers["location"] == "/admin/faq"
-    item = FAQ_ENTRIES().scan()["Items"][0]
-    assert item["question"] == "Is it free?"
-    assert item["answer"] == "Yes."
-    assert int(item["sort_order"]) == 5
+    new = next(i for i in FAQ_ENTRIES().scan()["Items"] if i["question"] == "Is it free?")
+    assert new["answer"] == "Yes."
+    assert int(new["sort_order"]) == 1  # after the one existing entry
 
 
 def test_create_faq_requires_question_and_answer(admin_client):
-    for bad in (
-        {"question": "  ", "answer": "A."},
-        {"question": "Q?", "answer": "   "},
-        {"question": "Q?", "answer": "A.", "sort_order": "soon"},
-    ):
+    for bad in ({"question": "  ", "answer": "A."}, {"question": "Q?", "answer": "   "}):
         resp = admin_client.post("/admin/faq", data=bad, follow_redirects=False)
         assert resp.status_code == 400, bad
     assert FAQ_ENTRIES().scan()["Items"] == []
 
 
-def test_delete_faq_entry(admin_client):
-    FAQ_ENTRIES().put_item(Item={
-        "faq_id": "faq_del", "question": "Q?", "answer": "A.", "sort_order": 0,
-        "created_at": "2026-01-01T00:00:00Z",
-    })
-    resp = admin_client.post("/admin/faq/faq_del/delete", follow_redirects=False)
+def test_update_faq_entry(admin_client):
+    _put_faq_admin("faq_e", question="Old q", answer="Old a", sort_order=2)
+    resp = admin_client.post(
+        "/admin/faq/faq_e",
+        data={"question": "  New q  ", "answer": "  New a  "},
+        follow_redirects=False,
+    )
     assert resp.status_code == 303
-    assert FAQ_ENTRIES().scan()["Items"] == []
+    item = FAQ_ENTRIES().get_item(Key={"faq_id": "faq_e"})["Item"]
+    assert item["question"] == "New q"
+    assert item["answer"] == "New a"
+    assert int(item["sort_order"]) == 2  # position preserved
+
+
+def test_update_faq_rejects_blank(admin_client):
+    _put_faq_admin("faq_e", question="Keep", answer="Keep")
+    resp = admin_client.post(
+        "/admin/faq/faq_e", data={"question": "x", "answer": "  "}, follow_redirects=False
+    )
+    assert resp.status_code == 400
+    assert FAQ_ENTRIES().get_item(Key={"faq_id": "faq_e"})["Item"]["question"] == "Keep"
+
+
+def test_move_faq_reorders_and_renumbers(admin_client):
+    _put_faq_admin("faq_1", question="one", sort_order=0)
+    _put_faq_admin("faq_2", question="two", sort_order=1)
+    _put_faq_admin("faq_3", question="three", sort_order=2)
+
+    admin_client.post("/admin/faq/faq_2/move", data={"direction": "up"}, follow_redirects=False)
+
+    order = {i["faq_id"]: int(i["sort_order"]) for i in FAQ_ENTRIES().scan()["Items"]}
+    assert order == {"faq_2": 0, "faq_1": 1, "faq_3": 2}
+
+
+def test_move_faq_at_the_edge_is_a_noop(admin_client):
+    _put_faq_admin("faq_1", sort_order=0)
+    _put_faq_admin("faq_2", sort_order=1)
+    resp = admin_client.post(
+        "/admin/faq/faq_1/move", data={"direction": "up"}, follow_redirects=False
+    )
+    assert resp.status_code == 303
+    order = {i["faq_id"]: int(i["sort_order"]) for i in FAQ_ENTRIES().scan()["Items"]}
+    assert order == {"faq_1": 0, "faq_2": 1}
+
+
+def test_delete_faq_entry_renumbers_the_rest(admin_client):
+    _put_faq_admin("faq_1", sort_order=0)
+    _put_faq_admin("faq_2", sort_order=1)
+    _put_faq_admin("faq_3", sort_order=2)
+
+    resp = admin_client.post("/admin/faq/faq_1/delete", follow_redirects=False)
+    assert resp.status_code == 303
+    order = {i["faq_id"]: int(i["sort_order"]) for i in FAQ_ENTRIES().scan()["Items"]}
+    assert order == {"faq_2": 0, "faq_3": 1}
 
 
 # ---- Clown management (Cognito users) ----
