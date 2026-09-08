@@ -398,10 +398,16 @@ def test_no_event_page_shows_the_krewe_mascot(dynamodb_tables):
 
 
 def test_static_image_assets_are_served(dynamodb_tables):
-    for name in ("fleur.png", "jester-rider.png", "bronco.png"):
+    for name in ("fleur.png", "jester-rider.png", "bronco.png", "bronco-alt.png"):
         resp = client.get(f"/static/img/{name}")
         assert resp.status_code == 200, name
         assert resp.headers["content-type"] == "image/png"
+
+
+def test_pages_use_the_jester_rider_favicon(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert '<link rel="icon" type="image/png" href="/static/img/jester-rider.png">' in resp.text
 
 
 def _put_beneficiary(beneficiary_id, **overrides):
