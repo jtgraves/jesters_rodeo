@@ -1,0 +1,34 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>FAQ</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<p>Shown on the public <a href="/faq" target="_blank" rel="noopener">FAQ</a> page.
+   To fix an entry, delete it and add it again. Lower sort order shows first.</p>
+
+<div class="table-scroll">
+<table>
+<tr><th>Order</th><th>Question</th><th>Answer</th><th></th></tr>
+{% for f in entries %}
+<tr>
+  <td>{{ f.sort_order }}</td>
+  <td>{{ f.question }}</td>
+  <td>{{ f.answer }}</td>
+  <td>
+    <form method="post" action="/admin/faq/{{ f.faq_id }}/delete"
+          onsubmit="return confirm('Delete this FAQ entry?')">
+      <button type="submit">Delete</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+<h2>Add a question</h2>
+<form method="post" action="/admin/faq" class="event-images-form">
+  <label>Question <input type="text" name="question" required></label>
+  <label>Answer <textarea name="answer" required></textarea></label>
+  <label>Sort order <input type="number" name="sort_order" value="0"></label>
+  <button type="submit">Add</button>
+</form>
+{% endblock %}

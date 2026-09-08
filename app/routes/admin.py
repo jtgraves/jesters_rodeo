@@ -23,6 +23,7 @@ from app.db import (
     ANNOUNCEMENTS,
     DISCOUNT_CODES,
     EVENTS,
+    FAQ_ENTRIES,
     ORDERS,
     PAST_BENEFICIARIES,
     TICKETS,
@@ -34,6 +35,7 @@ from app.fulfillment import fulfill_order, flag_fulfillment_error
 from app.models import (
     Announcement,
     DiscountCode,
+    FaqEntry,
     Order,
     PastBeneficiary,
     Ticket,
@@ -1108,6 +1110,66 @@ def create_beneficiary(
 def delete_beneficiary(beneficiary_id: str) -> RedirectResponse:
     PAST_BENEFICIARIES().delete_item(Key={"beneficiary_id": beneficiary_id})
     return RedirectResponse("/admin/beneficiaries", status_code=303)
+
+
+# ---- FAQ (public /faq page) ----
+
+def _sorted_faq_entries() -> list[dict]:
+    items = paginate(FAQ_ENTRIES().scan)
+    return sorted(items, key=lambda f: (int(f.get("sort_order") or 0), f.get("created_at") or ""))
+
+
+def _faq_page(request: Request, error: str | None = None, status_code: int = 200) -> Response:
+    return templates.TemplateResponse(
+        request, "admin/faq.html",
+        {"entries": _sorted_faq_entries(), "error": error},
+        status_code=status_code,
+    )
+
+
+@router.get("/faq")
+def list_faq(request: Request) -> Response:
+    return _faq_page(request)
+
+
+@router.post("/faq")
+def create_faq(
+    request: Request,
+    question: str = Form(...),
+    answer: str = Form(...),
+    sort_order: str = Form(""),
+) -> Response:
+    question, answer = question.strip(), answer.strip()
+    if not question or not answer:
+        return _faq_page(request, error="Question and answer are both required.", status_code=400)
+
+    order_value = 0
+    if sort_order.strip():
+        try:
+            order_value = int(sort_order.strip())
+        except ValueError:
+            return _faq_page(request, error="Sort order must be a number.", status_code=400)
+
+    item = {
+        "faq_id": f"faq_{uuid.uuid4().hex}",
+        "question": question,
+        "answer": answer,
+        "sort_order": order_value,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        FaqEntry(**item)
+    except ValidationError:
+        return _faq_page(request, error="Invalid FAQ entry.", status_code=400)
+
+    FAQ_ENTRIES().put_item(Item=item)
+    return RedirectResponse("/admin/faq", status_code=303)
+
+
+@router.post("/faq/{faq_id}/delete")
+def delete_faq(faq_id: str) -> RedirectResponse:
+    FAQ_ENTRIES().delete_item(Key={"faq_id": faq_id})
+    return RedirectResponse("/admin/faq", status_code=303)
 
 
 # ---- Clown management (Cognito users) ----

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     waitlist_table: str
     announcements_table: str
     past_beneficiaries_table: str
+    faq_entries_table: str
     event_images_bucket: str
     ses_sender_email: str
     cognito_user_pool_id: str

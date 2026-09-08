@@ -78,3 +78,7 @@ def ANNOUNCEMENTS() -> Any:
 
 def PAST_BENEFICIARIES() -> Any:
     return get_table(settings.past_beneficiaries_table)
+
+
+def FAQ_ENTRIES() -> Any:
+    return get_table(settings.faq_entries_table)

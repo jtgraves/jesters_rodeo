@@ -148,3 +148,14 @@ class PastBeneficiary(BaseModel):
     amount_cents: int = 0
     year: int | None = None
     created_at: str
+
+
+class FaqEntry(BaseModel):
+    """A question/answer pair shown on the public /faq page. sort_order is a
+    manual tiebreaker (lower shows first); entries with the same order fall
+    back to created_at."""
+    faq_id: str
+    question: str
+    answer: str
+    sort_order: int = 0
+    created_at: str

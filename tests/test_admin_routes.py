@@ -11,6 +11,7 @@ from app.db import (
     ANNOUNCEMENTS,
     DISCOUNT_CODES,
     EVENTS,
+    FAQ_ENTRIES,
     ORDERS,
     PAST_BENEFICIARIES,
     TICKETS,
@@ -1156,6 +1157,54 @@ def test_delete_beneficiary(admin_client):
     assert PAST_BENEFICIARIES().scan()["Items"] == []
 
 
+# ---- FAQ ----
+
+def test_faq_admin_page_renders(admin_client):
+    FAQ_ENTRIES().put_item(Item={
+        "faq_id": "faq_x", "question": "Where do I park?", "answer": "On the street.",
+        "sort_order": 3, "created_at": "2026-01-01T00:00:00Z",
+    })
+    resp = admin_client.get("/admin/faq")
+    assert resp.status_code == 200
+    assert "Where do I park?" in resp.text
+    assert "On the street." in resp.text
+
+
+def test_create_faq_entry(admin_client):
+    resp = admin_client.post(
+        "/admin/faq",
+        data={"question": "  Is it free?  ", "answer": "  Yes.  ", "sort_order": "5"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/faq"
+    item = FAQ_ENTRIES().scan()["Items"][0]
+    assert item["question"] == "Is it free?"
+    assert item["answer"] == "Yes."
+    assert int(item["sort_order"]) == 5
+
+
+def test_create_faq_requires_question_and_answer(admin_client):
+    for bad in (
+        {"question": "  ", "answer": "A."},
+        {"question": "Q?", "answer": "   "},
+        {"question": "Q?", "answer": "A.", "sort_order": "soon"},
+    ):
+        resp = admin_client.post("/admin/faq", data=bad, follow_redirects=False)
+        assert resp.status_code == 400, bad
+    assert FAQ_ENTRIES().scan()["Items"] == []
+
+
+def test_delete_faq_entry(admin_client):
+    FAQ_ENTRIES().put_item(Item={
+        "faq_id": "faq_del", "question": "Q?", "answer": "A.", "sort_order": 0,
+        "created_at": "2026-01-01T00:00:00Z",
+    })
+    resp = admin_client.post("/admin/faq/faq_del/delete", follow_redirects=False)
+    assert resp.status_code == 303
+    assert FAQ_ENTRIES().scan()["Items"] == []
+
+
 # ---- Clown management (Cognito users) ----
 
 _FAKE_CLOWNS = [
@@ -1289,7 +1338,7 @@ def test_member_is_bounced_from_admin_only_pages(member_client):
     _put_event(status="open")
     for path in (
         "/admin/events", "/admin/clowns", "/admin/charity",
-        "/admin/give-tickets", "/admin/beneficiaries",
+        "/admin/give-tickets", "/admin/beneficiaries", "/admin/faq",
     ):
         resp = member_client.get(path, headers={"accept": "text/html"}, follow_redirects=False)
         assert resp.status_code == 303, path

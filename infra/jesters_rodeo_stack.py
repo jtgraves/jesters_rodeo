@@ -56,6 +56,7 @@ class JestersRodeoStack(Stack):
             "WAITLIST_TABLE": tables["waitlist"].table_name,
             "ANNOUNCEMENTS_TABLE": tables["announcements"].table_name,
             "PAST_BENEFICIARIES_TABLE": tables["past_beneficiaries"].table_name,
+            "FAQ_ENTRIES_TABLE": tables["faq_entries"].table_name,
             "SES_SENDER_EMAIL": sender_email,
             "COGNITO_USER_POOL_ID": user_pool.user_pool_id,
             "COGNITO_APP_CLIENT_ID": user_pool_client.user_pool_client_id,
@@ -338,6 +339,12 @@ class JestersRodeoStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.RETAIN,
         )
+        faq_entries_table = dynamodb.Table(
+            self, "FaqEntriesTable",
+            partition_key=dynamodb.Attribute(name="faq_id", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
         return {
             "events": events_table,
             "orders": orders_table,
@@ -346,6 +353,7 @@ class JestersRodeoStack(Stack):
             "waitlist": waitlist_table,
             "announcements": announcements_table,
             "past_beneficiaries": past_beneficiaries_table,
+            "faq_entries": faq_entries_table,
         }
 
     def _create_auth(self, domain_prefix: str, site_url: str):

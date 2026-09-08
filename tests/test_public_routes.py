@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.db import DISCOUNT_CODES, EVENTS, ORDERS, PAST_BENEFICIARIES, WAITLIST
+from app.db import DISCOUNT_CODES, EVENTS, FAQ_ENTRIES, ORDERS, PAST_BENEFICIARIES, WAITLIST
 from app.main import app
 
 client = TestClient(app)
@@ -450,6 +450,43 @@ def test_beneficiaries_nav_link_on_public_pages(dynamodb_tables):
     _put_event()
     resp = client.get("/")
     assert 'href="/beneficiaries">Past Beneficiaries</a>' in resp.text
+
+
+def _put_faq(faq_id, question="Q?", answer="A.", sort_order=0, created_at="2026-01-01T00:00:00Z"):
+    FAQ_ENTRIES().put_item(Item={
+        "faq_id": faq_id, "question": question, "answer": answer,
+        "sort_order": sort_order, "created_at": created_at,
+    })
+
+
+def test_faq_page_empty_state(dynamodb_tables):
+    resp = client.get("/faq")
+    assert resp.status_code == 200
+    assert "<h1>FAQ</h1>" in resp.text
+    assert "will show up here soon" in resp.text
+    assert 'src="/static/img/jester-rider.png"' in resp.text
+
+
+def test_faq_page_lists_entries_in_order(dynamodb_tables):
+    _put_faq("faq_b", question="Where do I park?", answer="On the street.",
+             sort_order=2, created_at="2026-01-02T00:00:00Z")
+    _put_faq("faq_a", question="Is it family friendly?", answer="Yes!\nBring the kids.",
+             sort_order=1, created_at="2026-01-03T00:00:00Z")
+    _put_faq("faq_c", question="Rain plan?", answer="We parade anyway.",
+             sort_order=2, created_at="2026-01-01T00:00:00Z")
+
+    resp = client.get("/faq")
+    body = resp.text
+    assert "<details class=\"faq-item\">" in body
+    assert "Is it family friendly?" in body and "Bring the kids." in body
+    # sort_order 1 first; then the two order-2 entries by created_at ascending
+    assert body.index("family friendly") < body.index("Rain plan?") < body.index("Where do I park?")
+
+
+def test_faq_nav_link_on_public_pages(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert 'href="/faq">FAQ</a>' in resp.text
 
 
 def test_event_page_renders_timeline_section(dynamodb_tables):

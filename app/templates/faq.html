@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}FAQ{% endblock %}
+
+{% block content %}
+<h1>FAQ</h1>
+
+{% if not entries %}
+<img class="empty-state-mascot" src="/static/img/jester-rider.png" alt="">
+<p>Questions and answers will show up here soon.</p>
+{% else %}
+{% for f in entries %}
+<details class="faq-item">
+  <summary>{{ f.question }}</summary>
+  <div class="faq-answer">{{ f.answer }}</div>
+</details>
+{% endfor %}
+{% endif %}
+{% endblock %}
