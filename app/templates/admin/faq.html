@@ -2,46 +2,41 @@
 {% block content %}
 <h1>FAQ</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-<p>Shown on the public <a href="/faq" target="_blank" rel="noopener">FAQ</a> page,
-   in the order below. Use the arrows to rearrange.</p>
+<p>Shown on the public <a href="/faq" target="_blank" rel="noopener">FAQ</a> page, in the order below.</p>
 
-<div class="table-scroll">
-<table>
-<tr><th>Order</th><th>Question &amp; answer</th><th></th></tr>
+<ol class="faq-admin-list">
 {% for f in entries %}
-<tr>
-  <td class="faq-move">
-    <form method="post" action="/admin/faq/{{ f.faq_id }}/move">
-      <input type="hidden" name="direction" value="up">
-      <button type="submit" {% if loop.first %}disabled{% endif %} aria-label="Move up">▲</button>
+  <li class="faq-admin-card">
+    <form method="post" action="/admin/faq/{{ f.faq_id }}" class="faq-admin-fields">
+      <label>Question
+        <input type="text" name="question" value="{{ f.question }}" required>
+      </label>
+      <label>Answer
+        <textarea name="answer" rows="3" required>{{ f.answer }}</textarea>
+      </label>
+      <div class="faq-admin-actions">
+        <span class="faq-admin-num">#{{ loop.index }}</span>
+        <button class="icon-btn" type="submit" name="direction" value="up"
+                formaction="/admin/faq/{{ f.faq_id }}/move" formnovalidate
+                {% if loop.first %}disabled{% endif %} aria-label="Move up" title="Move up">&#9650;</button>
+        <button class="icon-btn" type="submit" name="direction" value="down"
+                formaction="/admin/faq/{{ f.faq_id }}/move" formnovalidate
+                {% if loop.last %}disabled{% endif %} aria-label="Move down" title="Move down">&#9660;</button>
+        <span class="faq-admin-spacer"></span>
+        <button type="submit">Save</button>
+        <button type="submit" class="btn-danger"
+                formaction="/admin/faq/{{ f.faq_id }}/delete" formnovalidate
+                onclick="return confirm('Delete this FAQ entry?')">Delete</button>
+      </div>
     </form>
-    <form method="post" action="/admin/faq/{{ f.faq_id }}/move">
-      <input type="hidden" name="direction" value="down">
-      <button type="submit" {% if loop.last %}disabled{% endif %} aria-label="Move down">▼</button>
-    </form>
-  </td>
-  <td>
-    <form method="post" action="/admin/faq/{{ f.faq_id }}" class="faq-edit-form">
-      <label>Question <input type="text" name="question" value="{{ f.question }}" required></label>
-      <label>Answer <textarea name="answer" required>{{ f.answer }}</textarea></label>
-      <button type="submit">Save</button>
-    </form>
-  </td>
-  <td>
-    <form method="post" action="/admin/faq/{{ f.faq_id }}/delete"
-          onsubmit="return confirm('Delete this FAQ entry?')">
-      <button type="submit">Delete</button>
-    </form>
-  </td>
-</tr>
+  </li>
 {% endfor %}
-</table>
-</div>
+</ol>
 
 <h2>Add a question</h2>
-<form method="post" action="/admin/faq" class="event-images-form">
+<form method="post" action="/admin/faq" class="faq-admin-fields faq-admin-new">
   <label>Question <input type="text" name="question" required></label>
-  <label>Answer <textarea name="answer" required></textarea></label>
-  <button type="submit">Add to the bottom</button>
+  <label>Answer <textarea name="answer" rows="3" required></textarea></label>
+  <div class="faq-admin-actions"><button type="submit">Add to the bottom</button></div>
 </form>
 {% endblock %}

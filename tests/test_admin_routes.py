@@ -1172,7 +1172,8 @@ def test_faq_admin_page_renders_editable_rows(admin_client):
     assert resp.status_code == 200
     assert 'value="Where do I park?"' in resp.text   # editable input, not read-only text
     assert ">On the street.</textarea>" in resp.text
-    assert 'action="/admin/faq/faq_x/move"' in resp.text  # reorder arrows
+    assert 'formaction="/admin/faq/faq_x/move"' in resp.text  # reorder arrows
+    assert 'class="icon-btn"' in resp.text
 
 
 def test_create_faq_entry_appends_to_the_bottom(admin_client):
