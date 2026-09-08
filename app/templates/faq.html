@@ -9,10 +9,10 @@
 <p>Questions and answers will show up here soon.</p>
 {% else %}
 {% for f in entries %}
-<details class="faq-item">
-  <summary>{{ f.question }}</summary>
+<div class="faq-item">
+  <h2 class="faq-question">{{ f.question }}</h2>
   <div class="faq-answer">{{ f.answer }}</div>
-</details>
+</div>
 {% endfor %}
 {% endif %}
 {% endblock %}

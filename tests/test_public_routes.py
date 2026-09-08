@@ -477,7 +477,8 @@ def test_faq_page_lists_entries_in_order(dynamodb_tables):
 
     resp = client.get("/faq")
     body = resp.text
-    assert "<details class=\"faq-item\">" in body
+    assert 'class="faq-item"' in body
+    assert "<details" not in body  # answers are always visible, not folded away
     assert "Is it family friendly?" in body and "Bring the kids." in body
     # sort_order 1 first; then the two order-2 entries by created_at ascending
     assert body.index("family friendly") < body.index("Rain plan?") < body.index("Where do I park?")

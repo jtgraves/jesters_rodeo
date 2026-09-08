@@ -423,19 +423,17 @@ img.event-hero { opacity: 0.5; }
 .beneficiary { margin-top: var(--space-3); }
 .beneficiary h2 { margin: 0 0 0.25rem; }
 
-/* Public FAQ: native <details> accordion, no JS. Entries are separated by the
+/* Public FAQ: question + answer, always visible. Entries are separated by the
    rotating silhouette ornament (see .faq-item::before above). */
 .faq-item {
   padding: var(--space-1) 0;
   overflow-wrap: anywhere;
 }
-.faq-item summary {
-  cursor: pointer;
-  font-weight: 600;
+.faq-question {
+  margin: 0 0 var(--space-1);
+  font-size: 1.1rem;
 }
 .faq-answer {
-  margin-top: var(--space-1);
-  color: var(--color-muted);
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
