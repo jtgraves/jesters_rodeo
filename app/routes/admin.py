@@ -1413,3 +1413,60 @@ def _my_profile(claims: dict) -> dict:
 def clowns_home(request: Request, claims: dict = Depends(require_member)) -> Response:
     profile = _my_profile(claims)
     return templates.TemplateResponse(request, "admin/clowns_home.html", {"profile": profile})
+
+
+def _update_clown_fields(clown_id: str, fields: dict) -> None:
+    if not fields:
+        return
+    CLOWN_PROFILES().update_item(
+        Key={"clown_id": clown_id},
+        UpdateExpression="SET " + ", ".join(f"#{k} = :{k}" for k in fields),
+        ExpressionAttributeNames={f"#{k}": k for k in fields},
+        ExpressionAttributeValues={f":{k}": v for k, v in fields.items()},
+    )
+
+
+_PROFILE_TEXT_FIELDS = (
+    "display_name", "bio", "phone", "address",
+    "emergency_contact_name", "emergency_contact_phone",
+)
+
+
+@member_router.get("/clowns/profile")
+def my_profile_page(request: Request, claims: dict = Depends(require_member)) -> Response:
+    return templates.TemplateResponse(
+        request, "admin/clowns_profile.html", {"profile": _my_profile(claims)}
+    )
+
+
+@member_router.post("/clowns/profile")
+def update_my_profile(
+    request: Request,
+    claims: dict = Depends(require_member),
+    display_name: str = Form(""),
+    bio: str = Form(""),
+    phone: str = Form(""),
+    address: str = Form(""),
+    emergency_contact_name: str = Form(""),
+    emergency_contact_phone: str = Form(""),
+    photo: UploadFile | None = File(None),
+) -> Response:
+    profile = _my_profile(claims)
+    fields = {
+        "display_name": display_name.strip() or None,
+        "bio": bio.strip() or None,
+        "phone": phone.strip() or None,
+        "address": address.strip() or None,
+        "emergency_contact_name": emergency_contact_name.strip() or None,
+        "emergency_contact_phone": emergency_contact_phone.strip() or None,
+    }
+    photo_url, photo_error = _maybe_upload_image(photo, "clowns", "Clown photo")
+    if photo_error:
+        return templates.TemplateResponse(
+            request, "admin/clowns_profile.html",
+            {"profile": profile, "error": photo_error}, status_code=400,
+        )
+    if photo_url:
+        fields["photo_url"] = photo_url
+    _update_clown_fields(profile["clown_id"], fields)
+    return RedirectResponse("/admin/clowns/profile", status_code=303)

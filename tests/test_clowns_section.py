@@ -85,3 +85,43 @@ def test_clowns_hub_nav_link_visible_to_members(dynamodb_tables):
         assert 'href="/admin/clowns"' in resp.text
     finally:
         ctx.stop()
+
+
+def test_my_profile_edit_updates_only_my_row(dynamodb_tables):
+    CLOWN_PROFILES().put_item(Item={
+        "clown_id": "clown_other", "cognito_sub": "sub-other", "email": "o@example.com",
+        "display_name": "Other", "years_ridden": [], "is_lieutenant": False, "active": True,
+        "created_at": "2026-01-01T00:00:00Z",
+    })
+    c, ctx = _client(sub="sub-me", email="me@example.com")
+    try:
+        resp = c.post("/admin/clowns/profile", data={
+            "display_name": "  Me the Clown  ", "bio": "Rode since forever.",
+            "phone": "5045551234", "address": "", "emergency_contact_name": "Pat",
+            "emergency_contact_phone": "5045559999",
+        }, follow_redirects=False)
+        assert resp.status_code == 303
+    finally:
+        ctx.stop()
+    mine = next(p for p in CLOWN_PROFILES().scan()["Items"] if p["cognito_sub"] == "sub-me")
+    assert mine["display_name"] == "Me the Clown"
+    assert mine["bio"] == "Rode since forever."
+    assert mine["emergency_contact_name"] == "Pat"
+    other = CLOWN_PROFILES().get_item(Key={"clown_id": "clown_other"})["Item"]
+    assert other["display_name"] == "Other"  # untouched
+
+
+def test_my_profile_edit_cannot_set_official_fields(dynamodb_tables):
+    c, ctx = _client(sub="sub-me", email="me@example.com")
+    try:
+        c.post("/admin/clowns/profile", data={
+            "display_name": "Me", "bio": "", "phone": "", "address": "",
+            "emergency_contact_name": "", "emergency_contact_phone": "",
+            "years_ridden": "2019 2020", "is_lieutenant": "1", "active": "",
+        }, follow_redirects=False)
+    finally:
+        ctx.stop()
+    mine = next(p for p in CLOWN_PROFILES().scan()["Items"] if p["cognito_sub"] == "sub-me")
+    assert mine["years_ridden"] == []
+    assert mine["is_lieutenant"] is False
+    assert mine["active"] is True

@@ -1,0 +1,19 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>My profile</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/admin/clowns/profile" enctype="multipart/form-data" class="event-images-form">
+  <label>Name <input type="text" name="display_name" value="{{ profile.display_name or '' }}"></label>
+  <label>
+    {% if profile.photo_url %}<img src="{{ profile.photo_url }}" alt="" class="event-image-preview"><br>{% endif %}
+    Photo <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp">
+  </label>
+  <label>Bio <textarea name="bio" rows="4">{{ profile.bio or '' }}</textarea></label>
+  <label>Phone <input type="tel" name="phone" value="{{ profile.phone or '' }}"></label>
+  <label>Address <input type="text" name="address" value="{{ profile.address or '' }}"></label>
+  <label>Emergency contact name <input type="text" name="emergency_contact_name" value="{{ profile.emergency_contact_name or '' }}"></label>
+  <label>Emergency contact phone <input type="tel" name="emergency_contact_phone" value="{{ profile.emergency_contact_phone or '' }}"></label>
+  <button type="submit">Save</button>
+</form>
+{% include "admin/_image_size_guard.html" %}
+{% endblock %}
