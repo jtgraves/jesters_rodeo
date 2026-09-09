@@ -437,3 +437,31 @@ def test_resources_mutations_are_admin_only(dynamodb_tables):
         assert resp.status_code == 403
     finally:
         ctx.stop()
+
+
+def test_hub_shows_admin_links_only_to_admins(dynamodb_tables):
+    m, mctx = _client(admin=False)
+    try:
+        body = m.get("/admin/clowns").text
+        assert 'href="/admin/clowns/roster"' in body
+        assert 'href="/admin/clowns/manage"' not in body
+        assert 'href="/admin/clowns/import"' not in body
+    finally:
+        mctx.stop()
+    a, actx = _client(sub="admin-2", admin=True)
+    try:
+        body = a.get("/admin/clowns").text
+        assert 'href="/admin/clowns/manage"' in body
+        assert 'href="/admin/clowns/import"' in body
+    finally:
+        actx.stop()
+
+
+def test_every_clowns_view_page_renders_for_a_member(dynamodb_tables):
+    m, mctx = _client(admin=False)
+    try:
+        for path in ("/admin/clowns", "/admin/clowns/roster", "/admin/clowns/lieutenants",
+                     "/admin/clowns/directory", "/admin/clowns/resources", "/admin/clowns/profile"):
+            assert m.get(path).status_code == 200, path
+    finally:
+        mctx.stop()
