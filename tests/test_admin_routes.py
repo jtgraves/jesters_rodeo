@@ -30,7 +30,7 @@ def admin_client(dynamodb_tables):
     """
     with patch.object(
         auth, "verify_cognito_token",
-        return_value={"sub": "admin-1", "cognito:groups": ["admins"]},
+        return_value={"sub": "admin-1", "email": "admin@example.com", "cognito:groups": ["admins"]},
     ):
         client = TestClient(app)
         client.cookies.set(settings.session_cookie_name, auth.issue_session("fake-id-token"))
@@ -41,7 +41,7 @@ def admin_client(dynamodb_tables):
 def member_client(dynamodb_tables):
     """A client signed in as a plain clown -- no admin group membership."""
     with patch.object(
-        auth, "verify_cognito_token", return_value={"sub": "member-1", "cognito:groups": []},
+        auth, "verify_cognito_token", return_value={"sub": "member-1", "email": "member@example.com", "cognito:groups": []},
     ):
         client = TestClient(app)
         client.cookies.set(settings.session_cookie_name, auth.issue_session("fake-id-token"))

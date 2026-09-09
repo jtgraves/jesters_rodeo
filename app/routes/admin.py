@@ -4,8 +4,9 @@ import csv
 import io
 import json
 import logging
+import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -21,9 +22,11 @@ from app.auth import ADMIN_GROUP, require_admin, require_member
 from app.config import settings
 from app.db import (
     ANNOUNCEMENTS,
+    CLOWN_PROFILES,
     DISCOUNT_CODES,
     EVENTS,
     FAQ_ENTRIES,
+    KREWE_LINKS,
     ORDERS,
     PAST_BENEFICIARIES,
     TICKETS,
@@ -34,8 +37,10 @@ from app.emails import send_confirmation_email
 from app.fulfillment import fulfill_order, flag_fulfillment_error
 from app.models import (
     Announcement,
+    ClownProfile,
     DiscountCode,
     FaqEntry,
+    KreweLink,
     Order,
     PastBeneficiary,
     Ticket,
@@ -1357,3 +1362,48 @@ def delete_clown(
         )
     _delete_clown(username)
     return RedirectResponse("/admin/clown_mgmt", status_code=303)
+
+
+# ---- Clowns section (members-only krewe area) ----
+
+def _my_profile(claims: dict) -> dict:
+    """Return the calling clown's ClownProfile, creating or email-linking it.
+
+    1. by cognito_sub -> return it
+    2. an unlinked profile whose email matches -> attach cognito_sub, return it
+       (a pre-seeded / returning rider connecting to their new account)
+    3. otherwise create a fresh linked profile
+    """
+    sub = claims.get("sub", "")
+    email = (claims.get("email") or "").strip()
+    email_key = email.lower()
+    profiles = paginate(CLOWN_PROFILES().scan)
+
+    for p in profiles:
+        if p.get("cognito_sub") == sub:
+            return p
+
+    if email_key:
+        for p in profiles:
+            if not p.get("cognito_sub") and (p.get("email") or "").strip().lower() == email_key:
+                CLOWN_PROFILES().update_item(
+                    Key={"clown_id": p["clown_id"]},
+                    UpdateExpression="SET cognito_sub = :s",
+                    ExpressionAttributeValues={":s": sub},
+                )
+                p["cognito_sub"] = sub
+                return p
+
+    item = {
+        "clown_id": f"clown_{uuid.uuid4().hex}",
+        "cognito_sub": sub,
+        "email": email or None,
+        "display_name": None, "photo_url": None, "bio": None,
+        "phone": None, "address": None,
+        "emergency_contact_name": None, "emergency_contact_phone": None,
+        "years_ridden": [], "is_lieutenant": False, "lieutenant_title": None,
+        "active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    CLOWN_PROFILES().put_item(Item=item)
+    return item
