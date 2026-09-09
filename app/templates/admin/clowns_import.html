@@ -1,0 +1,29 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Import clowns from a spreadsheet</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+{% if summary %}
+<div class="import-summary">
+  <p>created {{ summary.created }} · updated {{ summary.updated }} · invited {{ summary.invited }}
+     · skipped {{ summary.skipped | length }}</p>
+  {% if summary.skipped %}
+  <ul>{% for s in summary.skipped %}<li>{{ s }}</li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% endif %}
+
+<p>CSV columns (a header row is required; <code>email</code> is the only required value per row —
+   any others are optional and only the columns present are written):
+   <code>{{ columns | join(", ") }}</code>.
+   <code>years_ridden</code> accepts a list like <code>2019 2021-2023</code>.
+   <a href="/admin/clowns/import/template">Download a blank template</a> ·
+   <a href="/admin/clowns/export.csv">Export current data</a>.</p>
+
+<form method="post" action="/admin/clowns/import" enctype="multipart/form-data">
+  <label>CSV file <input type="file" name="file" accept=".csv,text/csv" required></label>
+  <label><input type="checkbox" name="invite_missing" value="1">
+    Also send a Cognito login invite to emails that don't have an account yet</label>
+  <button type="submit">Import</button>
+</form>
+{% endblock %}

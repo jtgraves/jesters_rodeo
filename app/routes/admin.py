@@ -1699,3 +1699,159 @@ def unlink_clown_account(clown_id: str) -> RedirectResponse:
         Key={"clown_id": clown_id}, UpdateExpression="REMOVE cognito_sub",
     )
     return RedirectResponse("/admin/clowns/manage", status_code=303)
+
+
+# ---- CSV import + export (admin) ----
+
+CLOWN_CSV_COLUMNS = [
+    "email", "display_name", "phone", "address", "bio",
+    "emergency_contact_name", "emergency_contact_phone",
+    "years_ridden", "is_lieutenant", "lieutenant_title", "active",
+]
+_CLOWN_CSV_TEXT_COLUMNS = (
+    "display_name", "phone", "address", "bio",
+    "emergency_contact_name", "emergency_contact_phone", "lieutenant_title",
+)
+
+
+def _clowns_import_page(
+    request: Request, summary: dict | None = None,
+    error: str | None = None, status_code: int = 200,
+) -> Response:
+    return templates.TemplateResponse(
+        request, "admin/clowns_import.html",
+        {"summary": summary, "error": error, "columns": CLOWN_CSV_COLUMNS},
+        status_code=status_code,
+    )
+
+
+@router.get("/clowns/import")
+def clowns_import_form(request: Request) -> Response:
+    return _clowns_import_page(request)
+
+
+@router.get("/clowns/import/template")
+def clowns_import_template() -> Response:
+    buf = io.StringIO()
+    csv.writer(buf).writerow(CLOWN_CSV_COLUMNS)
+    return Response(
+        content=buf.getvalue(), media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="clowns-template.csv"'},
+    )
+
+
+@router.get("/clowns/export.csv")
+def clowns_export() -> Response:
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(CLOWN_CSV_COLUMNS)
+    for p in _all_profiles():
+        writer.writerow([
+            _csv_safe(p.get("email")),
+            _csv_safe(p.get("display_name")),
+            _csv_safe(p.get("phone")),
+            _csv_safe(p.get("address")),
+            _csv_safe(p.get("bio")),
+            _csv_safe(p.get("emergency_contact_name")),
+            _csv_safe(p.get("emergency_contact_phone")),
+            " ".join(str(int(y)) for y in (p.get("years_ridden") or [])),
+            "yes" if p.get("is_lieutenant") else "no",
+            _csv_safe(p.get("lieutenant_title")),
+            "yes" if p.get("active", True) else "no",
+        ])
+    return Response(
+        content=buf.getvalue(), media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="clowns.csv"'},
+    )
+
+
+@router.post("/clowns/import")
+def clowns_import(
+    request: Request,
+    file: UploadFile = File(...),
+    invite_missing: str = Form(""),
+) -> Response:
+    raw = file.file.read().decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(raw))
+    headers = [(h or "").strip().lower() for h in (reader.fieldnames or [])]
+    if "email" not in headers:
+        return _clowns_import_page(request, error="The CSV needs an 'email' column.", status_code=400)
+
+    profiles = paginate(CLOWN_PROFILES().scan)
+    by_sub = {p["cognito_sub"]: p for p in profiles if p.get("cognito_sub")}
+    by_email = {
+        (p.get("email") or "").strip().lower(): p
+        for p in profiles if not p.get("cognito_sub") and p.get("email")
+    }
+    cognito_by_email: dict[str, str] = {}
+    for u in _cognito().list_users(UserPoolId=settings.cognito_user_pool_id).get("Users", []):
+        attrs = {a["Name"]: a["Value"] for a in u.get("Attributes", [])}
+        if attrs.get("email"):
+            cognito_by_email[attrs["email"].strip().lower()] = u["Username"]
+
+    do_invite = bool(invite_missing)
+    created = updated = invited = 0
+    skipped: list[str] = []
+
+    for row_num, row in enumerate(reader, start=2):
+        norm = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items()}
+        email = norm.get("email", "")
+        if not email:
+            skipped.append(f"row {row_num}: missing email")
+            continue
+        key = email.lower()
+        sub = cognito_by_email.get(key)
+        profile = by_sub.get(sub) if sub else by_email.get(key)
+
+        fields: dict = {}
+        for col in _CLOWN_CSV_TEXT_COLUMNS:
+            if norm.get(col):
+                fields[col] = norm[col]
+        if norm.get("years_ridden"):
+            fields["years_ridden"] = _parse_years(norm["years_ridden"])
+        if norm.get("is_lieutenant"):
+            fields["is_lieutenant"] = _parse_bool(norm["is_lieutenant"])
+        if norm.get("active"):
+            fields["active"] = _parse_bool(norm["active"])
+
+        if profile:
+            _update_clown_fields(profile["clown_id"], fields)
+            updated += 1
+            continue
+
+        if sub is None and do_invite:
+            try:
+                resp = _cognito().admin_create_user(
+                    UserPoolId=settings.cognito_user_pool_id, Username=email,
+                    UserAttributes=[
+                        {"Name": "email", "Value": email},
+                        {"Name": "email_verified", "Value": "true"},
+                    ],
+                )
+                sub = resp["User"]["Username"]
+                invited += 1
+            except ClientError:
+                skipped.append(f"row {row_num}: could not invite {email}")
+                continue
+
+        CLOWN_PROFILES().put_item(Item={
+            "clown_id": f"clown_{uuid.uuid4().hex}",
+            "cognito_sub": sub, "email": email,
+            "display_name": fields.get("display_name"),
+            "photo_url": None,
+            "bio": fields.get("bio"),
+            "phone": fields.get("phone"),
+            "address": fields.get("address"),
+            "emergency_contact_name": fields.get("emergency_contact_name"),
+            "emergency_contact_phone": fields.get("emergency_contact_phone"),
+            "years_ridden": fields.get("years_ridden", []),
+            "is_lieutenant": fields.get("is_lieutenant", False),
+            "lieutenant_title": fields.get("lieutenant_title"),
+            "active": fields.get("active", True),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        created += 1
+
+    return _clowns_import_page(request, summary={
+        "created": created, "updated": updated, "invited": invited, "skipped": skipped,
+    })

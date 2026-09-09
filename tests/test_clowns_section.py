@@ -1,3 +1,4 @@
+import io
 from unittest.mock import patch
 
 from app import auth
@@ -262,6 +263,115 @@ def test_manage_is_admin_only(dynamodb_tables):
         assert resp.headers["location"] == "/admin/orders"
     finally:
         ctx.stop()
+
+
+def _csv(rows_text):
+    return {"file": ("clowns.csv", io.BytesIO(rows_text.encode()), "text/csv")}
+
+
+def test_import_creates_loginless_profile_for_unknown_email(dynamodb_tables):
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": []}})()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            resp = c.post("/admin/clowns/import", files=_csv(
+                "email,display_name,years_ridden\n"
+                "ghost@example.com,Ghost Rider,2014-2016\n"
+            ), data={"invite_missing": ""}, follow_redirects=False)
+        assert resp.status_code == 200
+        p = CLOWN_PROFILES().scan()["Items"][0]
+        assert p["display_name"] == "Ghost Rider"
+        assert p.get("cognito_sub") is None
+        assert [int(y) for y in p["years_ridden"]] == [2014, 2015, 2016]
+        assert "created 1" in resp.text.lower() or "created: 1" in resp.text.lower()
+    finally:
+        ctx.stop()
+
+
+def test_import_updates_existing_and_leaves_blank_cells(dynamodb_tables):
+    _put_profile("clown_u", "Original", [2020], phone="5045551111", email="u@example.com",
+                 cognito_sub=None)
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": []}})()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            c.post("/admin/clowns/import", files=_csv(
+                "email,display_name,phone,years_ridden\n"
+                "u@example.com,,,2020 2021\n"
+            ), data={"invite_missing": ""}, follow_redirects=False)
+    finally:
+        ctx.stop()
+    p = CLOWN_PROFILES().get_item(Key={"clown_id": "clown_u"})["Item"]
+    assert p["display_name"] == "Original"      # blank cell -> unchanged
+    assert p["phone"] == "5045551111"           # blank cell -> unchanged
+    assert [int(y) for y in p["years_ridden"]] == [2020, 2021]
+
+
+def test_import_invite_path_creates_and_links(dynamodb_tables):
+    calls = {}
+    class Fake:
+        def list_users(self, **kw): return {"Users": []}
+        def admin_create_user(self, **kw):
+            calls["email"] = kw["Username"]
+            return {"User": {"Username": "sub-invited"}}
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=Fake()):
+            c.post("/admin/clowns/import", files=_csv(
+                "email,display_name\nnew@example.com,New Clown\n"
+            ), data={"invite_missing": "1"}, follow_redirects=False)
+    finally:
+        ctx.stop()
+    assert calls["email"] == "new@example.com"
+    p = CLOWN_PROFILES().scan()["Items"][0]
+    assert p["cognito_sub"] == "sub-invited"
+
+
+def test_import_skips_blank_email_rows(dynamodb_tables):
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": []}})()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            resp = c.post("/admin/clowns/import", files=_csv(
+                "email,display_name\n,No Email\n"
+            ), data={"invite_missing": ""}, follow_redirects=False)
+        assert CLOWN_PROFILES().scan()["Items"] == []
+        assert "skipped" in resp.text.lower()
+    finally:
+        ctx.stop()
+
+
+def test_import_rejects_csv_without_email_column(dynamodb_tables):
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.post("/admin/clowns/import", files=_csv("name\nBob\n"),
+                      data={"invite_missing": ""}, follow_redirects=False)
+        assert resp.status_code == 400
+    finally:
+        ctx.stop()
+
+
+def test_export_round_trips(dynamodb_tables):
+    _put_profile("clown_x", "Xtra", [2021, 2022], is_lieutenant=True,
+                 lieutenant_title="Float 1 Lieutenant", email="x@example.com", cognito_sub=None)
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": []}})()
+    c, ctx = _client(admin=True)
+    try:
+        export = c.get("/admin/clowns/export.csv")
+        assert export.status_code == 200
+        assert export.headers["content-type"].startswith("text/csv")
+        # wipe and re-import
+        CLOWN_PROFILES().delete_item(Key={"clown_id": "clown_x"})
+        with patch("app.routes.admin._cognito", return_value=fake):
+            c.post("/admin/clowns/import",
+                   files={"file": ("clowns.csv", io.BytesIO(export.text.encode()), "text/csv")},
+                   data={"invite_missing": ""}, follow_redirects=False)
+    finally:
+        ctx.stop()
+    p = CLOWN_PROFILES().scan()["Items"][0]
+    assert p["display_name"] == "Xtra"
+    assert p["is_lieutenant"] is True
+    assert [int(y) for y in p["years_ridden"]] == [2021, 2022]
 
 
 # ---- Resources links ----

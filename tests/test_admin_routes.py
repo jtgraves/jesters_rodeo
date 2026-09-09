@@ -1387,7 +1387,7 @@ def test_member_is_bounced_from_admin_only_pages(member_client):
     for path in (
         "/admin/events", "/admin/clown_mgmt", "/admin/charity",
         "/admin/give-tickets", "/admin/beneficiaries", "/admin/faq",
-        "/admin/clowns/manage",
+        "/admin/clowns/manage", "/admin/clowns/import",
     ):
         resp = member_client.get(path, headers={"accept": "text/html"}, follow_redirects=False)
         assert resp.status_code == 303, path
