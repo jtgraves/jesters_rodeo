@@ -1500,3 +1500,19 @@ def clowns_roster(request: Request, year: int | None = None) -> Response:
         request, "admin/clowns_roster.html",
         {"riders": riders, "year": selected, "all_years": all_years},
     )
+
+
+@member_router.get("/clowns/lieutenants")
+def clowns_lieutenants(request: Request) -> Response:
+    lts = [p for p in _all_profiles() if p.get("is_lieutenant")]
+    return templates.TemplateResponse(
+        request, "admin/clowns_lieutenants.html", {"lieutenants": lts}
+    )
+
+
+@member_router.get("/clowns/directory")
+def clowns_directory(request: Request) -> Response:
+    people = [p for p in _all_profiles() if p.get("active", True)]
+    return templates.TemplateResponse(
+        request, "admin/clowns_directory.html", {"people": people}
+    )

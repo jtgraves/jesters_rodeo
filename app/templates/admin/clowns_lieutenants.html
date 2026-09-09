@@ -1,0 +1,15 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Float lieutenants</h1>
+{% if not lieutenants %}
+<p>No lieutenants listed yet.</p>
+{% else %}
+{% for l in lieutenants %}
+<section class="lieutenant">
+  {% if l.photo_url %}<img class="lieutenant-photo" src="{{ l.photo_url }}" alt="{{ l.display_name }}">{% endif %}
+  <h2>{{ l.display_name or l.email }}{% if l.lieutenant_title %} — {{ l.lieutenant_title }}{% endif %}</h2>
+  {% if l.bio %}<p class="lieutenant-bio">{{ l.bio }}</p>{% endif %}
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

@@ -676,3 +676,7 @@ img.event-hero { opacity: 0.5; }
 .clown-card-name { font-weight: 600; margin-top: 0.4rem; }
 .clown-card-tenure { color: var(--color-muted); font-size: 0.85rem; }
 .clown-card-milestone { font-size: 0.85rem; }
+
+.lieutenant { margin-top: var(--space-3); display: flex; gap: var(--space-2); align-items: flex-start; }
+.lieutenant-photo { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius); flex: 0 0 auto; }
+.lieutenant-bio { white-space: pre-line; }

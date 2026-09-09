@@ -169,3 +169,32 @@ def test_roster_year_param_and_milestone(dynamodb_tables):
         assert "Cyd" not in empty.text
     finally:
         ctx.stop()
+
+
+def test_lieutenants_page_shows_only_lieutenants(dynamodb_tables):
+    _put_profile("clown_lt", "Lou", [2025], is_lieutenant=True,
+                 lieutenant_title="Float 3 Lieutenant", bio="Been steering since 2009.")
+    _put_profile("clown_reg", "Reg", [2025])
+    c, ctx = _client()
+    try:
+        resp = c.get("/admin/clowns/lieutenants")
+        assert "Lou" in resp.text and "Float 3 Lieutenant" in resp.text
+        assert "Been steering since 2009." in resp.text
+        assert "Reg" not in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_directory_shows_active_contact_rows(dynamodb_tables):
+    _put_profile("clown_x", "Xena", [2025], phone="5045551234", email="xena@x.com",
+                 emergency_contact_name="Gabby", emergency_contact_phone="5045550000")
+    _put_profile("clown_gone", "Gone", [2019], active=False, phone="5045559999")
+    c, ctx = _client()
+    try:
+        resp = c.get("/admin/clowns/directory")
+        assert "Xena" in resp.text and "xena@x.com" in resp.text
+        assert "(504)555-1234" in resp.text
+        assert "Gabby" in resp.text
+        assert "Gone" not in resp.text
+    finally:
+        ctx.stop()
