@@ -1,0 +1,49 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Resources</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+{% if not links %}
+<p>No links yet.</p>
+{% else %}
+<ul class="krewe-links">
+{% for lk in links %}
+  <li>
+    <a href="{{ lk.url }}" target="_blank" rel="noopener">{{ lk.label }}</a>
+    {% if lk.description %}<p class="krewe-link-desc">{{ lk.description }}</p>{% endif %}
+    {% if request.state.is_admin %}
+    <form method="post" action="/admin/clowns/resources/{{ lk.link_id }}" class="faq-admin-fields">
+      <label>Label <input type="text" name="label" value="{{ lk.label }}" required></label>
+      <label>URL <input type="url" name="url" value="{{ lk.url }}" required></label>
+      <label>Description <input type="text" name="description" value="{{ lk.description or '' }}"></label>
+      <div class="faq-admin-actions">
+        <span class="faq-admin-num">#{{ loop.index }}</span>
+        <button class="icon-btn" type="submit" name="direction" value="up"
+                formaction="/admin/clowns/resources/{{ lk.link_id }}/move" formnovalidate
+                {% if loop.first %}disabled{% endif %} aria-label="Move up" title="Move up">&#9650;</button>
+        <button class="icon-btn" type="submit" name="direction" value="down"
+                formaction="/admin/clowns/resources/{{ lk.link_id }}/move" formnovalidate
+                {% if loop.last %}disabled{% endif %} aria-label="Move down" title="Move down">&#9660;</button>
+        <span class="faq-admin-spacer"></span>
+        <button type="submit">Save</button>
+        <button type="submit" class="btn-danger"
+                formaction="/admin/clowns/resources/{{ lk.link_id }}/delete" formnovalidate
+                onclick="return confirm('Delete this link?')">Delete</button>
+      </div>
+    </form>
+    {% endif %}
+  </li>
+{% endfor %}
+</ul>
+{% endif %}
+
+{% if request.state.is_admin %}
+<h2>Add a link</h2>
+<form method="post" action="/admin/clowns/resources" class="faq-admin-fields faq-admin-new">
+  <label>Label <input type="text" name="label" required></label>
+  <label>URL <input type="url" name="url" placeholder="https://docs.google.com/..." required></label>
+  <label>Description <input type="text" name="description"></label>
+  <div class="faq-admin-actions"><button type="submit">Add to the bottom</button></div>
+</form>
+{% endif %}
+{% endblock %}

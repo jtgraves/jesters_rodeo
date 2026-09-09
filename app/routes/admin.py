@@ -1415,6 +1415,91 @@ def clowns_home(request: Request, claims: dict = Depends(require_member)) -> Res
     return templates.TemplateResponse(request, "admin/clowns_home.html", {"profile": profile})
 
 
+# ---- Resources links (krewe links) ----
+
+def _sorted_krewe_links() -> list[dict]:
+    items = paginate(KREWE_LINKS().scan)
+    return sorted(items, key=lambda x: (int(x.get("sort_order") or 0), (x.get("label") or "").lower()))
+
+
+def _write_krewe_link_order(ids: list[str]) -> None:
+    """Renumber sort_order to match list position (0, 1, 2, ...)."""
+    for position, link_id in enumerate(ids):
+        KREWE_LINKS().update_item(
+            Key={"link_id": link_id},
+            UpdateExpression="SET sort_order = :s",
+            ExpressionAttributeValues={":s": position},
+        )
+
+
+def _resources_page(request: Request, error: str | None = None, status_code: int = 200) -> Response:
+    return templates.TemplateResponse(
+        request, "admin/clowns_resources.html",
+        {"links": _sorted_krewe_links(), "error": error}, status_code=status_code,
+    )
+
+
+@member_router.get("/clowns/resources")
+def clowns_resources(request: Request) -> Response:
+    return _resources_page(request)
+
+
+@router.post("/clowns/resources")
+def create_krewe_link(
+    request: Request, label: str = Form(...), url: str = Form(...), description: str = Form(""),
+) -> Response:
+    label, url = label.strip(), url.strip()
+    if not label or not url:
+        return _resources_page(request, error="Label and URL are required.", status_code=400)
+    if not url.startswith(("http://", "https://")):
+        return _resources_page(request, error="The URL must start with http:// or https://.", status_code=400)
+    KREWE_LINKS().put_item(Item={
+        "link_id": f"lnk_{uuid.uuid4().hex}",
+        "label": label, "url": url, "description": description.strip() or None,
+        "sort_order": len(_sorted_krewe_links()),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return RedirectResponse("/admin/clowns/resources", status_code=303)
+
+
+@router.post("/clowns/resources/{link_id}")
+def update_krewe_link(
+    request: Request, link_id: str,
+    label: str = Form(...), url: str = Form(...), description: str = Form(""),
+) -> Response:
+    label, url = label.strip(), url.strip()
+    if not label or not url:
+        return _resources_page(request, error="Label and URL are required.", status_code=400)
+    if not url.startswith(("http://", "https://")):
+        return _resources_page(request, error="The URL must start with http:// or https://.", status_code=400)
+    KREWE_LINKS().update_item(
+        Key={"link_id": link_id},
+        UpdateExpression="SET label = :l, #u = :u, description = :d",
+        ExpressionAttributeNames={"#u": "url"},
+        ExpressionAttributeValues={":l": label, ":u": url, ":d": description.strip() or None},
+    )
+    return RedirectResponse("/admin/clowns/resources", status_code=303)
+
+
+@router.post("/clowns/resources/{link_id}/move")
+def move_krewe_link(link_id: str, direction: str = Form(...)) -> RedirectResponse:
+    ids = [x["link_id"] for x in _sorted_krewe_links()]
+    if link_id in ids:
+        i = ids.index(link_id)
+        j = i - 1 if direction == "up" else i + 1
+        if 0 <= j < len(ids):
+            ids[i], ids[j] = ids[j], ids[i]
+            _write_krewe_link_order(ids)
+    return RedirectResponse("/admin/clowns/resources", status_code=303)
+
+
+@router.post("/clowns/resources/{link_id}/delete")
+def delete_krewe_link(link_id: str) -> RedirectResponse:
+    KREWE_LINKS().delete_item(Key={"link_id": link_id})
+    _write_krewe_link_order([x["link_id"] for x in _sorted_krewe_links()])
+    return RedirectResponse("/admin/clowns/resources", status_code=303)
+
+
 def _update_clown_fields(clown_id: str, fields: dict) -> None:
     if not fields:
         return

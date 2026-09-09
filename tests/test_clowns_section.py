@@ -262,3 +262,68 @@ def test_manage_is_admin_only(dynamodb_tables):
         assert resp.headers["location"] == "/admin/orders"
     finally:
         ctx.stop()
+
+
+# ---- Resources links ----
+
+def _put_link(link_id, label="Roster sheet", url="https://docs.google.com/x", sort_order=0):
+    KREWE_LINKS().put_item(Item={
+        "link_id": link_id, "label": label, "url": url, "description": None,
+        "sort_order": sort_order, "created_at": "2026-01-01T00:00:00Z",
+    })
+
+
+def test_resources_member_view_has_no_admin_controls(dynamodb_tables):
+    _put_link("lnk_1", label="Throw budget")
+    c, ctx = _client(admin=False)
+    try:
+        resp = c.get("/admin/clowns/resources")
+        assert "Throw budget" in resp.text
+        assert 'href="https://docs.google.com/x"' in resp.text
+        assert 'action="/admin/clowns/resources/lnk_1"' not in resp.text  # no edit form
+    finally:
+        ctx.stop()
+
+
+def test_resources_admin_can_add_edit_move_delete(dynamodb_tables):
+    c, ctx = _client(admin=True)
+    try:
+        c.post("/admin/clowns/resources", data={"label": "A", "url": "https://a.example",
+               "description": "first"}, follow_redirects=False)
+        c.post("/admin/clowns/resources", data={"label": "B", "url": "https://b.example",
+               "description": ""}, follow_redirects=False)
+        ids = [i["link_id"] for i in sorted(KREWE_LINKS().scan()["Items"],
+                                            key=lambda x: int(x["sort_order"]))]
+        c.post(f"/admin/clowns/resources/{ids[1]}/move", data={"direction": "up"},
+               follow_redirects=False)
+        order = {i["link_id"]: int(i["sort_order"]) for i in KREWE_LINKS().scan()["Items"]}
+        assert order[ids[1]] == 0 and order[ids[0]] == 1
+        c.post(f"/admin/clowns/resources/{ids[0]}", data={"label": "A2",
+               "url": "https://a2.example", "description": "x"}, follow_redirects=False)
+        assert KREWE_LINKS().get_item(Key={"link_id": ids[0]})["Item"]["label"] == "A2"
+        c.post(f"/admin/clowns/resources/{ids[0]}/delete", follow_redirects=False)
+        remaining = KREWE_LINKS().scan()["Items"]
+        assert len(remaining) == 1 and int(remaining[0]["sort_order"]) == 0
+    finally:
+        ctx.stop()
+
+
+def test_resources_add_rejects_bad_url(dynamodb_tables):
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.post("/admin/clowns/resources", data={"label": "X", "url": "docs.google.com/x",
+               "description": ""}, follow_redirects=False)
+        assert resp.status_code == 400
+        assert KREWE_LINKS().scan()["Items"] == []
+    finally:
+        ctx.stop()
+
+
+def test_resources_mutations_are_admin_only(dynamodb_tables):
+    c, ctx = _client(admin=False)
+    try:
+        resp = c.post("/admin/clowns/resources", data={"label": "X", "url": "https://x.example",
+               "description": ""}, headers={"accept": "application/json"})
+        assert resp.status_code == 403
+    finally:
+        ctx.stop()

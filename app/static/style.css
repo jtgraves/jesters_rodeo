@@ -680,3 +680,7 @@ img.event-hero { opacity: 0.5; }
 .lieutenant { margin-top: var(--space-3); display: flex; gap: var(--space-2); align-items: flex-start; }
 .lieutenant-photo { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius); flex: 0 0 auto; }
 .lieutenant-bio { white-space: pre-line; }
+
+.krewe-links { padding-left: 1.1rem; }
+.krewe-links > li { margin-bottom: var(--space-2); }
+.krewe-link-desc { margin: 0.1rem 0 0; color: var(--color-muted); }
