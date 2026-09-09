@@ -1383,7 +1383,9 @@ def _my_profile(claims: dict) -> dict:
         if p.get("cognito_sub") == sub:
             return p
 
-    if email_key:
+    # Step 2 adopts a historical, login-less profile off the token's email, so
+    # only trust an address Cognito has verified.
+    if email_key and claims.get("email_verified"):
         for p in profiles:
             if not p.get("cognito_sub") and (p.get("email") or "").strip().lower() == email_key:
                 CLOWN_PROFILES().update_item(
@@ -1500,21 +1502,19 @@ def delete_krewe_link(link_id: str) -> RedirectResponse:
     return RedirectResponse("/admin/clowns/resources", status_code=303)
 
 
-def _update_clown_fields(clown_id: str, fields: dict) -> None:
+def _update_clown_fields(clown_id: str, fields: dict, *, require_exists: bool = False) -> None:
     if not fields:
         return
-    CLOWN_PROFILES().update_item(
+    kwargs: dict = dict(
         Key={"clown_id": clown_id},
         UpdateExpression="SET " + ", ".join(f"#{k} = :{k}" for k in fields),
         ExpressionAttributeNames={f"#{k}": k for k in fields},
         ExpressionAttributeValues={f":{k}": v for k, v in fields.items()},
     )
-
-
-_PROFILE_TEXT_FIELDS = (
-    "display_name", "bio", "phone", "address",
-    "emergency_contact_name", "emergency_contact_phone",
-)
+    if require_exists:
+        # update_item upserts; without this a stale id writes a bare ghost row.
+        kwargs["ConditionExpression"] = Attr("clown_id").exists()
+    CLOWN_PROFILES().update_item(**kwargs)
 
 
 @member_router.get("/clowns/profile")
@@ -1665,18 +1665,26 @@ def update_clown_official(
     years_ridden: str = Form(""), is_lieutenant: str = Form(""),
     lieutenant_title: str = Form(""), active: str = Form(""),
 ) -> Response:
-    _update_clown_fields(clown_id, {
-        "years_ridden": _parse_years(years_ridden),
-        "is_lieutenant": _parse_bool(is_lieutenant),
-        "lieutenant_title": lieutenant_title.strip() or None,
-        "active": _parse_bool(active),
-    })
+    try:
+        _update_clown_fields(clown_id, {
+            "years_ridden": _parse_years(years_ridden),
+            "is_lieutenant": _parse_bool(is_lieutenant),
+            "lieutenant_title": lieutenant_title.strip() or None,
+            "active": _parse_bool(active),
+        }, require_exists=True)
+    except ClientError as exc:
+        if _is_conditional_failure(exc):
+            return RedirectResponse("/admin/clowns/manage", status_code=303)
+        raise
     return RedirectResponse("/admin/clowns/manage", status_code=303)
 
 
 @router.post("/clowns/manage/{clown_id}/link")
 def link_clown_account(request: Request, clown_id: str, email: str = Form(...)) -> Response:
     wanted = email.strip().lower()
+    # NOTE: reads only the first Cognito page (~60 users); email-matching
+    # silently fails past that. Switch to a paginated list_users if the rider
+    # pool ever exceeds ~60 (see app/db.py `paginate`).
     users = _cognito().list_users(UserPoolId=settings.cognito_user_pool_id).get("Users", [])
     sub = None
     for u in users:
@@ -1686,18 +1694,46 @@ def link_clown_account(request: Request, clown_id: str, email: str = Form(...)) 
             break
     if sub is None:
         return _clowns_manage_page(request, error="No login found with that email.", status_code=400)
-    CLOWN_PROFILES().update_item(
-        Key={"clown_id": clown_id},
-        UpdateExpression="SET cognito_sub = :s", ExpressionAttributeValues={":s": sub},
-    )
+    for other in paginate(CLOWN_PROFILES().scan):
+        if other.get("cognito_sub") == sub and other["clown_id"] != clown_id:
+            name = other.get("display_name") or other.get("email") or other["clown_id"]
+            return _clowns_manage_page(
+                request,
+                error=f"That login is already linked to another profile ({name}).",
+                status_code=400,
+            )
+    try:
+        CLOWN_PROFILES().update_item(
+            Key={"clown_id": clown_id},
+            UpdateExpression="SET cognito_sub = :s",
+            ExpressionAttributeValues={":s": sub},
+            ConditionExpression=Attr("clown_id").exists(),
+        )
+    except ClientError as exc:
+        if _is_conditional_failure(exc):
+            return _clowns_manage_page(
+                request, error="That profile no longer exists.", status_code=400
+            )
+        raise
     return RedirectResponse("/admin/clowns/manage", status_code=303)
 
 
 @router.post("/clowns/manage/{clown_id}/unlink")
 def unlink_clown_account(clown_id: str) -> RedirectResponse:
-    CLOWN_PROFILES().update_item(
-        Key={"clown_id": clown_id}, UpdateExpression="REMOVE cognito_sub",
-    )
+    try:
+        CLOWN_PROFILES().update_item(
+            Key={"clown_id": clown_id}, UpdateExpression="REMOVE cognito_sub",
+            ConditionExpression=Attr("clown_id").exists(),
+        )
+    except ClientError as exc:
+        if not _is_conditional_failure(exc):
+            raise
+    return RedirectResponse("/admin/clowns/manage", status_code=303)
+
+
+@router.post("/clowns/manage/{clown_id}/delete")
+def delete_clown_profile(clown_id: str) -> RedirectResponse:
+    CLOWN_PROFILES().delete_item(Key={"clown_id": clown_id})
     return RedirectResponse("/admin/clowns/manage", status_code=303)
 
 
@@ -1784,6 +1820,10 @@ def clowns_import(
         for p in profiles if not p.get("cognito_sub") and p.get("email")
     }
     cognito_by_email: dict[str, str] = {}
+    # NOTE: reads only the first Cognito page (~60 users); an email past that
+    # page looks unknown here, so the importer would treat a returning rider as
+    # new. Switch to a paginated list_users if the pool ever exceeds ~60
+    # (see app/db.py `paginate`).
     for u in _cognito().list_users(UserPoolId=settings.cognito_user_pool_id).get("Users", []):
         attrs = {a["Name"]: a["Value"] for a in u.get("Attributes", [])}
         if attrs.get("email"):
@@ -1794,19 +1834,27 @@ def clowns_import(
     skipped: list[str] = []
 
     for row_num, row in enumerate(reader, start=2):
-        norm = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items()}
+        # csv.DictReader parks surplus values under key None as a list -> guard
+        # against a row with more columns than the header.
+        norm = {(k or "").strip().lower(): (v if isinstance(v, str) else "").strip()
+                for k, v in row.items()}
         email = norm.get("email", "")
         if not email:
             skipped.append(f"row {row_num}: missing email")
             continue
         key = email.lower()
         sub = cognito_by_email.get(key)
-        profile = by_sub.get(sub) if sub else by_email.get(key)
+        profile = (by_sub.get(sub) if sub else None) or by_email.get(key)
 
         fields: dict = {}
         for col in _CLOWN_CSV_TEXT_COLUMNS:
             if norm.get(col):
-                fields[col] = norm[col]
+                value = norm[col]
+                if value.startswith("'"):
+                    value = value[1:]  # undo the _csv_safe formula-injection guard
+                fields[col] = value
+        if profile and sub and not profile.get("cognito_sub"):
+            fields["cognito_sub"] = sub  # adopt the login onto the historical row
         if norm.get("years_ridden"):
             fields["years_ridden"] = _parse_years(norm["years_ridden"])
         if norm.get("is_lieutenant"):

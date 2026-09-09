@@ -6,7 +6,7 @@
 <tr><th>Name</th><th>Phone</th><th>Email</th><th>Emergency contact</th></tr>
 {% for p in people %}
 <tr>
-  <td>{{ p.display_name or p.email }}</td>
+  <td>{{ p.display_name or '(no name)' }}</td>
   <td>{% if p.phone %}<a href="tel:{{ p.phone }}">{{ p.phone | phone }}</a>{% endif %}</td>
   <td>{% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}</td>
   <td>

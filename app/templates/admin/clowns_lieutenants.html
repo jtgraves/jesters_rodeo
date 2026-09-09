@@ -6,8 +6,8 @@
 {% else %}
 {% for l in lieutenants %}
 <section class="lieutenant">
-  {% if l.photo_url %}<img class="lieutenant-photo" src="{{ l.photo_url }}" alt="{{ l.display_name }}">{% endif %}
-  <h2>{{ l.display_name or l.email }}{% if l.lieutenant_title %} — {{ l.lieutenant_title }}{% endif %}</h2>
+  {% if l.photo_url %}<img class="lieutenant-photo" src="{{ l.photo_url }}" alt="{{ l.display_name or '(no name)' }}">{% endif %}
+  <h2>{{ l.display_name or '(no name)' }}{% if l.lieutenant_title %} — {{ l.lieutenant_title }}{% endif %}</h2>
   {% if l.bio %}<p class="lieutenant-bio">{{ l.bio }}</p>{% endif %}
 </section>
 {% endfor %}

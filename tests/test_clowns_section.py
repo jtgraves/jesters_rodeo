@@ -49,7 +49,9 @@ def test_my_profile_links_an_unlinked_profile_by_email(dynamodb_tables):
         "years_ridden": [2015, 2016], "is_lieutenant": False, "active": False,
         "created_at": "2026-01-01T00:00:00Z",
     })
-    p = admin_routes._my_profile({"sub": "sub-new", "email": "RETURNING@example.com"})
+    p = admin_routes._my_profile(
+        {"sub": "sub-new", "email": "RETURNING@example.com", "email_verified": True}
+    )
     assert p["clown_id"] == "clown_hist"
     assert p["cognito_sub"] == "sub-new"
     stored = CLOWN_PROFILES().get_item(Key={"clown_id": "clown_hist"})["Item"]
@@ -353,7 +355,8 @@ def test_import_rejects_csv_without_email_column(dynamodb_tables):
 
 def test_export_round_trips(dynamodb_tables):
     _put_profile("clown_x", "Xtra", [2021, 2022], is_lieutenant=True,
-                 lieutenant_title="Float 1 Lieutenant", email="x@example.com", cognito_sub=None)
+                 lieutenant_title="Float 1 Lieutenant", email="x@example.com",
+                 phone="+15045551212", cognito_sub=None)
     fake = type("C", (), {"list_users": lambda self, **kw: {"Users": []}})()
     c, ctx = _client(admin=True)
     try:
@@ -372,6 +375,7 @@ def test_export_round_trips(dynamodb_tables):
     assert p["display_name"] == "Xtra"
     assert p["is_lieutenant"] is True
     assert [int(y) for y in p["years_ridden"]] == [2021, 2022]
+    assert p["phone"] == "+15045551212"  # M2: no permanent leading apostrophe
 
 
 # ---- Resources links ----
@@ -455,6 +459,129 @@ def test_hub_shows_admin_links_only_to_admins(dynamodb_tables):
         assert 'href="/admin/clowns/import"' in body
     finally:
         actx.stop()
+
+
+def test_my_profile_skips_adoption_when_email_unverified(dynamodb_tables):
+    CLOWN_PROFILES().put_item(Item={
+        "clown_id": "clown_hist2", "cognito_sub": None, "email": "old@example.com",
+        "years_ridden": [2015], "is_lieutenant": False, "active": False,
+        "created_at": "2026-01-01T00:00:00Z",
+    })
+    p = admin_routes._my_profile({"sub": "sub-z", "email": "old@example.com"})
+    assert p["clown_id"] != "clown_hist2"
+    assert len(CLOWN_PROFILES().scan()["Items"]) == 2  # a fresh profile, no adoption
+
+
+def test_import_adopts_unlinked_profile_when_email_has_cognito_account(dynamodb_tables):
+    # The seed workflow: import historical CSV -> invite riders (now in Cognito)
+    # -> re-import. The row must adopt the historical profile, not duplicate it.
+    _put_profile("clown_alice", "Alice", [2015, 2016], cognito_sub=None,
+                 email="alice@example.com")
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": [
+        {"Username": "sub-alice",
+         "Attributes": [{"Name": "email", "Value": "alice@example.com"}]}
+    ]}})()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            resp = c.post("/admin/clowns/import", files=_csv(
+                "email,display_name,years_ridden\n"
+                "alice@example.com,Alice Updated,2015-2017\n"
+            ), data={"invite_missing": ""}, follow_redirects=False)
+        assert resp.status_code == 200
+    finally:
+        ctx.stop()
+    items = CLOWN_PROFILES().scan()["Items"]
+    assert len(items) == 1
+    p = items[0]
+    assert p["clown_id"] == "clown_alice"
+    assert p["cognito_sub"] == "sub-alice"
+    assert p["display_name"] == "Alice Updated"
+    assert [int(y) for y in p["years_ridden"]] == [2015, 2016, 2017]
+
+
+def test_import_row_wider_than_header_is_not_a_500(dynamodb_tables):
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": []}})()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            resp = c.post("/admin/clowns/import", files=_csv(
+                "email,display_name\n"
+                "wide@example.com,Wide,extra,more extra\n"
+            ), data={"invite_missing": ""}, follow_redirects=False)
+        assert resp.status_code == 200
+    finally:
+        ctx.stop()
+    assert [p["email"] for p in CLOWN_PROFILES().scan()["Items"]] == ["wide@example.com"]
+
+
+def test_manage_delete_removes_profile(dynamodb_tables):
+    _put_profile("clown_del", "Deletable", [2019])
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.post("/admin/clowns/manage/clown_del/delete", follow_redirects=False)
+        assert resp.status_code == 303
+    finally:
+        ctx.stop()
+    assert "clown_del" not in [p["clown_id"] for p in CLOWN_PROFILES().scan()["Items"]]
+
+
+def test_manage_delete_is_admin_only(dynamodb_tables):
+    _put_profile("clown_del2", "Nope", [2019])
+    c, ctx = _client(admin=False)
+    try:
+        resp = c.post("/admin/clowns/manage/clown_del2/delete",
+                      headers={"accept": "application/json"})
+        assert resp.status_code == 403
+    finally:
+        ctx.stop()
+    assert "clown_del2" in [p["clown_id"] for p in CLOWN_PROFILES().scan()["Items"]]
+
+
+def test_manage_update_on_stale_id_does_not_500_the_page(dynamodb_tables):
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.post("/admin/clowns/manage/clown_missing", data={
+            "years_ridden": "2019", "is_lieutenant": "", "lieutenant_title": "",
+            "active": "1",
+        }, follow_redirects=False)
+        assert resp.status_code in (303, 400)
+        assert c.get("/admin/clowns/manage").status_code == 200
+    finally:
+        ctx.stop()
+    assert CLOWN_PROFILES().scan()["Items"] == []  # no ghost row upserted
+
+
+def test_roster_milestone_badge_for_any_multiple_of_five(dynamodb_tables):
+    _put_profile("clown_vet", "Vet", list(range(1990, 2020)))  # tenure == 30
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.get("/admin/clowns/roster?year=2000")
+        assert "Vet" in resp.text
+        assert "30-year rider" in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_manage_link_rejects_login_already_linked_to_another_profile(dynamodb_tables):
+    _put_profile("clown_first", "First", [2010], cognito_sub="sub-dupe",
+                 email="first@example.com")
+    _put_profile("clown_second", "Second", [2011], cognito_sub=None,
+                 email="second@example.com")
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": [
+        {"Username": "sub-dupe",
+         "Attributes": [{"Name": "email", "Value": "reuse@example.com"}]}
+    ]}})()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            resp = c.post("/admin/clowns/manage/clown_second/link",
+                          data={"email": "reuse@example.com"}, follow_redirects=False)
+        assert resp.status_code == 400
+    finally:
+        ctx.stop()
+    p = CLOWN_PROFILES().get_item(Key={"clown_id": "clown_second"})["Item"]
+    assert p.get("cognito_sub") is None
 
 
 def test_every_clowns_view_page_renders_for_a_member(dynamodb_tables):
