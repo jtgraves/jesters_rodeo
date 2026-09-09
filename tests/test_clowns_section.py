@@ -198,3 +198,67 @@ def test_directory_shows_active_contact_rows(dynamodb_tables):
         assert "Gone" not in resp.text
     finally:
         ctx.stop()
+
+
+def test_parse_years_ranges_and_dedup():
+    assert admin_routes._parse_years("2018-2021, 2023 2023") == [2018, 2019, 2020, 2021, 2023]
+    assert admin_routes._parse_years("") == []
+
+
+def test_manage_sets_official_fields(dynamodb_tables):
+    _put_profile("clown_m", "Mo", [])
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.post("/admin/clowns/manage/clown_m", data={
+            "years_ridden": "2019-2021", "is_lieutenant": "1",
+            "lieutenant_title": "  Float 2 Lieutenant  ", "active": "1",
+        }, follow_redirects=False)
+        assert resp.status_code == 303
+    finally:
+        ctx.stop()
+    p = CLOWN_PROFILES().get_item(Key={"clown_id": "clown_m"})["Item"]
+    assert [int(y) for y in p["years_ridden"]] == [2019, 2020, 2021]
+    assert p["is_lieutenant"] is True
+    assert p["lieutenant_title"] == "Float 2 Lieutenant"
+    assert p["active"] is True
+
+
+def test_manage_add_historical_rider(dynamodb_tables):
+    c, ctx = _client(admin=True)
+    try:
+        c.post("/admin/clowns/manage", data={"display_name": "  Old Timer  ",
+               "years_ridden": "2010 2011"}, follow_redirects=False)
+    finally:
+        ctx.stop()
+    p = CLOWN_PROFILES().scan()["Items"][0]
+    assert p["display_name"] == "Old Timer"
+    assert p.get("cognito_sub") is None
+    assert p["active"] is False
+    assert [int(y) for y in p["years_ridden"]] == [2010, 2011]
+
+
+def test_manage_link_and_unlink_account(dynamodb_tables):
+    _put_profile("clown_h", "Hist", [2012], cognito_sub=None, email="hist@example.com")
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": [
+        {"Username": "sub-hist", "Attributes": [{"Name": "email", "Value": "hist@example.com"}]}
+    ]}})()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            c.post("/admin/clowns/manage/clown_h/link", data={"email": "hist@example.com"},
+                   follow_redirects=False)
+        assert CLOWN_PROFILES().get_item(Key={"clown_id": "clown_h"})["Item"]["cognito_sub"] == "sub-hist"
+        c.post("/admin/clowns/manage/clown_h/unlink", follow_redirects=False)
+        assert CLOWN_PROFILES().get_item(Key={"clown_id": "clown_h"})["Item"].get("cognito_sub") is None
+    finally:
+        ctx.stop()
+
+
+def test_manage_is_admin_only(dynamodb_tables):
+    c, ctx = _client(admin=False)
+    try:
+        resp = c.get("/admin/clowns/manage", headers={"accept": "text/html"}, follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/admin/orders"
+    finally:
+        ctx.stop()

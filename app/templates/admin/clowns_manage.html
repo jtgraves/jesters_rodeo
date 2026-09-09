@@ -1,0 +1,44 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Manage clowns</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<div class="table-scroll">
+<table>
+<tr><th>Name / email</th><th>Account</th><th>Years ridden</th><th>Lieutenant</th><th>Active</th><th></th></tr>
+{% for p in profiles %}
+<tr>
+  <td>{{ p.display_name or "(no name)" }}<br><small>{{ p.email or "no login" }}</small></td>
+  <td>
+    {% if p.cognito_sub %}
+      linked
+      <form method="post" action="/admin/clowns/manage/{{ p.clown_id }}/unlink" style="display:inline">
+        <button type="submit">unlink</button></form>
+    {% else %}
+      <form method="post" action="/admin/clowns/manage/{{ p.clown_id }}/link" style="display:inline">
+        <input type="email" name="email" placeholder="login email" required>
+        <button type="submit">link</button></form>
+    {% endif %}
+  </td>
+  <td colspan="4">
+    <form method="post" action="/admin/clowns/manage/{{ p.clown_id }}" class="event-images-form">
+      <label>Years <input type="text" name="years_ridden"
+             value="{{ p.years_ridden | map('int') | join(' ') }}" placeholder="2019 2021-2023"></label>
+      <label><input type="checkbox" name="is_lieutenant" value="1" {% if p.is_lieutenant %}checked{% endif %}> Lieutenant</label>
+      <label>Title <input type="text" name="lieutenant_title" value="{{ p.lieutenant_title or '' }}"></label>
+      <label><input type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}> Active</label>
+      <button type="submit">Save</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+<h2>Add a historical rider (no login)</h2>
+<form method="post" action="/admin/clowns/manage" class="event-images-form">
+  <label>Name <input type="text" name="display_name" required></label>
+  <label>Years <input type="text" name="years_ridden" placeholder="2010 2011"></label>
+  <button type="submit">Add</button>
+</form>
+{% endblock %}

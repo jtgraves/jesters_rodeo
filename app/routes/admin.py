@@ -1516,3 +1516,101 @@ def clowns_directory(request: Request) -> Response:
     return templates.TemplateResponse(
         request, "admin/clowns_directory.html", {"people": people}
     )
+
+
+# ---- Manage clowns (admin) ----
+
+def _parse_years(text: str) -> list[int]:
+    """'2018-2021, 2023' -> [2018, 2019, 2020, 2021, 2023]. Splits on any run
+    of non-digit/non-hyphen; expands A-B inclusive; de-dupes; sorts."""
+    years: set[int] = set()
+    for token in re.split(r"[^\d-]+", (text or "").strip()):
+        if not token:
+            continue
+        if "-" in token.strip("-"):
+            lo, hi = token.split("-", 1)
+            if lo.isdigit() and hi.isdigit() and int(lo) <= int(hi):
+                years.update(range(int(lo), int(hi) + 1))
+        elif token.isdigit():
+            years.add(int(token))
+    return sorted(years)
+
+
+def _parse_bool(value: str) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _clowns_manage_page(
+    request: Request, error: str | None = None, status_code: int = 200
+) -> Response:
+    return templates.TemplateResponse(
+        request, "admin/clowns_manage.html",
+        {"profiles": _all_profiles(), "error": error}, status_code=status_code,
+    )
+
+
+@router.get("/clowns/manage")
+def clowns_manage(request: Request) -> Response:
+    return _clowns_manage_page(request)
+
+
+@router.post("/clowns/manage")
+def add_historical_rider(
+    request: Request, display_name: str = Form(...), years_ridden: str = Form(""),
+) -> Response:
+    name = display_name.strip()
+    if not name:
+        return _clowns_manage_page(request, error="Name is required.", status_code=400)
+    CLOWN_PROFILES().put_item(Item={
+        "clown_id": f"clown_{uuid.uuid4().hex}",
+        "cognito_sub": None, "email": None,
+        "display_name": name, "photo_url": None, "bio": None,
+        "phone": None, "address": None,
+        "emergency_contact_name": None, "emergency_contact_phone": None,
+        "years_ridden": _parse_years(years_ridden),
+        "is_lieutenant": False, "lieutenant_title": None, "active": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return RedirectResponse("/admin/clowns/manage", status_code=303)
+
+
+@router.post("/clowns/manage/{clown_id}")
+def update_clown_official(
+    request: Request, clown_id: str,
+    years_ridden: str = Form(""), is_lieutenant: str = Form(""),
+    lieutenant_title: str = Form(""), active: str = Form(""),
+) -> Response:
+    _update_clown_fields(clown_id, {
+        "years_ridden": _parse_years(years_ridden),
+        "is_lieutenant": _parse_bool(is_lieutenant),
+        "lieutenant_title": lieutenant_title.strip() or None,
+        "active": _parse_bool(active),
+    })
+    return RedirectResponse("/admin/clowns/manage", status_code=303)
+
+
+@router.post("/clowns/manage/{clown_id}/link")
+def link_clown_account(request: Request, clown_id: str, email: str = Form(...)) -> Response:
+    wanted = email.strip().lower()
+    users = _cognito().list_users(UserPoolId=settings.cognito_user_pool_id).get("Users", [])
+    sub = None
+    for u in users:
+        attrs = {a["Name"]: a["Value"] for a in u.get("Attributes", [])}
+        if (attrs.get("email") or "").strip().lower() == wanted:
+            sub = u["Username"]
+            break
+    if sub is None:
+        return _clowns_manage_page(request, error="No login found with that email.", status_code=400)
+    CLOWN_PROFILES().update_item(
+        Key={"clown_id": clown_id},
+        UpdateExpression="SET cognito_sub = :s", ExpressionAttributeValues={":s": sub},
+    )
+    return RedirectResponse("/admin/clowns/manage", status_code=303)
+
+
+@router.post("/clowns/manage/{clown_id}/unlink")
+def unlink_clown_account(clown_id: str) -> RedirectResponse:
+    CLOWN_PROFILES().update_item(
+        Key={"clown_id": clown_id}, UpdateExpression="REMOVE cognito_sub",
+    )
+    return RedirectResponse("/admin/clowns/manage", status_code=303)
