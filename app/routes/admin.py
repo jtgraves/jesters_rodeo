@@ -1407,3 +1407,9 @@ def _my_profile(claims: dict) -> dict:
     }
     CLOWN_PROFILES().put_item(Item=item)
     return item
+
+
+@member_router.get("/clowns")
+def clowns_home(request: Request, claims: dict = Depends(require_member)) -> Response:
+    profile = _my_profile(claims)
+    return templates.TemplateResponse(request, "admin/clowns_home.html", {"profile": profile})

@@ -1406,6 +1406,7 @@ def test_member_nav_hides_admin_links(member_client):
     _put_event(status="open")
     resp = member_client.get("/admin/orders")
     assert 'href="/admin/checkin"' in resp.text
+    assert 'href="/admin/clowns"' in resp.text
     assert 'href="/admin/events"' not in resp.text
     assert 'href="/admin/clown_mgmt"' not in resp.text
 

@@ -1,0 +1,19 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Reaux-de-Eaux Clowns</h1>
+{% if not profile.display_name or not profile.photo_url %}
+<p class="error" role="alert">Your profile is incomplete —
+   <a href="/admin/clowns/profile">add your name and photo</a>.</p>
+{% endif %}
+<ul>
+  <li><a href="/admin/clowns/roster">Roster</a></li>
+  <li><a href="/admin/clowns/lieutenants">Float lieutenants</a></li>
+  <li><a href="/admin/clowns/directory">Directory</a></li>
+  <li><a href="/admin/clowns/resources">Resources</a></li>
+  <li><a href="/admin/clowns/profile">My profile</a></li>
+  {% if request.state.is_admin %}
+  <li><a href="/admin/clowns/manage">Manage clowns</a> ·
+      <a href="/admin/clowns/import">Import CSV</a></li>
+  {% endif %}
+</ul>
+{% endblock %}
