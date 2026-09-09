@@ -25,6 +25,18 @@ def _format_phone(value: str | None) -> str:
 
 templates.env.filters["phone"] = _format_phone
 
+
+def _ordinal(value: object) -> str:
+    n = int(value)
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+templates.env.filters["ordinal"] = _ordinal
+
 # Cache-busting token for /static/style.css. The <link> URL is otherwise
 # identical across deploys, so a browser that cached the stylesheet can serve
 # a stale copy indefinitely; keying it to the file's bytes forces a re-fetch

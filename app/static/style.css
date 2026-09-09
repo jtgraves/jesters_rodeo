@@ -666,3 +666,13 @@ img.event-hero { opacity: 0.5; }
   border-radius: var(--radius);
   border: 1px solid var(--color-border);
 }
+
+.clown-grid { list-style: none; padding: 0; display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); }
+.clown-card { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.clown-card img { width: 120px; height: 120px; object-fit: cover; border-radius: var(--radius);
+  background: var(--color-surface); }
+.clown-card-placeholder { object-fit: contain; opacity: 0.4; padding: 1rem; }
+.clown-card-name { font-weight: 600; margin-top: 0.4rem; }
+.clown-card-tenure { color: var(--color-muted); font-size: 0.85rem; }
+.clown-card-milestone { font-size: 0.85rem; }

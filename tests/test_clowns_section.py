@@ -125,3 +125,47 @@ def test_my_profile_edit_cannot_set_official_fields(dynamodb_tables):
     assert mine["years_ridden"] == []
     assert mine["is_lieutenant"] is False
     assert mine["active"] is True
+
+
+def _put_profile(clown_id, name, years, **extra):
+    item = {
+        "clown_id": clown_id, "cognito_sub": clown_id + "-sub", "email": clown_id + "@x.com",
+        "display_name": name, "years_ridden": years,
+        "is_lieutenant": False, "lieutenant_title": None, "active": True,
+        "photo_url": None, "bio": None, "phone": None, "address": None,
+        "emergency_contact_name": None, "emergency_contact_phone": None,
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+    item.update(extra)
+    CLOWN_PROFILES().put_item(Item=item)
+
+
+def test_roster_defaults_to_latest_event_year_and_filters(dynamodb_tables):
+    from app.db import EVENTS
+    EVENTS().put_item(Item={"event_id": "evt_2026", "year": 2026, "name": "x", "date": "d",
+                            "location": "l", "description": "d", "ticket_price_cents": 1,
+                            "capacity": 1, "tickets_sold_count": 0, "registration_open": False,
+                            "status": "open"})
+    _put_profile("clown_a", "Abby", [2024, 2025, 2026])
+    _put_profile("clown_b", "Bo", [2020])          # not this year
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.get("/admin/clowns/roster")
+        assert resp.status_code == 200
+        assert "Abby" in resp.text
+        assert "Bo" not in resp.text
+        assert "3rd year" in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_roster_year_param_and_milestone(dynamodb_tables):
+    _put_profile("clown_c", "Cyd", [2015, 2016, 2017, 2018, 2019])  # 5 years
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.get("/admin/clowns/roster?year=2017")
+        assert "Cyd" in resp.text and "5-year rider" in resp.text
+        empty = c.get("/admin/clowns/roster?year=1999")
+        assert "Cyd" not in empty.text
+    finally:
+        ctx.stop()

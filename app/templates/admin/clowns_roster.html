@@ -1,0 +1,36 @@
+{% extends "admin/_base.html" %}
+{% block content %}
+<h1>Roster — {{ year }}</h1>
+<form method="get" action="/admin/clowns/roster">
+  <label>Year
+    <select name="year" onchange="this.form.submit()">
+      {% if year not in all_years %}<option value="{{ year }}" selected>{{ year }}</option>{% endif %}
+      {% for y in all_years %}
+      <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <noscript><button type="submit">Go</button></noscript>
+</form>
+
+{% if not riders %}
+<p>No riders recorded for {{ year }} yet.</p>
+{% else %}
+<ul class="clown-grid">
+  {% for r in riders %}
+  <li class="clown-card">
+    {% if r.photo_url %}
+    <img src="{{ r.photo_url }}" alt="{{ r.display_name or r.email }}">
+    {% else %}
+    <img src="/static/img/fleur.png" alt="" class="clown-card-placeholder">
+    {% endif %}
+    <span class="clown-card-name">{{ r.display_name or r.email }}</span>
+    <span class="clown-card-tenure">{{ r.tenure | ordinal }} year</span>
+    {% if r.tenure in [5, 10, 15, 20, 25] %}
+    <span class="clown-card-milestone">🏅 {{ r.tenure }}-year rider</span>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

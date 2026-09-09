@@ -1470,3 +1470,33 @@ def update_my_profile(
         fields["photo_url"] = photo_url
     _update_clown_fields(profile["clown_id"], fields)
     return RedirectResponse("/admin/clowns/profile", status_code=303)
+
+
+def _all_profiles() -> list[dict]:
+    profiles = paginate(CLOWN_PROFILES().scan)
+    profiles.sort(key=lambda p: (p.get("display_name") or p.get("email") or p["clown_id"]).lower())
+    return profiles
+
+
+def _profile_years(p: dict) -> list[int]:
+    return sorted(int(y) for y in (p.get("years_ridden") or []))
+
+
+def _current_krewe_year() -> int:
+    years = [int(e["year"]) for e in paginate(EVENTS().scan) if e.get("year")]
+    return max(years) if years else date.today().year
+
+
+@member_router.get("/clowns/roster")
+def clowns_roster(request: Request, year: int | None = None) -> Response:
+    profiles = _all_profiles()
+    all_years = sorted({y for p in profiles for y in _profile_years(p)}, reverse=True)
+    selected = year if year is not None else _current_krewe_year()
+    riders = [
+        {**p, "tenure": len(_profile_years(p))}
+        for p in profiles if selected in _profile_years(p)
+    ]
+    return templates.TemplateResponse(
+        request, "admin/clowns_roster.html",
+        {"riders": riders, "year": selected, "all_years": all_years},
+    )
