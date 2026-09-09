@@ -159,3 +159,34 @@ class FaqEntry(BaseModel):
     answer: str
     sort_order: int = 0
     created_at: str
+
+
+class ClownProfile(BaseModel):
+    """A Reaux-de-Eaux clown. The source of truth for the roster. A profile may
+    have no Cognito login (a historical rider); it is linked to an account on
+    first sign-in by matching email, or by an admin."""
+    clown_id: str
+    cognito_sub: str | None = None
+    email: str | None = None
+    display_name: str | None = None
+    photo_url: str | None = None
+    bio: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_phone: str | None = None
+    years_ridden: list[int] = []
+    is_lieutenant: bool = False
+    lieutenant_title: str | None = None
+    active: bool = True
+    created_at: str
+
+
+class KreweLink(BaseModel):
+    """A link to a Google Doc/Sheet, shown on the clowns Resources page."""
+    link_id: str
+    label: str
+    url: str
+    description: str | None = None
+    sort_order: int = 0
+    created_at: str

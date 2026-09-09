@@ -82,3 +82,11 @@ def PAST_BENEFICIARIES() -> Any:
 
 def FAQ_ENTRIES() -> Any:
     return get_table(settings.faq_entries_table)
+
+
+def CLOWN_PROFILES() -> Any:
+    return get_table(settings.clown_profiles_table)
+
+
+def KREWE_LINKS() -> Any:
+    return get_table(settings.krewe_links_table)

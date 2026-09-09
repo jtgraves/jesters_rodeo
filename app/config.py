@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     announcements_table: str
     past_beneficiaries_table: str
     faq_entries_table: str
+    clown_profiles_table: str
+    krewe_links_table: str
     event_images_bucket: str
     ses_sender_email: str
     cognito_user_pool_id: str

@@ -57,6 +57,8 @@ class JestersRodeoStack(Stack):
             "ANNOUNCEMENTS_TABLE": tables["announcements"].table_name,
             "PAST_BENEFICIARIES_TABLE": tables["past_beneficiaries"].table_name,
             "FAQ_ENTRIES_TABLE": tables["faq_entries"].table_name,
+            "CLOWN_PROFILES_TABLE": tables["clown_profiles"].table_name,
+            "KREWE_LINKS_TABLE": tables["krewe_links"].table_name,
             "SES_SENDER_EMAIL": sender_email,
             "COGNITO_USER_POOL_ID": user_pool.user_pool_id,
             "COGNITO_APP_CLIENT_ID": user_pool_client.user_pool_client_id,
@@ -345,6 +347,18 @@ class JestersRodeoStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.RETAIN,
         )
+        clown_profiles_table = dynamodb.Table(
+            self, "ClownProfilesTable",
+            partition_key=dynamodb.Attribute(name="clown_id", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+        krewe_links_table = dynamodb.Table(
+            self, "KreweLinksTable",
+            partition_key=dynamodb.Attribute(name="link_id", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
         return {
             "events": events_table,
             "orders": orders_table,
@@ -354,6 +368,8 @@ class JestersRodeoStack(Stack):
             "announcements": announcements_table,
             "past_beneficiaries": past_beneficiaries_table,
             "faq_entries": faq_entries_table,
+            "clown_profiles": clown_profiles_table,
+            "krewe_links": krewe_links_table,
         }
 
     def _create_auth(self, domain_prefix: str, site_url: str):
