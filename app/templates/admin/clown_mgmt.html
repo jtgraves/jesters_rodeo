@@ -3,7 +3,7 @@
 <h1>Clown Management</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
-<form method="post" action="/admin/clowns">
+<form method="post" action="/admin/clown_mgmt">
   <input type="email" name="email" placeholder="new-clown@example.com" required>
   <label><input type="checkbox" name="make_admin" value="1"> Make them an admin</label>
   <button type="submit">Invite clown</button>
@@ -25,16 +25,16 @@
       <em>you</em>
     {% else %}
       {% if c.is_admin %}
-        <form method="post" action="/admin/clowns/{{ c.username }}/demote" style="display:inline"
+        <form method="post" action="/admin/clown_mgmt/{{ c.username }}/demote" style="display:inline"
               onsubmit="return confirm('Remove admin rights from this clown?')">
           <button type="submit">Make clown</button>
         </form>
       {% else %}
-        <form method="post" action="/admin/clowns/{{ c.username }}/promote" style="display:inline">
+        <form method="post" action="/admin/clown_mgmt/{{ c.username }}/promote" style="display:inline">
           <button type="submit">Make admin</button>
         </form>
       {% endif %}
-      <form method="post" action="/admin/clowns/{{ c.username }}/delete" style="display:inline"
+      <form method="post" action="/admin/clown_mgmt/{{ c.username }}/delete" style="display:inline"
             onsubmit="return confirm('Remove this clown entirely?')">
         <button type="submit">Remove</button>
       </form>

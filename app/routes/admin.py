@@ -1280,20 +1280,20 @@ def _clowns_page(
     request: Request, current_sub: str, error: str | None = None, status_code: int = 200
 ) -> Response:
     return templates.TemplateResponse(
-        request, "admin/clowns.html",
+        request, "admin/clown_mgmt.html",
         {"clowns": _list_clowns(), "current_sub": current_sub, "error": error},
         status_code=status_code,
     )
 
 
-@router.get("/clowns")
+@router.get("/clown_mgmt")
 def list_clowns(
     request: Request, current_admin: dict = Depends(require_admin)
 ) -> Response:
     return _clowns_page(request, current_admin.get("sub"))
 
 
-@router.post("/clowns")
+@router.post("/clown_mgmt")
 def create_clown(
     request: Request,
     current_admin: dict = Depends(require_admin),
@@ -1316,20 +1316,20 @@ def create_clown(
         else:
             raise
         return _clowns_page(request, current_admin.get("sub"), error=msg, status_code=400)
-    return RedirectResponse("/admin/clowns", status_code=303)
+    return RedirectResponse("/admin/clown_mgmt", status_code=303)
 
 
-@router.post("/clowns/{username}/promote")
+@router.post("/clown_mgmt/{username}/promote")
 def promote_clown(
     request: Request,
     username: str,
     current_admin: dict = Depends(require_admin),
 ) -> Response:
     _promote_clown(username)
-    return RedirectResponse("/admin/clowns", status_code=303)
+    return RedirectResponse("/admin/clown_mgmt", status_code=303)
 
 
-@router.post("/clowns/{username}/demote")
+@router.post("/clown_mgmt/{username}/demote")
 def demote_clown(
     request: Request,
     username: str,
@@ -1341,10 +1341,10 @@ def demote_clown(
             error="You can't remove your own admin rights.", status_code=400,
         )
     _demote_clown(username)
-    return RedirectResponse("/admin/clowns", status_code=303)
+    return RedirectResponse("/admin/clown_mgmt", status_code=303)
 
 
-@router.post("/clowns/{username}/delete")
+@router.post("/clown_mgmt/{username}/delete")
 def delete_clown(
     request: Request,
     username: str,
@@ -1356,4 +1356,4 @@ def delete_clown(
             error="You can't remove your own account.", status_code=400,
         )
     _delete_clown(username)
-    return RedirectResponse("/admin/clowns", status_code=303)
+    return RedirectResponse("/admin/clown_mgmt", status_code=303)
