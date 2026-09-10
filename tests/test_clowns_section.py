@@ -400,6 +400,21 @@ def test_resources_member_view_has_no_admin_controls(dynamodb_tables):
         ctx.stop()
 
 
+def test_resources_admin_edit_form_is_behind_a_disclosure(dynamodb_tables):
+    _put_link("lnk_1", label="Throw budget")
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.get("/admin/clowns/resources")
+        # The edit fields live inside a <details>, not on the page by default.
+        assert "<details" in resp.text
+        assert "<summary>Edit</summary>" in resp.text
+        assert 'action="/admin/clowns/resources/lnk_1"' in resp.text  # still present, just tucked away
+        # Reorder stays reachable without opening the disclosure.
+        assert 'action="/admin/clowns/resources/lnk_1/move"' in resp.text
+    finally:
+        ctx.stop()
+
+
 def test_resources_admin_can_add_edit_move_delete(dynamodb_tables):
     c, ctx = _client(admin=True)
     try:

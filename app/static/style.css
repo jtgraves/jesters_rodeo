@@ -691,3 +691,26 @@ img.event-hero { opacity: 0.5; }
 .krewe-links { padding-left: 1.1rem; }
 .krewe-links > li { margin-bottom: var(--space-2); }
 .krewe-link-desc { margin: 0.1rem 0 0; color: var(--color-muted); }
+/* Admin resources: label + reorder on one row, edit form tucked behind a
+   disclosure so a page of links isn't a wall of input fields. */
+.krewe-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+}
+.krewe-link-reorder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+}
+.krewe-link-edit { margin-top: 0.35rem; }
+.krewe-link-edit > summary {
+  display: inline-block;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-accent);
+}
+.krewe-link-edit[open] > summary { margin-bottom: var(--space-1); }
+.krewe-link-edit .faq-admin-fields { max-width: 40rem; }
