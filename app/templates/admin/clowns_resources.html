@@ -1,6 +1,10 @@
 {% extends "admin/_base.html" %}
 {% block content %}
 <h1>Resources</h1>
+{% if profile and (not profile.display_name or not profile.photo_url) %}
+<p class="error" role="alert">Your profile is incomplete —
+   <a href="/admin/clowns/profile">add your name and photo</a>.</p>
+{% endif %}
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
 {% if not links %}

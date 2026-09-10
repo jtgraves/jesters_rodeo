@@ -3,27 +3,47 @@
 {% set admin = request.state.is_admin %}
 <header class="site-nav">
   <div class="site-nav-bar">
-    <a class="brand" href="{{ '/admin/events' if admin else '/admin/orders' }}">Jester's Reaux-de-Eaux</a>
-    {# Pure-CSS hamburger: a checkbox + label toggle the menu, no JS. #}
+    <a class="brand" href="{{ '/admin/events' if admin else '/admin/clowns/resources' }}">Jester's Reaux-de-Eaux</a>
+    {# Pure-CSS hamburger: a checkbox + label toggle the menu, no JS. One
+       grouped menu at every width -- it carries both the clown-facing pages
+       and the admin-only sections, too many links for an inline bar. #}
     <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox">
     <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">☰</label>
-    <nav class="nav-links">
-      {% if admin %}<a href="/admin/events">Events</a>{% endif %}
+    <nav class="nav-links" aria-label="Admin">
+
+      <p class="nav-group-label">Clowns</p>
+      {# /admin/clowns redirects here; keeps old bookmarks + this href working. #}
+      <a href="/admin/clowns/resources">Resources</a>
+      <a href="/admin/clowns/roster">Roster</a>
+      <a href="/admin/clowns/lieutenants">Float lieutenants</a>
+      <a href="/admin/clowns/directory">Directory</a>
+      <a href="/admin/clowns/profile">My profile</a>
+      {% if admin %}
+      <a href="/admin/clowns/manage">Manage roster</a>
+      <a href="/admin/clowns/import">Import roster CSV</a>
+      <a href="/admin/clown_mgmt">Logins &amp; roles</a>
+      {% endif %}
+
+      <p class="nav-group-label">Ticketing</p>
       {# event_id is intentionally omitted: /admin/orders etc. default to
-         whichever event is open (or the most recent), so the nav doesn't
-         need to know which event is "current". #}
+         whichever event is open (or the most recent). #}
       <a href="/admin/orders">Orders</a>
-      {% if admin %}<a href="/admin/give-tickets">Give tickets</a>{% endif %}
-      {% if admin %}<a href="/admin/discount-codes">Codes</a>{% endif %}
       <a href="/admin/waitlist">Waitlist</a>
       <a href="/admin/checkin">Check-in</a>
-      <a href="/admin/clowns">Clowns</a>
-      {% if admin %}<a href="/admin/announcements">Announcements &amp; Alerts</a>{% endif %}
-      {% if admin %}<a href="/admin/charity">Charity</a>{% endif %}
-      {% if admin %}<a href="/admin/beneficiaries">Beneficiaries</a>{% endif %}
-      {% if admin %}<a href="/admin/faq">FAQ</a>{% endif %}
-      {% if admin %}<a href="/admin/clown_mgmt">Clown Management</a>{% endif %}
-      <a href="/" target="_blank" rel="noopener">View Site</a>
+      {% if admin %}<a href="/admin/give-tickets">Give tickets</a>{% endif %}
+
+      {% if admin %}
+      <p class="nav-group-label">Event</p>
+      <a href="/admin/events">Events</a>
+      <a href="/admin/discount-codes">Discount codes</a>
+      <a href="/admin/announcements">Announcements &amp; Alerts</a>
+      <a href="/admin/charity">Charity</a>
+      <a href="/admin/beneficiaries">Past beneficiaries</a>
+      <a href="/admin/faq">FAQ</a>
+      {% endif %}
+
+      <p class="nav-group-label">Session</p>
+      <a href="/" target="_blank" rel="noopener">View public site</a>
       <a href="/admin/logout">Sign out</a>
     </nav>
   </div>

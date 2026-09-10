@@ -69,23 +69,24 @@ def _client(sub="member-1", email="member@example.com", admin=False):
     return c, ctx
 
 
-def test_clowns_hub_creates_profile_and_renders(dynamodb_tables):
+def test_clowns_landing_redirects_to_resources_and_creates_profile(dynamodb_tables):
     c, ctx = _client()
     try:
-        resp = c.get("/admin/clowns")
-        assert resp.status_code == 200
-        assert "Clowns" in resp.text
-        assert 'href="/admin/clowns/roster"' in resp.text
+        resp = c.get("/admin/clowns", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/admin/clowns/resources"
         assert len(CLOWN_PROFILES().scan()["Items"]) == 1
     finally:
         ctx.stop()
 
 
-def test_clowns_hub_nav_link_visible_to_members(dynamodb_tables):
+def test_clowns_nav_links_visible_to_members(dynamodb_tables):
     c, ctx = _client()
     try:
-        resp = c.get("/admin/clowns")
-        assert 'href="/admin/clowns"' in resp.text
+        resp = c.get("/admin/clowns/resources")
+        assert 'href="/admin/clowns/resources"' in resp.text
+        assert 'href="/admin/clowns/roster"' in resp.text
+        assert 'href="/admin/clowns/manage"' not in resp.text
     finally:
         ctx.stop()
 
@@ -443,22 +444,48 @@ def test_resources_mutations_are_admin_only(dynamodb_tables):
         ctx.stop()
 
 
-def test_hub_shows_admin_links_only_to_admins(dynamodb_tables):
+def test_nav_shows_clown_admin_links_only_to_admins(dynamodb_tables):
     m, mctx = _client(admin=False)
     try:
-        body = m.get("/admin/clowns").text
+        body = m.get("/admin/clowns/resources").text
         assert 'href="/admin/clowns/roster"' in body
         assert 'href="/admin/clowns/manage"' not in body
         assert 'href="/admin/clowns/import"' not in body
+        assert 'href="/admin/clown_mgmt"' not in body
     finally:
         mctx.stop()
     a, actx = _client(sub="admin-2", admin=True)
     try:
-        body = a.get("/admin/clowns").text
+        body = a.get("/admin/clowns/resources").text
         assert 'href="/admin/clowns/manage"' in body
         assert 'href="/admin/clowns/import"' in body
+        assert 'href="/admin/clown_mgmt"' in body
     finally:
         actx.stop()
+
+
+def test_resources_shows_incomplete_profile_nudge(dynamodb_tables):
+    c, ctx = _client(sub="sub-new", email="new@example.com")
+    try:
+        resp = c.get("/admin/clowns/resources")
+        assert "Your profile is incomplete" in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_resources_hides_nudge_when_profile_complete(dynamodb_tables):
+    CLOWN_PROFILES().put_item(Item={
+        "clown_id": "clown_done", "cognito_sub": "sub-done", "email": "done@example.com",
+        "display_name": "All Set", "photo_url": "https://img.example/x.jpg",
+        "years_ridden": [2025], "is_lieutenant": False, "active": True,
+        "created_at": "2026-01-01T00:00:00Z",
+    })
+    c, ctx = _client(sub="sub-done", email="done@example.com")
+    try:
+        resp = c.get("/admin/clowns/resources")
+        assert "Your profile is incomplete" not in resp.text
+    finally:
+        ctx.stop()
 
 
 def test_my_profile_skips_adoption_when_email_unverified(dynamodb_tables):

@@ -177,6 +177,34 @@ def test_callback_survives_a_malformed_token_response(monkeypatch):
     assert resp.headers["location"] == "/admin/login"
 
 
+def _ok_token_exchange(monkeypatch):
+    fake = MagicMock()
+    fake.__enter__.return_value.read.return_value = b'{"id_token": "the-id-token"}'
+    monkeypatch.setattr(auth_routes.urllib.request, "urlopen", MagicMock(return_value=fake))
+
+
+def test_callback_lands_admin_on_the_event_dashboard(monkeypatch):
+    _ok_token_exchange(monkeypatch)
+    monkeypatch.setattr(auth_routes, "verify_cognito_token",
+                        lambda _t: {"sub": "admin-1", "cognito:groups": ["admins"]})
+
+    resp = _callback_client_with_pkce().get("/admin/callback?code=abc", follow_redirects=False)
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/events"
+
+
+def test_callback_lands_a_plain_clown_on_resources(monkeypatch):
+    _ok_token_exchange(monkeypatch)
+    monkeypatch.setattr(auth_routes, "verify_cognito_token",
+                        lambda _t: {"sub": "member-1", "cognito:groups": []})
+
+    resp = _callback_client_with_pkce().get("/admin/callback?code=abc", follow_redirects=False)
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/clowns/resources"
+
+
 def _request(cookies: dict | None = None, accept: str = "text/html") -> Request:
     headers = [(b"accept", accept.encode())]
     if cookies:

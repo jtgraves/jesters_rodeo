@@ -1412,9 +1412,12 @@ def _my_profile(claims: dict) -> dict:
 
 
 @member_router.get("/clowns")
-def clowns_home(request: Request, claims: dict = Depends(require_member)) -> Response:
-    profile = _my_profile(claims)
-    return templates.TemplateResponse(request, "admin/clowns_home.html", {"profile": profile})
+def clowns_landing(claims: dict = Depends(require_member)) -> RedirectResponse:
+    """The Clowns area has no hub page -- navigation is the menu. Anyone landing
+    here (post-login, an old bookmark, the nav's group link) gets their profile
+    created if needed and is dropped on Resources."""
+    _my_profile(claims)
+    return RedirectResponse("/admin/clowns/resources", status_code=303)
 
 
 # ---- Resources links (krewe links) ----
@@ -1434,16 +1437,23 @@ def _write_krewe_link_order(ids: list[str]) -> None:
         )
 
 
-def _resources_page(request: Request, error: str | None = None, status_code: int = 200) -> Response:
+def _resources_page(
+    request: Request, error: str | None = None, status_code: int = 200,
+    profile: dict | None = None,
+) -> Response:
     return templates.TemplateResponse(
         request, "admin/clowns_resources.html",
-        {"links": _sorted_krewe_links(), "error": error}, status_code=status_code,
+        {"links": _sorted_krewe_links(), "error": error, "profile": profile},
+        status_code=status_code,
     )
 
 
 @member_router.get("/clowns/resources")
-def clowns_resources(request: Request) -> Response:
-    return _resources_page(request)
+def clowns_resources(request: Request, claims: dict = Depends(require_member)) -> Response:
+    # Resources is the members' landing page, so this is where the calling
+    # clown's profile is created on first visit and where the "finish your
+    # profile" nudge lives.
+    return _resources_page(request, profile=_my_profile(claims))
 
 
 @router.post("/clowns/resources")

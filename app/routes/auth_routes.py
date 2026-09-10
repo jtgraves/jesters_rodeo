@@ -13,7 +13,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from app.auth import clear_session_cookie, set_session_cookie, verify_cognito_token
+from app.auth import (
+    clear_session_cookie,
+    is_admin,
+    set_session_cookie,
+    verify_cognito_token,
+)
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -114,9 +119,13 @@ def callback(request: Request, code: str = "", error: str = "") -> RedirectRespo
         raise HTTPException(status_code=400, detail="Sign-in failed. Please try again.")
 
     # Verify before trusting it, even though it came straight from Cognito.
-    verify_cognito_token(id_token)
+    claims = verify_cognito_token(id_token)
 
-    response = RedirectResponse("/admin/events", status_code=303)
+    # Admins land on the event dashboard; every other clown starts on the
+    # members' Resources page -- the Clowns area has no hub, navigation is the
+    # menu (see the /admin/clowns redirect).
+    landing = "/admin/events" if is_admin(claims) else "/admin/clowns/resources"
+    response = RedirectResponse(landing, status_code=303)
     set_session_cookie(response, id_token)
     response.delete_cookie(PKCE_COOKIE, path="/admin")
     return response

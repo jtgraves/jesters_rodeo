@@ -83,8 +83,9 @@ th, td {
 
 /* ---- Admin nav: pure-CSS hamburger via the checkbox toggle hack.
    No JS, no build step -- consistent with how the rest of this app
-   avoids dependencies (see the vendored QR scanner). Collapses below
-   640px; shows as a plain inline bar above that. ---- */
+   avoids dependencies (see the vendored QR scanner). One grouped
+   dropdown at every width: it carries the clown-facing pages and the
+   admin-only sections together, too many links for an inline bar. ---- */
 .site-nav {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
@@ -106,7 +107,7 @@ th, td {
 }
 .nav-toggle-checkbox { display: none; }
 .nav-toggle-label {
-  display: none;
+  display: block;
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
@@ -114,40 +115,44 @@ th, td {
   user-select: none;
 }
 .nav-links {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  display: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  position: absolute;
+  top: 100%;
+  right: var(--space-2);
+  min-width: 15rem;
+  max-width: calc(100vw - 2 * var(--space-2));
+  max-height: calc(100vh - var(--nav-height));
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  padding: var(--space-1) 0;
+  z-index: 20;
 }
+.nav-toggle-checkbox:checked ~ .nav-links { display: flex; }
 .nav-links a {
   color: var(--color-text);
   text-decoration: none;
-  padding: 0.5rem 0;
+  padding: 0.6rem var(--space-2);
 }
-.nav-links a:hover, .nav-links a:focus { color: var(--color-accent); }
-
-@media (max-width: 640px) {
-  .nav-toggle-label { display: block; }
-  .nav-links {
-    display: none;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
-    padding: 0 var(--space-2);
-    z-index: 1;
-  }
-  .nav-links a {
-    padding: 0.9rem 0; /* comfortably tappable */
-    border-bottom: 1px solid var(--color-border);
-  }
-  .nav-links a:last-child { border-bottom: none; }
-  .nav-toggle-checkbox:checked ~ .nav-links { display: flex; }
+.nav-links a:hover, .nav-links a:focus {
+  color: var(--color-accent);
+  background: var(--color-bg);
 }
+.nav-group-label {
+  margin: 0;
+  padding: 0.85rem var(--space-2) 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+.nav-group-label:first-child { padding-top: 0.2rem; }
 
 /* ---- Public nav: no bar of its own, no wordmark -- just a hamburger in the
    top-right at every width. On pages with a banner (body.has-hero) it floats
@@ -173,6 +178,8 @@ th, td {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   overflow: hidden;
+  padding: 0;          /* the admin .nav-links base adds vertical padding */
+  box-shadow: none;
 }
 .public-nav .nav-links a {
   padding: 0.75rem 1rem;
