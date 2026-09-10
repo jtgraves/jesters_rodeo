@@ -214,7 +214,9 @@ def test_event_admin_pages_carry_the_image_size_guard(admin_client):
     _put_event()
     for path in ("/admin/events", "/admin/events/new", "/admin/charity?event_id=evt_2026"):
         resp = admin_client.get(path)
-        assert "Each image must be under 2 MB." in resp.text, path
+        # The client-side downscale-before-upload guard partial is present.
+        assert "function resizeFile(file)" in resp.text, path
+        assert "after resizing" in resp.text, path
 
 
 def test_admin_can_create_event_with_uploaded_images(admin_client):

@@ -1,32 +1,113 @@
 <script>
-// An oversized upload is rejected by API Gateway / Lambda with a bare 413
-// before the app ever sees it. Catch it in the browser and say what's wrong.
-// Attaches to every multipart form on the page (event create/edit, charity).
+// Image upload guard. Attaches to every multipart form on the page (event
+// create/edit, charity, beneficiaries, clown profile).
+//
+// Why this exists: an uploaded file travels browser -> API Gateway HTTP API
+// -> Lambda. API Gateway caps the request body at 10 MB, and Lambda caps the
+// invocation payload at 6 MB -- and the body is base64-encoded into that
+// payload (+33%), so the real ceiling is ~4.5 MB for the whole multipart
+// submit combined. A modern phone photo (3-12 MB) blows past that on its own,
+// and the phone user can't do anything about the file size.
+//
+// So: before submitting, downscale each raster image in a <canvas> (long edge
+// -> 1600 px, re-encoded) and swap the smaller file back into the input. A
+// 10 MB photo becomes a few hundred KB. The byte check below is now just a
+// backstop for the rare thing that can't be shrunk (a huge PNG screenshot, a
+// desktop .heic). If per-form image counts ever make even resized uploads too
+// big to batch, the next step is presigned direct-to-S3 uploads -- see
+// docs/image-uploads.md.
 (function () {
-  var MAX_ONE = 2 * 1024 * 1024;    // per image
-  var MAX_TOTAL = 4 * 1024 * 1024;  // all images in one submit
+  var MAX_EDGE = 1600;                  // downscale the long edge to this
+  var JPEG_QUALITY = 0.82;
+  var BACKSTOP_ONE = 2 * 1024 * 1024;   // after resize, per image (matches the server)
+  var BACKSTOP_TOTAL = 4 * 1024 * 1024; // after resize, whole submit
+
+  function mb(bytes) { return (bytes / 1048576).toFixed(1); }
+
+  // Resolves to a shrunk File, or the original if it can't/shouldn't be touched.
+  function resizeFile(file) {
+    return new Promise(function (resolve) {
+      var isPng = file.type === "image/png";
+      var isJpegLike = file.type === "image/jpeg" || file.type === "image/webp";
+      if (!isPng && !isJpegLike) { resolve(file); return; }  // heic, gif, svg: leave alone
+
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+        // Already small in both dimensions and bytes -- nothing to gain.
+        if (scale === 1 && file.size <= BACKSTOP_ONE) { resolve(file); return; }
+
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Keep PNG as PNG so transparent logos don't get a black background.
+        var outType = isPng ? "image/png" : "image/jpeg";
+        canvas.toBlob(function (blob) {
+          if (!blob || blob.size >= file.size) { resolve(file); return; }  // no win, keep original
+          var base = file.name.replace(/\.[a-z0-9]+$/i, "");
+          resolve(new File([blob], base + (isPng ? ".png" : ".jpg"),
+                           { type: outType, lastModified: Date.now() }));
+        }, outType, JPEG_QUALITY);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+
+  function setInputFile(input, file) {
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+  }
+
   var forms = document.querySelectorAll('form[enctype="multipart/form-data"]');
   for (var f = 0; f < forms.length; f++) {
     forms[f].addEventListener("submit", function (e) {
-      var total = 0;
-      var inputs = e.currentTarget.querySelectorAll('input[type="file"]');
+      var form = e.currentTarget;
+      if (form.dataset.imgGuardDone === "1") return;  // second pass: let it through
+      e.preventDefault();
+      var submitter = e.submitter;
+
+      var inputs = form.querySelectorAll('input[type="file"]');
+      var jobs = [];
       for (var i = 0; i < inputs.length; i++) {
-        var file = inputs[i].files[0];
-        if (!file) continue;
-        if (file.size > MAX_ONE) {
-          e.preventDefault();
-          alert('"' + file.name + '" is ' + (file.size / 1048576).toFixed(1) +
-                " MB. Each image must be under 2 MB.");
+        (function (input) {
+          var file = input.files[0];
+          if (!file) return;
+          jobs.push(resizeFile(file).then(function (out) {
+            if (out === file) return file;
+            try { setInputFile(input, out); }
+            catch (err) { return file; }  // DataTransfer unsupported: send the original
+            return out;
+          }));
+        })(inputs[i]);
+      }
+
+      Promise.all(jobs).then(function (results) {
+        var total = 0;
+        for (var j = 0; j < results.length; j++) {
+          var r = results[j];
+          if (r.size > BACKSTOP_ONE) {
+            alert('"' + r.name + '" is still ' + mb(r.size) + " MB after resizing. " +
+                  "Please use a smaller image, or save it as a JPEG first.");
+            return;
+          }
+          total += r.size;
+        }
+        if (total > BACKSTOP_TOTAL) {
+          alert("These images total " + mb(total) + " MB after resizing, which is " +
+                "too much to upload at once. Upload fewer now and the rest afterwards.");
           return;
         }
-        total += file.size;
-      }
-      if (total > MAX_TOTAL) {
-        e.preventDefault();
-        alert("Those images add up to " + (total / 1048576).toFixed(1) +
-              " MB, which is too much to upload at once. Keep the combined " +
-              "size under 4 MB (upload fewer now and the rest afterwards).");
-      }
+        form.dataset.imgGuardDone = "1";
+        if (form.requestSubmit) { form.requestSubmit(submitter || undefined); }
+        else { form.submit(); }
+      });
     });
   }
 })();
