@@ -51,7 +51,7 @@
   <h1>{{ event.charity_name }}</h1>
 
   {% if event.charity_description %}
-  <p class="charity-description">{{ event.charity_description }}</p>
+  <div class="charity-description richtext">{{ event.charity_description | richtext }}</div>
   {% endif %}
 
   {% if event.charity_website_url %}

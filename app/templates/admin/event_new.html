@@ -9,7 +9,7 @@
   <input name="date" placeholder="Date (YYYY-MM-DD)" required>
   <input name="location" placeholder="Location" required>
   <input name="address" placeholder="Address (optional, for the map)">
-  <textarea name="description" placeholder="Description" required></textarea>
+  <textarea name="description" class="richtext-input" placeholder="Description" required></textarea>
   <input name="ticket_price_cents" placeholder="Price (cents)" required>
   <input name="capacity" placeholder="Capacity" required>
   <input name="contact_name" placeholder="Contact name (optional)">
@@ -23,4 +23,5 @@
   <button type="submit">Create</button>
 </form>
 {% include "admin/_image_size_guard.html" %}
+{% include "admin/_richtext_toolbar.html" %}
 {% endblock %}

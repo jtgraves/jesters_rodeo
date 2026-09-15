@@ -1,0 +1,69 @@
+<script>
+// Formatting toolbar for any <textarea class="richtext-input">. Inserts the
+// small markup subset app/richtext.py understands -- no rich-text editor,
+// just syntax the toolbar types for you. Attaches a hint line too, for
+// anyone typing the syntax directly.
+(function () {
+  function wrapSelection(ta, before, after) {
+    var s = ta.selectionStart, e = ta.selectionEnd;
+    var text = ta.value;
+    var selected = text.slice(s, e) || "text";
+    ta.value = text.slice(0, s) + before + selected + after + text.slice(e);
+    ta.focus();
+    ta.selectionStart = s + before.length;
+    ta.selectionEnd = s + before.length + selected.length;
+  }
+
+  function prefixLines(ta, prefix) {
+    var s = ta.selectionStart, e = ta.selectionEnd;
+    var text = ta.value;
+    var lineStart = text.lastIndexOf("\n", s - 1) + 1;
+    var lineEnd = text.indexOf("\n", e);
+    if (lineEnd === -1) lineEnd = text.length;
+    var block = text.slice(lineStart, lineEnd) || "text";
+    var withPrefix = block.split("\n").map(function (l) { return prefix + l; }).join("\n");
+    ta.value = text.slice(0, lineStart) + withPrefix + text.slice(lineEnd);
+    ta.focus();
+    ta.selectionStart = lineStart;
+    ta.selectionEnd = lineStart + withPrefix.length;
+  }
+
+  var ACTIONS = [
+    ["Bold", function (ta) { wrapSelection(ta, "**", "**"); }],
+    ["Italic", function (ta) { wrapSelection(ta, "*", "*"); }],
+    ["Heading", function (ta) { prefixLines(ta, "# "); }],
+    ["Subheading", function (ta) { prefixLines(ta, "## "); }],
+    ["List", function (ta) { prefixLines(ta, "- "); }],
+    ["Link", function (ta) {
+      var url = window.prompt("Link URL (https://...)");
+      if (!url) return;
+      wrapSelection(ta, "[", "](" + url + ")");
+    }],
+  ];
+
+  var textareas = document.querySelectorAll("textarea.richtext-input");
+  for (var t = 0; t < textareas.length; t++) {
+    (function (ta) {
+      var bar = document.createElement("div");
+      bar.className = "richtext-toolbar";
+      for (var a = 0; a < ACTIONS.length; a++) {
+        (function (label, run) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "icon-btn richtext-btn";
+          btn.textContent = label;
+          btn.addEventListener("click", function () { run(ta); });
+          bar.appendChild(btn);
+        })(ACTIONS[a][0], ACTIONS[a][1]);
+      }
+      ta.parentNode.insertBefore(bar, ta);
+
+      var hint = document.createElement("p");
+      hint.className = "field-hint";
+      hint.textContent = "Formatting: **bold**, *italic*, # heading, ## subheading, "
+        + "\"- \" for a list, [text](https://...) for a link.";
+      ta.parentNode.insertBefore(hint, ta.nextSibling);
+    })(textareas[t]);
+  }
+})();
+</script>

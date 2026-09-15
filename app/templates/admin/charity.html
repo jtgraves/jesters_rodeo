@@ -12,7 +12,9 @@
 <form method="post" action="/admin/charity" enctype="multipart/form-data" class="event-images-form">
   <input type="hidden" name="event_id" value="{{ event_id }}">
   <label>Charity name <input type="text" name="charity_name" value="{{ event.charity_name or '' }}"></label>
-  <label>Description <textarea name="charity_description">{{ event.charity_description or '' }}</textarea></label>
+  <label>Description
+    <textarea name="charity_description" class="richtext-input">{{ event.charity_description or '' }}</textarea>
+  </label>
   <label>Website link <input type="url" name="charity_website_url" placeholder="https://..."
          value="{{ event.charity_website_url or '' }}"></label>
   <label>Contact name <input type="text" name="charity_contact_name" value="{{ event.charity_contact_name or '' }}"></label>
@@ -44,5 +46,6 @@
 </form>
 
 {% include "admin/_image_size_guard.html" %}
+{% include "admin/_richtext_toolbar.html" %}
 {% endif %}
 {% endblock %}

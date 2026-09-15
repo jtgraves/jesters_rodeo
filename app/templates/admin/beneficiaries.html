@@ -32,9 +32,10 @@
   <label>Year <input type="number" name="year" placeholder="2025"></label>
   <label>Amount donated (whole dollars) <input type="number" name="amount_dollars" min="0" step="1" placeholder="0"></label>
   <label>Website link <input type="url" name="website_url" placeholder="https://..."></label>
-  <label>Description <textarea name="description"></textarea></label>
+  <label>Description <textarea name="description" class="richtext-input"></textarea></label>
   <label>Logo <input type="file" name="logo" accept="image/jpeg,image/png,image/gif,image/webp"></label>
   <button type="submit">Add</button>
 </form>
 {% include "admin/_image_size_guard.html" %}
+{% include "admin/_richtext_toolbar.html" %}
 {% endblock %}

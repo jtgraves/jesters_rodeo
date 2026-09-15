@@ -17,7 +17,9 @@
       <label>Date <input type="text" name="date" value="{{ e.date }}" placeholder="YYYY-MM-DD" required></label>
       <label>Location <input type="text" name="location" value="{{ e.location }}" required></label>
       <label>Address <input type="text" name="address" value="{{ e.address or '' }}"></label>
-      <label>Description <textarea name="description" required>{{ e.description }}</textarea></label>
+      <label>Description
+        <textarea name="description" class="richtext-input" required>{{ e.description }}</textarea>
+      </label>
       <label>Contact name <input type="text" name="contact_name" value="{{ e.contact_name or '' }}"></label>
       <label>Contact email <input type="email" name="contact_email" value="{{ e.contact_email or '' }}"></label>
       <label>Contact phone <input type="tel" name="contact_phone" value="{{ e.contact_phone or '' }}"></label>
@@ -55,4 +57,5 @@
 {% endfor %}
 </ul>
 {% include "admin/_image_size_guard.html" %}
+{% include "admin/_richtext_toolbar.html" %}
 {% endblock %}

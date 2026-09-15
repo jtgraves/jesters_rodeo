@@ -11,7 +11,7 @@
 {% for f in entries %}
 <div class="faq-item">
   <h2 class="faq-question">{{ f.question }}</h2>
-  <div class="faq-answer">{{ f.answer }}</div>
+  <div class="faq-answer richtext">{{ f.answer | richtext }}</div>
 </div>
 {% endfor %}
 {% endif %}

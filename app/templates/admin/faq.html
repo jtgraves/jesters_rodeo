@@ -12,7 +12,7 @@
         <input type="text" name="question" value="{{ f.question }}" required>
       </label>
       <label>Answer
-        <textarea name="answer" rows="3" required>{{ f.answer }}</textarea>
+        <textarea name="answer" class="richtext-input" rows="3" required>{{ f.answer }}</textarea>
       </label>
       <div class="faq-admin-actions">
         <span class="faq-admin-num">#{{ loop.index }}</span>
@@ -36,7 +36,8 @@
 <h2>Add a question</h2>
 <form method="post" action="/admin/faq" class="faq-admin-fields faq-admin-new">
   <label>Question <input type="text" name="question" required></label>
-  <label>Answer <textarea name="answer" rows="3" required></textarea></label>
+  <label>Answer <textarea name="answer" class="richtext-input" rows="3" required></textarea></label>
   <div class="faq-admin-actions"><button type="submit">Add to the bottom</button></div>
 </form>
+{% include "admin/_richtext_toolbar.html" %}
 {% endblock %}

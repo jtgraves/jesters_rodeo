@@ -13,7 +13,7 @@
 <div class="event-layout">
   <div class="event-main">
     <h2>About this event</h2>
-    <p class="event-description">{{ event.description }}</p>
+    <div class="event-description richtext">{{ event.description | richtext }}</div>
   </div>
 
   <aside class="ticket-card" id="tickets">

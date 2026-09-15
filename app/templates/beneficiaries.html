@@ -18,7 +18,7 @@
   {% if b.amount_cents %}
   <p class="beneficiary-amount">${{ "{:,}".format(b.amount_cents // 100) }} donated</p>
   {% endif %}
-  {% if b.description %}<p class="beneficiary-description">{{ b.description }}</p>{% endif %}
+  {% if b.description %}<div class="beneficiary-description richtext">{{ b.description | richtext }}</div>{% endif %}
   {% if b.website_url %}
   <p><a href="{{ b.website_url }}" target="_blank" rel="noopener">Visit {{ b.name }}'s website</a></p>
   {% endif %}

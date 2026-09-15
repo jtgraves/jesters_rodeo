@@ -6,6 +6,8 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
+from app.richtext import render_richtext
+
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -36,6 +38,7 @@ def _ordinal(value: object) -> str:
 
 
 templates.env.filters["ordinal"] = _ordinal
+templates.env.filters["richtext"] = render_richtext
 
 # Cache-busting token for /static/style.css. The <link> URL is otherwise
 # identical across deploys, so a browser that cached the stylesheet can serve

@@ -8,7 +8,7 @@
 <section class="lieutenant">
   {% if l.photo_url %}<img class="lieutenant-photo" src="{{ l.photo_url }}" alt="{{ l.display_name or '(no name)' }}">{% endif %}
   <h2>{{ l.display_name or '(no name)' }}{% if l.lieutenant_title %} — {{ l.lieutenant_title }}{% endif %}</h2>
-  {% if l.bio %}<p class="lieutenant-bio">{{ l.bio }}</p>{% endif %}
+  {% if l.bio %}<div class="lieutenant-bio richtext">{{ l.bio | richtext }}</div>{% endif %}
 </section>
 {% endfor %}
 {% endif %}

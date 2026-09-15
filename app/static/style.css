@@ -366,7 +366,21 @@ img.event-hero { opacity: 0.5; }
   gap: var(--space-3);
   margin-top: var(--space-2);
 }
-.event-description { white-space: pre-line; }
+/* Rendered richtext output (event/charity/beneficiary descriptions, clown
+   bios, FAQ answers) -- app/richtext.py emits its own <p>/<h3-5>/<ul>, so no
+   `white-space: pre-line` is needed on these fields anymore. */
+.richtext { overflow-wrap: anywhere; }
+.richtext > :first-child { margin-top: 0; }
+.richtext > :last-child { margin-bottom: 0; }
+.richtext h3 { font-size: 1.1rem; margin: var(--space-2) 0 var(--space-1); }
+.richtext h4 { font-size: 1.02rem; margin: var(--space-2) 0 var(--space-1); }
+.richtext h5 { font-size: 0.95rem; margin: var(--space-2) 0 var(--space-1); }
+.richtext ul { margin: 0.3rem 0; padding-left: 1.3rem; }
+
+/* Formatting toolbar above a richtext-input textarea. */
+.richtext-toolbar { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.25rem; }
+.richtext-btn { font-size: 0.8rem; font-weight: 600; border: 1px solid var(--color-border); }
+.field-hint { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--color-muted); }
 
 .event-map { margin-top: var(--space-3); }
 .event-map iframe {
@@ -421,7 +435,6 @@ img.event-hero { opacity: 0.5; }
   object-fit: contain;
 }
 .charity-kicker { color: var(--color-muted); margin: 0; }
-.charity-description { white-space: pre-line; }
 .charity-contact { margin-top: var(--space-2); }
 .charity-contact p { margin: 0.25rem 0; }
 
@@ -439,10 +452,6 @@ img.event-hero { opacity: 0.5; }
 .faq-question {
   margin: 0 0 var(--space-1);
   font-size: 1.1rem;
-}
-.faq-answer {
-  white-space: pre-line;
-  overflow-wrap: anywhere;
 }
 
 /* Admin FAQ: one card per entry -- editable question/answer, then an action
@@ -497,7 +506,6 @@ img.event-hero { opacity: 0.5; }
 }
 .beneficiary-year { color: var(--color-muted); font-weight: 400; }
 .beneficiary-amount { font-weight: 600; margin: 0.25rem 0; }
-.beneficiary-description { white-space: pre-line; }
 .beneficiary-logo {
   display: block;
   max-width: 200px;
@@ -686,7 +694,6 @@ img.event-hero { opacity: 0.5; }
 
 .lieutenant { margin-top: var(--space-3); display: flex; gap: var(--space-2); align-items: flex-start; }
 .lieutenant-photo { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius); flex: 0 0 auto; }
-.lieutenant-bio { white-space: pre-line; }
 
 .krewe-links { padding-left: 1.1rem; }
 .krewe-links > li { margin-bottom: var(--space-2); }
