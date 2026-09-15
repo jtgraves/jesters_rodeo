@@ -13,7 +13,7 @@ from app.config import settings
 
 JWKS_TIMEOUT_SECONDS = 5
 JWKS_CACHE_TTL_SECONDS = 3600
-SESSION_MAX_AGE_SECONDS = 3600
+SESSION_MAX_AGE_SECONDS = 8 * 3600  # applies to every signed-in clown, admins included
 
 _jwks_cache: dict | None = None
 _jwks_fetched_at: float = 0.0

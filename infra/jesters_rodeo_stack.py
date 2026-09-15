@@ -397,6 +397,12 @@ class JestersRodeoStack(Stack):
                 callback_urls=[f"{site_url}/admin/callback"],
                 logout_urls=[f"{site_url}/"],
             ),
+            # This app only ever holds the ID token -- no refresh flow -- and
+            # verify_cognito_token enforces its exp claim on every request, so
+            # Cognito's default 60-minute id_token_validity is the real ceiling
+            # on a session regardless of app.auth.SESSION_MAX_AGE_SECONDS.
+            # Match the two so the cookie's stated lifetime is the real one.
+            id_token_validity=Duration.hours(8),
         )
         return user_pool, user_pool_client, user_pool_domain
 
