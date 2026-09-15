@@ -373,7 +373,8 @@ def test_admin_can_edit_event_details(admin_client):
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
         data={
-            "name": "New Name", "description": "New description.", "location": "Baton Rouge",
+            "name": "New Name", "date": "2026-04-01",
+            "description": "New description.", "location": "Baton Rouge",
             "address": "1 Main St", "contact_name": "Jo", "contact_email": "jo@x.test",
             "contact_phone": "555-9",
         },
@@ -382,6 +383,7 @@ def test_admin_can_edit_event_details(admin_client):
     assert resp.status_code == 303
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
     assert event["name"] == "New Name"
+    assert event["date"] == "2026-04-01"
     assert event["description"] == "New description."
     assert event["location"] == "Baton Rouge"
     assert event["address"] == "1 Main St"
@@ -390,11 +392,23 @@ def test_admin_can_edit_event_details(admin_client):
     assert event["contact_phone"] == "555-9"
 
 
+def test_admin_edit_event_details_rejects_blank_date(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "  ", "description": "D", "location": "L"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["date"] == "2026-03-14"  # unchanged
+
+
 def test_admin_edit_event_details_clears_blank_contact_fields(admin_client):
     _put_event(address="old addr", contact_name="Old Contact")
     admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "description": "D", "location": "L"},  # contact fields omitted
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L"},
         follow_redirects=False,
     )
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
@@ -422,7 +436,8 @@ def test_admin_edit_event_details_rejects_blank_fields(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "  ", "description": "New description.", "location": "Baton Rouge"},
+        data={"name": "  ", "date": "2026-03-14",
+              "description": "New description.", "location": "Baton Rouge"},
         follow_redirects=False,
     )
     assert resp.status_code == 400
@@ -435,6 +450,7 @@ def test_admin_events_page_prefills_details_form(admin_client):
     resp = admin_client.get("/admin/events")
     assert 'value="Existing Name"' in resp.text
     assert 'value="Existing Location"' in resp.text
+    assert 'value="2026-03-14"' in resp.text  # date, from _put_event's default
 
 
 def test_admin_can_set_event_banner(admin_client):

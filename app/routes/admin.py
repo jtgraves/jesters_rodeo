@@ -309,6 +309,7 @@ def update_event_details(
     request: Request,
     event_id: str,
     name: str = Form(...),
+    date: str = Form(...),
     description: str = Form(...),
     location: str = Form(...),
     address: str = Form(""),
@@ -316,21 +317,21 @@ def update_event_details(
     contact_email: str = Form(""),
     contact_phone: str = Form(""),
 ) -> Response:
-    name, description, location = name.strip(), description.strip(), location.strip()
-    if not name or not description or not location:
+    name, date, description, location = name.strip(), date.strip(), description.strip(), location.strip()
+    if not name or not date or not description or not location:
         return _events_page(
-            request, error="Name, description, and location can't be empty.", status_code=400
+            request, error="Name, date, description, and location can't be empty.", status_code=400
         )
     EVENTS().update_item(
         Key={"event_id": event_id},
         # name and location are both DynamoDB reserved words, hence the aliases.
         UpdateExpression=(
-            "SET #n = :n, description = :d, #l = :l, address = :addr, "
+            "SET #n = :n, #d = :date, description = :desc, #l = :l, address = :addr, "
             "contact_name = :cn, contact_email = :ce, contact_phone = :cp"
         ),
-        ExpressionAttributeNames={"#n": "name", "#l": "location"},
+        ExpressionAttributeNames={"#n": "name", "#d": "date", "#l": "location"},
         ExpressionAttributeValues={
-            ":n": name, ":d": description, ":l": location,
+            ":n": name, ":date": date, ":desc": description, ":l": location,
             ":addr": address.strip() or None,
             ":cn": contact_name.strip() or None,
             ":ce": contact_email.strip() or None,

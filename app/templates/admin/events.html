@@ -14,6 +14,7 @@
     <form method="post" action="/admin/events/{{ e.event_id }}/close" style="display:inline"><button>Close</button></form>
     <form method="post" action="/admin/events/{{ e.event_id }}/details" class="event-images-form">
       <label>Name <input type="text" name="name" value="{{ e.name }}" required></label>
+      <label>Date <input type="text" name="date" value="{{ e.date }}" placeholder="YYYY-MM-DD" required></label>
       <label>Location <input type="text" name="location" value="{{ e.location }}" required></label>
       <label>Address <input type="text" name="address" value="{{ e.address or '' }}"></label>
       <label>Description <textarea name="description" required>{{ e.description }}</textarea></label>
