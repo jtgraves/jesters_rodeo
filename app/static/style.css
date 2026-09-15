@@ -59,6 +59,17 @@ input, select, textarea {
   background: var(--color-surface);
   color: var(--color-text);
 }
+/* An unstyled <textarea> defaults to ~2 rows x 20 cols -- fine on a desktop
+   form, cramped on a phone where there's no cols/rows-driven width to speak
+   of and every field stacks full-width anyway. box-sizing so the 100% width
+   includes the textarea's own padding/border rather than overflowing it. */
+textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+}
 
 table {
   width: 100%;
@@ -665,6 +676,10 @@ img.event-hero { opacity: 0.5; }
   flex-direction: row;
   align-items: center;
 }
+/* A textarea field takes the whole row instead of squeezing into whatever
+   width it'd get competing with Name/Location/etc. -- otherwise a 100%-wide
+   textarea inside an auto-sized flex item just collapses back down. */
+.event-images-form label:has(textarea) { flex: 1 1 100%; }
 .event-image-preview {
   /* Fixed width AND height (not max-*): a preview thumbnail must render at
      this size regardless of the uploaded image's native resolution. Relying
