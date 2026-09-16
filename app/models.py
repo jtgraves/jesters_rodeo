@@ -183,10 +183,12 @@ class ClownProfile(BaseModel):
 
 
 class KreweLink(BaseModel):
-    """A link to a Google Doc/Sheet, shown on the clowns Resources page."""
+    """A resource shown on the clowns Resources page: usually a link to a
+    Google Doc/Sheet, but url is optional -- some resources are just a piece
+    of information (a label + description) with nothing to link to."""
     link_id: str
     label: str
-    url: str
+    url: str | None = None
     description: str | None = None
     sort_order: int = 0
     created_at: str

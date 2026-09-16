@@ -1459,16 +1459,16 @@ def clowns_resources(request: Request, claims: dict = Depends(require_member)) -
 
 @router.post("/clowns/resources")
 def create_krewe_link(
-    request: Request, label: str = Form(...), url: str = Form(...), description: str = Form(""),
+    request: Request, label: str = Form(...), url: str = Form(""), description: str = Form(""),
 ) -> Response:
     label, url = label.strip(), url.strip()
-    if not label or not url:
-        return _resources_page(request, error="Label and URL are required.", status_code=400)
-    if not url.startswith(("http://", "https://")):
+    if not label:
+        return _resources_page(request, error="Label is required.", status_code=400)
+    if url and not url.startswith(("http://", "https://")):
         return _resources_page(request, error="The URL must start with http:// or https://.", status_code=400)
     KREWE_LINKS().put_item(Item={
         "link_id": f"lnk_{uuid.uuid4().hex}",
-        "label": label, "url": url, "description": description.strip() or None,
+        "label": label, "url": url or None, "description": description.strip() or None,
         "sort_order": len(_sorted_krewe_links()),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
@@ -1478,18 +1478,18 @@ def create_krewe_link(
 @router.post("/clowns/resources/{link_id}")
 def update_krewe_link(
     request: Request, link_id: str,
-    label: str = Form(...), url: str = Form(...), description: str = Form(""),
+    label: str = Form(...), url: str = Form(""), description: str = Form(""),
 ) -> Response:
     label, url = label.strip(), url.strip()
-    if not label or not url:
-        return _resources_page(request, error="Label and URL are required.", status_code=400)
-    if not url.startswith(("http://", "https://")):
+    if not label:
+        return _resources_page(request, error="Label is required.", status_code=400)
+    if url and not url.startswith(("http://", "https://")):
         return _resources_page(request, error="The URL must start with http:// or https://.", status_code=400)
     KREWE_LINKS().update_item(
         Key={"link_id": link_id},
         UpdateExpression="SET label = :l, #u = :u, description = :d",
         ExpressionAttributeNames={"#u": "url"},
-        ExpressionAttributeValues={":l": label, ":u": url, ":d": description.strip() or None},
+        ExpressionAttributeValues={":l": label, ":u": url or None, ":d": description.strip() or None},
     )
     return RedirectResponse("/admin/clowns/resources", status_code=303)
 

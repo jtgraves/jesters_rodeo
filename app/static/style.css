@@ -713,6 +713,7 @@ img.event-hero { opacity: 0.5; }
 .krewe-links { padding-left: 1.1rem; }
 .krewe-links > li { margin-bottom: var(--space-2); }
 .krewe-link-desc { margin: 0.1rem 0 0; color: var(--color-muted); }
+.krewe-link-label { font-weight: 600; }  /* a resource with no url -- info, not a link */
 /* Admin resources: label + reorder on one row, edit form tucked behind a
    disclosure so a page of links isn't a wall of input fields. */
 .krewe-link-row {
@@ -722,7 +723,6 @@ img.event-hero { opacity: 0.5; }
   gap: var(--space-1);
 }
 .krewe-link-reorder {
-  display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   flex: 0 0 auto;
@@ -736,3 +736,21 @@ img.event-hero { opacity: 0.5; }
 }
 .krewe-link-edit[open] > summary { margin-bottom: var(--space-1); }
 .krewe-link-edit .faq-admin-fields { max-width: 40rem; }
+
+/* All resource management (reorder, edit, delete, add) stays off until an
+   admin opts in via the checkbox -- pure CSS, same toggle mechanic as the
+   nav hamburger. Members never see the checkbox or label at all. */
+.resources-manage-checkbox { display: none; }
+.resources-manage-label {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--color-accent);
+  font-size: 0.9rem;
+  margin: var(--space-2) 0 var(--space-1);
+}
+.resources-manage-label-on { display: none; }
+.resources-admin-inline, .resources-admin-block { display: none; }
+#resources-manage-toggle:checked ~ .resources-body .resources-manage-label-off { display: none; }
+#resources-manage-toggle:checked ~ .resources-body .resources-manage-label-on { display: inline-block; }
+#resources-manage-toggle:checked ~ .resources-body .resources-admin-inline { display: inline-flex; }
+#resources-manage-toggle:checked ~ .resources-body .resources-admin-block { display: block; }

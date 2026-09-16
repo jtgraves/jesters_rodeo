@@ -415,6 +415,69 @@ def test_resources_admin_edit_form_is_behind_a_disclosure(dynamodb_tables):
         ctx.stop()
 
 
+def test_resources_manage_toggle_markup_is_admin_only(dynamodb_tables):
+    m, mctx = _client(admin=False)
+    try:
+        body = m.get("/admin/clowns/resources").text
+        assert 'id="resources-manage-toggle"' not in body
+        assert "Manage resources" not in body
+    finally:
+        mctx.stop()
+    a, actx = _client(admin=True)
+    try:
+        body = a.get("/admin/clowns/resources").text
+        assert 'id="resources-manage-toggle"' in body
+        assert "Manage resources" in body
+    finally:
+        actx.stop()
+
+
+def test_resources_can_add_a_link_less_information_entry(dynamodb_tables):
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.post("/admin/clowns/resources",
+                       data={"label": "Bring your own throw bag", "url": "", "description": "No link needed."},
+                       follow_redirects=False)
+        assert resp.status_code == 303
+        items = KREWE_LINKS().scan()["Items"]
+        assert len(items) == 1
+        assert items[0]["url"] is None
+        assert items[0]["label"] == "Bring your own throw bag"
+
+        page = c.get("/admin/clowns/resources").text
+        assert "Bring your own throw bag" in page
+        # It shows as plain text, not a link.
+        assert 'class="krewe-link-label"' in page
+    finally:
+        ctx.stop()
+
+
+def test_resources_create_rejects_blank_label(dynamodb_tables):
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.post("/admin/clowns/resources", data={"label": "  ", "url": "", "description": ""},
+                       follow_redirects=False)
+        assert resp.status_code == 400
+        assert KREWE_LINKS().scan()["Items"] == []
+    finally:
+        ctx.stop()
+
+
+def test_resources_update_can_clear_the_url_to_make_it_info_only(dynamodb_tables):
+    _put_link("lnk_1", label="Old rules doc", url="https://docs.google.com/old")
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.post("/admin/clowns/resources/lnk_1",
+                       data={"label": "Old rules doc", "url": "", "description": "Retired, ask a lieutenant."},
+                       follow_redirects=False)
+        assert resp.status_code == 303
+    finally:
+        ctx.stop()
+    item = KREWE_LINKS().get_item(Key={"link_id": "lnk_1"})["Item"]
+    assert item["url"] is None
+    assert item["description"] == "Retired, ask a lieutenant."
+
+
 def test_resources_admin_can_add_edit_move_delete(dynamodb_tables):
     c, ctx = _client(admin=True)
     try:

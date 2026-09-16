@@ -7,16 +7,29 @@
 {% endif %}
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
+{% if request.state.is_admin %}
+{# Pure-CSS toggle: everything below with class "resources-admin-*" stays
+   hidden -- even from an admin -- until this is checked. Members never see
+   the checkbox or label at all, so there's nothing for them to turn on. #}
+<input type="checkbox" id="resources-manage-toggle" class="resources-manage-checkbox">
+{% endif %}
+
+<div class="resources-body">
 {% if not links %}
-<p>No links yet.</p>
+<p>No resources yet.</p>
 {% else %}
 <ul class="krewe-links">
 {% for lk in links %}
   <li>
     <div class="krewe-link-row">
+      {% if lk.url %}
       <a href="{{ lk.url }}" target="_blank" rel="noopener">{{ lk.label }}</a>
+      {% else %}
+      <span class="krewe-link-label">{{ lk.label }}</span>
+      {% endif %}
       {% if request.state.is_admin %}
-      <form method="post" action="/admin/clowns/resources/{{ lk.link_id }}/move" class="krewe-link-reorder">
+      <form method="post" action="/admin/clowns/resources/{{ lk.link_id }}/move"
+            class="krewe-link-reorder resources-admin-inline">
         <span class="faq-admin-num">#{{ loop.index }}</span>
         <button class="icon-btn" type="submit" name="direction" value="up"
                 {% if loop.first %}disabled{% endif %} aria-label="Move up" title="Move up">&#9650;</button>
@@ -27,17 +40,20 @@
     </div>
     {% if lk.description %}<p class="krewe-link-desc">{{ lk.description }}</p>{% endif %}
     {% if request.state.is_admin %}
-    <details class="krewe-link-edit">
+    <details class="krewe-link-edit resources-admin-block">
       <summary>Edit</summary>
       <form method="post" action="/admin/clowns/resources/{{ lk.link_id }}" class="faq-admin-fields">
         <label>Label <input type="text" name="label" value="{{ lk.label }}" required></label>
-        <label>URL <input type="url" name="url" value="{{ lk.url }}" required></label>
+        <label>URL
+          <input type="url" name="url" value="{{ lk.url or '' }}"
+                 placeholder="https://... (leave blank for information with no link)">
+        </label>
         <label>Description <input type="text" name="description" value="{{ lk.description or '' }}"></label>
         <div class="faq-admin-actions">
           <button type="submit">Save</button>
           <button type="submit" class="btn-danger"
                   formaction="/admin/clowns/resources/{{ lk.link_id }}/delete" formnovalidate
-                  onclick="return confirm('Delete this link?')">Delete</button>
+                  onclick="return confirm('Delete this resource?')">Delete</button>
         </div>
       </form>
     </details>
@@ -48,12 +64,19 @@
 {% endif %}
 
 {% if request.state.is_admin %}
-<h2>Add a link</h2>
-<form method="post" action="/admin/clowns/resources" class="faq-admin-fields faq-admin-new">
-  <label>Label <input type="text" name="label" required></label>
-  <label>URL <input type="url" name="url" placeholder="https://docs.google.com/..." required></label>
-  <label>Description <input type="text" name="description"></label>
-  <div class="faq-admin-actions"><button type="submit">Add to the bottom</button></div>
-</form>
+<label for="resources-manage-toggle" class="resources-manage-label resources-manage-label-off">Manage resources ▾</label>
+<label for="resources-manage-toggle" class="resources-manage-label resources-manage-label-on">Hide resource management ▴</label>
+<div class="resources-admin-block">
+  <h2>Add a resource</h2>
+  <form method="post" action="/admin/clowns/resources" class="faq-admin-fields faq-admin-new">
+    <label>Label <input type="text" name="label" required></label>
+    <label>URL
+      <input type="url" name="url" placeholder="https://docs.google.com/... (leave blank for information with no link)">
+    </label>
+    <label>Description <input type="text" name="description"></label>
+    <div class="faq-admin-actions"><button type="submit">Add to the bottom</button></div>
+  </form>
+</div>
 {% endif %}
+</div>
 {% endblock %}
