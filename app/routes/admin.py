@@ -1619,7 +1619,7 @@ def clowns_directory(request: Request) -> Response:
     )
 
 
-# ---- Manage clowns (admin) ----
+# ---- Manage roster (admin) ----
 
 def _parse_years(text: str) -> list[int]:
     """'2018-2021, 2023' -> [2018, 2019, 2020, 2021, 2023]. Splits on any run
