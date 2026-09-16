@@ -164,6 +164,20 @@ th, td {
   color: var(--color-muted);
 }
 .nav-group-label:first-child { padding-top: 0.2rem; }
+/* Marks a nav link (or a whole group's label) a plain clown never sees. */
+.nav-admin-tag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-warn);
+  color: var(--color-accent-contrast);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
 
 /* ---- Public nav: no bar of its own, no wordmark -- just a hamburger in the
    top-right at every width. On pages with a banner (body.has-hero) it floats

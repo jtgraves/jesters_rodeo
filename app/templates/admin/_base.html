@@ -18,6 +18,10 @@
     <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">☰</label>
     <nav class="nav-links" aria-label="Admin">
 
+      {# A "Admin only" tag marks a link a plain clown would never see, so an
+         admin browsing this menu can tell at a glance what is and isn't
+         visible to everyone else. Whole sections that are admin-only (Event)
+         carry the tag on the group label instead of on every link in it. #}
       <p class="nav-group-label">Clowns</p>
       {# /admin/clowns redirects here; keeps old bookmarks + this href working. #}
       <a href="/admin/clowns/resources">Resources</a>
@@ -25,9 +29,9 @@
       <a href="/admin/clowns/directory">Directory</a>
       <a href="/admin/clowns/profile">My profile</a>
       {% if admin %}
-      <a href="/admin/clowns/manage">Manage roster</a>
-      <a href="/admin/clowns/import">Import roster CSV</a>
-      <a href="/admin/clown_mgmt">Logins &amp; roles</a>
+      <a href="/admin/clowns/manage">Manage roster <span class="nav-admin-tag">Admin only</span></a>
+      <a href="/admin/clowns/import">Import roster CSV <span class="nav-admin-tag">Admin only</span></a>
+      <a href="/admin/clown_mgmt">Clown Management <span class="nav-admin-tag">Admin only</span></a>
       {% endif %}
 
       <p class="nav-group-label">Ticketing</p>
@@ -36,10 +40,12 @@
       <a href="/admin/orders">Orders</a>
       <a href="/admin/waitlist">Waitlist</a>
       <a href="/admin/checkin">Check-in</a>
-      {% if admin %}<a href="/admin/give-tickets">Give tickets</a>{% endif %}
+      {% if admin %}
+      <a href="/admin/give-tickets">Give tickets <span class="nav-admin-tag">Admin only</span></a>
+      {% endif %}
 
       {% if admin %}
-      <p class="nav-group-label">Event</p>
+      <p class="nav-group-label">Event <span class="nav-admin-tag">Admin only</span></p>
       <a href="/admin/events">Events</a>
       <a href="/admin/discount-codes">Discount codes</a>
       <a href="/admin/announcements">Announcements &amp; Alerts</a>
