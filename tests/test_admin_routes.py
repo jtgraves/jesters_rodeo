@@ -1434,3 +1434,22 @@ def test_admin_nav_shows_clown_mgmt_link(admin_client):
     _put_event()
     resp = admin_client.get("/admin/orders?event_id=evt_2026")
     assert 'href="/admin/clown_mgmt"' in resp.text
+
+
+def test_banner_names_the_section_for_an_admin(admin_client):
+    _put_event()
+    # An admin on an admin-only page sees the admin banner...
+    resp = admin_client.get("/admin/events")
+    assert "Reaux-de-Eaux Admins" in resp.text
+    assert "Reaux-de-Eaux Clowns" not in resp.text
+    # ...but the clowns banner on a /admin/clowns/* page -- the banner names
+    # the section, not the viewer's role.
+    resp = admin_client.get("/admin/clowns/roster")
+    assert "Reaux-de-Eaux Clowns" in resp.text
+    assert "Reaux-de-Eaux Admins" not in resp.text
+
+
+def test_banner_names_the_clowns_section_for_a_member(member_client):
+    resp = member_client.get("/admin/clowns/resources")
+    assert "Reaux-de-Eaux Clowns" in resp.text
+    assert "Reaux-de-Eaux Admins" not in resp.text

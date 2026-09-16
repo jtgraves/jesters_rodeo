@@ -1,9 +1,16 @@
 {% extends "base.html" %}
 {% block nav %}
 {% set admin = request.state.is_admin %}
+{# The banner names whichever section of /admin the current page belongs
+   to -- /admin/clowns/* is the members' area, everything else is admin
+   operations -- not the viewer's role: an admin on a roster page still
+   sees "Clowns", same as a member would. #}
+{% set in_clowns_section = request.url.path.startswith('/admin/clowns') %}
 <header class="site-nav">
   <div class="site-nav-bar">
-    <a class="brand" href="{{ '/admin/events' if admin else '/admin/clowns/resources' }}">Jester's Reaux-de-Eaux</a>
+    <a class="brand" href="{{ '/admin/events' if admin else '/admin/clowns/resources' }}">
+      {{ "Reaux-de-Eaux Clowns" if in_clowns_section else "Reaux-de-Eaux Admins" }}
+    </a>
     {# Pure-CSS hamburger: a checkbox + label toggle the menu, no JS. One
        grouped menu at every width -- it carries both the clown-facing pages
        and the admin-only sections, too many links for an inline bar. #}
