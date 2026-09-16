@@ -1583,6 +1583,13 @@ def _current_krewe_year() -> int:
     return max(years) if years else date.today().year
 
 
+def _current_lieutenants(profiles: list[dict]) -> list[dict]:
+    # Lieutenant is a current-standing flag, not tracked per year, so this
+    # is deliberately independent of the roster's year filter; a departed
+    # (inactive) former lieutenant isn't shown as if still serving.
+    return [p for p in profiles if p.get("is_lieutenant") and p.get("active", True)]
+
+
 @member_router.get("/clowns/roster")
 def clowns_roster(request: Request, year: int | None = None) -> Response:
     profiles = _all_profiles()
@@ -1594,21 +1601,19 @@ def clowns_roster(request: Request, year: int | None = None) -> Response:
     ]
     return templates.TemplateResponse(
         request, "admin/clowns_roster.html",
-        {"riders": riders, "year": selected, "all_years": all_years},
-    )
-
-
-@member_router.get("/clowns/lieutenants")
-def clowns_lieutenants(request: Request) -> Response:
-    lts = [p for p in _all_profiles() if p.get("is_lieutenant")]
-    return templates.TemplateResponse(
-        request, "admin/clowns_lieutenants.html", {"lieutenants": lts}
+        {
+            "riders": riders, "year": selected, "all_years": all_years,
+            "lieutenants": _current_lieutenants(profiles),
+        },
     )
 
 
 @member_router.get("/clowns/directory")
 def clowns_directory(request: Request) -> Response:
     people = [p for p in _all_profiles() if p.get("active", True)]
+    # Lieutenants first (alphabetical within each group) -- _all_profiles()
+    # already sorted alphabetically, so this only needs to promote lieutenants.
+    people.sort(key=lambda p: not p.get("is_lieutenant"))
     return templates.TemplateResponse(
         request, "admin/clowns_directory.html", {"people": people}
     )

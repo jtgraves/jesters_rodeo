@@ -175,16 +175,34 @@ def test_roster_year_param_and_milestone(dynamodb_tables):
         ctx.stop()
 
 
-def test_lieutenants_page_shows_only_lieutenants(dynamodb_tables):
+def test_roster_shows_lieutenants_section_regardless_of_selected_year(dynamodb_tables):
+    # No events seeded -> _current_krewe_year() falls back to today's year,
+    # so Lou (rode only in 2025) won't be in the year-filtered grid below --
+    # the lieutenant spotlight at the top is independent of that filter.
     _put_profile("clown_lt", "Lou", [2025], is_lieutenant=True,
                  lieutenant_title="Float 3 Lieutenant", bio="Been steering since 2009.")
-    _put_profile("clown_reg", "Reg", [2025])
     c, ctx = _client()
     try:
-        resp = c.get("/admin/clowns/lieutenants")
+        resp = c.get("/admin/clowns/roster")
+        assert "Float Lieutenants" in resp.text
         assert "Lou" in resp.text and "Float 3 Lieutenant" in resp.text
         assert "Been steering since 2009." in resp.text
-        assert "Reg" not in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_roster_lieutenant_section_excludes_inactive_and_non_lieutenants(dynamodb_tables):
+    # An inactive former lieutenant still has a historical ride on record --
+    # that stays in the year grid below -- but isn't spotlighted as if still
+    # serving.
+    _put_profile("clown_gone_lt", "Gone", [2020], is_lieutenant=True, active=False)
+    _put_profile("clown_reg", "Reg", [2020])
+    c, ctx = _client()
+    try:
+        resp = c.get("/admin/clowns/roster?year=2020")
+        assert "Float Lieutenants" not in resp.text
+        assert "Gone" in resp.text  # still on the 2020 roster grid
+        assert "Reg" in resp.text
     finally:
         ctx.stop()
 
@@ -200,6 +218,19 @@ def test_directory_shows_active_contact_rows(dynamodb_tables):
         assert "(504)555-1234" in resp.text
         assert "Gabby" in resp.text
         assert "Gone" not in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_directory_lists_lieutenants_first_with_a_badge(dynamodb_tables):
+    _put_profile("clown_a", "Amy", [2025])
+    _put_profile("clown_z", "Zeke", [2025], is_lieutenant=True, lieutenant_title="Float 1 Lieutenant")
+    c, ctx = _client()
+    try:
+        resp = c.get("/admin/clowns/directory")
+        assert resp.text.index("Zeke") < resp.text.index("Amy")  # lieutenant sorts first
+        assert "🎖 Lieutenant" in resp.text
+        assert "Float 1 Lieutenant" in resp.text
     finally:
         ctx.stop()
 
@@ -692,7 +723,7 @@ def test_manage_link_rejects_login_already_linked_to_another_profile(dynamodb_ta
 def test_every_clowns_view_page_renders_for_a_member(dynamodb_tables):
     m, mctx = _client(admin=False)
     try:
-        for path in ("/admin/clowns", "/admin/clowns/roster", "/admin/clowns/lieutenants",
+        for path in ("/admin/clowns", "/admin/clowns/roster",
                      "/admin/clowns/directory", "/admin/clowns/resources", "/admin/clowns/profile"):
             assert m.get(path).status_code == 200, path
     finally:

@@ -1,6 +1,21 @@
 {% extends "admin/_base.html" %}
 {% block content %}
-<h1>Roster — {{ year }}</h1>
+<h1>Roster</h1>
+
+{% if lieutenants %}
+<h2>Float Lieutenants</h2>
+{% for l in lieutenants %}
+<section class="lieutenant">
+  {% if l.photo_url %}<img class="lieutenant-photo" src="{{ l.photo_url }}" alt="{{ l.display_name or '(no name)' }}">{% endif %}
+  <div>
+    <h3>{{ l.display_name or '(no name)' }}{% if l.lieutenant_title %} — {{ l.lieutenant_title }}{% endif %}</h3>
+    {% if l.bio %}<div class="lieutenant-bio richtext">{{ l.bio | richtext }}</div>{% endif %}
+  </div>
+</section>
+{% endfor %}
+{% endif %}
+
+<h2>{{ year }} Riders</h2>
 <form method="get" action="/admin/clowns/roster">
   <label>Year
     <select name="year" onchange="this.form.submit()">
