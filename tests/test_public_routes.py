@@ -74,33 +74,53 @@ def test_event_page_renders_banner_and_logo_when_set(dynamodb_tables):
     assert resp.text.index("event-hero-logo") < resp.text.index('class="event-header"')
 
 
-def test_event_page_rotates_between_multiple_banner_images(dynamodb_tables):
+def test_event_page_rotates_through_the_whole_banner_pool(dynamodb_tables):
+    urls = [f"https://example.com/b{n}.jpg" for n in range(1, 6)]  # 5 images
+    _put_event(banner_image_urls=urls)
+    resp = client.get("/")
+    text = resp.text
+    assert "event-hero-rotator" in text
+    for url in urls:
+        assert f'src="{url}"' in text
+    assert text.count('class="event-hero"') == 5  # all 5 render, none dropped
+    assert "event-hero--fallback" not in text
+    # The keyframe and per-image timing are generated to fit the pool size,
+    # not a fixed 2/3-slot animation -- 5 images * 6s/slot each.
+    assert "@keyframes heroFade-evt_2026" in text
+    assert "30s linear infinite" in text
+    for delay in (0, 6, 12, 18, 24):
+        assert f"animation-delay: {delay}s;" in text
+
+
+def test_event_page_uses_plain_hero_for_a_single_pool_image(dynamodb_tables):
+    _put_event(banner_image_urls=["https://example.com/only.jpg"])
+    resp = client.get("/")
+    assert 'src="https://example.com/only.jpg"' in resp.text
+    assert "event-hero-rotator" not in resp.text
+
+
+def test_event_page_falls_back_to_legacy_banner_fields_when_pool_is_unset(dynamodb_tables):
+    # Events that predate the banner pool feature only have the three fixed
+    # legacy fields -- no banner_image_urls key at all.
     _put_event(
         banner_image_url="https://example.com/b1.jpg",
         banner_image_url_2="https://example.com/b2.jpg",
         banner_image_url_3="https://example.com/b3.jpg",
     )
     resp = client.get("/")
-    assert "event-hero-rotator event-hero-rotator--3" in resp.text
+    assert "event-hero-rotator" in resp.text
     for n in (1, 2, 3):
         assert f'src="https://example.com/b{n}.jpg"' in resp.text
     assert "event-hero--fallback" not in resp.text
 
 
-def test_event_page_uses_plain_hero_for_a_single_banner_image(dynamodb_tables):
-    _put_event(banner_image_url="https://example.com/only.jpg")
-    resp = client.get("/")
-    assert 'src="https://example.com/only.jpg"' in resp.text
-    assert "event-hero-rotator" not in resp.text
-
-
-def test_event_page_rotator_skips_empty_banner_slots(dynamodb_tables):
+def test_event_page_legacy_fallback_skips_empty_banner_slots(dynamodb_tables):
     _put_event(
         banner_image_url="https://example.com/b1.jpg",
-        banner_image_url_3="https://example.com/b3.jpg",
+        banner_image_url_3="https://example.com/b3.jpg",  # slot 2 left unset
     )
     resp = client.get("/")
-    assert "event-hero-rotator--2" in resp.text
+    assert resp.text.count('class="event-hero"') == 2  # the gap wasn't rendered as a third image
     assert 'src="https://example.com/b1.jpg"' in resp.text
     assert 'src="https://example.com/b3.jpg"' in resp.text
 

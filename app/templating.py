@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import random
 import re
 from pathlib import Path
 
@@ -39,6 +40,15 @@ def _ordinal(value: object) -> str:
 
 templates.env.filters["ordinal"] = _ordinal
 templates.env.filters["richtext"] = render_richtext
+
+
+def _shuffled(items: list) -> list:
+    """A fresh, randomly-ordered copy -- doesn't mutate `items`, unlike
+    random.shuffle (which also returns None, unusable as a Jinja filter)."""
+    return random.sample(items, len(items))
+
+
+templates.env.filters["shuffled"] = _shuffled
 
 # Cache-busting token for /static/style.css. The <link> URL is otherwise
 # identical across deploys, so a browser that cached the stylesheet can serve

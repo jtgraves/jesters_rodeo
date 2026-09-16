@@ -30,27 +30,37 @@
     </form>
     <form method="post" action="/admin/events/{{ e.event_id }}/images" enctype="multipart/form-data" class="event-images-form">
       <label>
-        {% if e.banner_image_url %}<img src="{{ e.banner_image_url }}" alt="" class="event-image-preview"><br>{% endif %}
-        Banner image <input type="file" name="banner_image" accept="image/jpeg,image/png,image/gif,image/webp">
-      </label>
-      {% if e.banner_image_url %}<label><input type="checkbox" name="remove_banner_image" value="1"> Remove</label>{% endif %}
-      <label>
-        {% if e.banner_image_url_2 %}<img src="{{ e.banner_image_url_2 }}" alt="" class="event-image-preview"><br>{% endif %}
-        Banner image 2 <input type="file" name="banner_image_2" accept="image/jpeg,image/png,image/gif,image/webp">
-      </label>
-      {% if e.banner_image_url_2 %}<label><input type="checkbox" name="remove_banner_image_2" value="1"> Remove</label>{% endif %}
-      <label>
-        {% if e.banner_image_url_3 %}<img src="{{ e.banner_image_url_3 }}" alt="" class="event-image-preview"><br>{% endif %}
-        Banner image 3 <input type="file" name="banner_image_3" accept="image/jpeg,image/png,image/gif,image/webp">
-      </label>
-      {% if e.banner_image_url_3 %}<label><input type="checkbox" name="remove_banner_image_3" value="1"> Remove</label>{% endif %}
-      <label>
         {% if e.logo_url %}<img src="{{ e.logo_url }}" alt="" class="event-image-preview"><br>{% endif %}
         Logo <input type="file" name="logo_image" accept="image/jpeg,image/png,image/gif,image/webp">
       </label>
       {% if e.logo_url %}<label><input type="checkbox" name="remove_logo_image" value="1"> Remove</label>{% endif %}
-      <button type="submit">Save images</button>
+      <button type="submit">Save logo</button>
     </form>
+    {% set pool = e.banner_image_urls or [] %}
+    <fieldset class="banner-pool">
+      <legend>Banner photo pool
+        ({{ pool | length }} image{{ '' if (pool | length) == 1 else 's' }}) —
+        the public page cross-fades through all of them, in a random order each visit.</legend>
+      {% if pool %}
+      <ul class="banner-pool-grid">
+        {% for url in pool %}
+        <li>
+          <img src="{{ url }}" alt="" class="event-image-preview">
+          <form method="post" action="/admin/events/{{ e.event_id }}/banner-pool/remove">
+            <input type="hidden" name="url" value="{{ url }}">
+            <button type="submit" class="btn-danger" onclick="return confirm('Remove this photo from the pool?')">Remove</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <form method="post" action="/admin/events/{{ e.event_id }}/banner-pool" enctype="multipart/form-data" class="event-images-form">
+        <label>Add a banner photo
+          <input type="file" name="image" accept="image/jpeg,image/png,image/gif,image/webp" required>
+        </label>
+        <button type="submit">Add to pool</button>
+      </form>
+    </fieldset>
     <form method="post" action="/admin/events/{{ e.event_id }}/timeline">
       {% set timeline_rows = e.timeline or [] %}
       {% include "admin/_timeline_fields.html" %}

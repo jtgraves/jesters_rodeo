@@ -187,20 +187,13 @@ def create_event(
     contact_name: str = Form(""),
     contact_email: str = Form(""),
     contact_phone: str = Form(""),
-    banner_image: UploadFile | None = File(None),
-    banner_image_2: UploadFile | None = File(None),
-    banner_image_3: UploadFile | None = File(None),
     logo_image: UploadFile | None = File(None),
     timeline_time: list[str] = Form([]),
     timeline_activity: list[str] = Form([]),
     timeline_details: list[str] = Form([]),
 ) -> Response:
     event_id = f"evt_{year}"
-    banner_url, banner_error = _maybe_upload_image(banner_image, event_id, "Banner image")
-    banner_url_2, banner_error_2 = _maybe_upload_image(banner_image_2, event_id, "Banner image 2")
-    banner_url_3, banner_error_3 = _maybe_upload_image(banner_image_3, event_id, "Banner image 3")
-    logo_url, logo_error = _maybe_upload_image(logo_image, event_id, "Logo")
-    upload_error = banner_error or banner_error_2 or banner_error_3 or logo_error
+    logo_url, upload_error = _maybe_upload_image(logo_image, event_id, "Logo")
     if upload_error:
         return _new_event_page(request, error=upload_error, status_code=400)
 
@@ -212,9 +205,10 @@ def create_event(
                 "ticket_price_cents": ticket_price_cents, "capacity": capacity,
                 "tickets_sold_count": 0, "registration_open": False, "status": "draft",
                 "registration_opens_at": None, "registration_closes_at": None,
-                "banner_image_url": banner_url,
-                "banner_image_url_2": banner_url_2,
-                "banner_image_url_3": banner_url_3,
+                # The banner pool is built afterward on the Events page (one
+                # upload at a time -- see add_banner_pool_image); a brand new
+                # event has no banner_image_urls yet.
+                "banner_image_urls": [],
                 "logo_url": logo_url,
                 "address": address.strip() or None,
                 "contact_name": contact_name.strip() or None,
@@ -260,47 +254,59 @@ def close_event(event_id: str) -> RedirectResponse:
 def update_event_images(
     request: Request,
     event_id: str,
-    banner_image: UploadFile | None = File(None),
-    banner_image_2: UploadFile | None = File(None),
-    banner_image_3: UploadFile | None = File(None),
     logo_image: UploadFile | None = File(None),
-    remove_banner_image: str = Form(""),
-    remove_banner_image_2: str = Form(""),
-    remove_banner_image_3: str = Form(""),
     remove_logo_image: str = Form(""),
 ) -> Response:
-    banner_url, banner_error = _maybe_upload_image(banner_image, event_id, "Banner image")
-    banner_url_2, banner_error_2 = _maybe_upload_image(banner_image_2, event_id, "Banner image 2")
-    banner_url_3, banner_error_3 = _maybe_upload_image(banner_image_3, event_id, "Banner image 3")
-    logo_url, logo_error = _maybe_upload_image(logo_image, event_id, "Logo")
-    upload_error = banner_error or banner_error_2 or banner_error_3 or logo_error
+    logo_url, upload_error = _maybe_upload_image(logo_image, event_id, "Logo")
     if upload_error:
         return _events_page(request, error=upload_error, status_code=400)
 
     # A file input can't be pre-filled with "the current image", so "no new
     # file chosen" has to mean leave-as-is, not clear -- clearing needs the
-    # explicit Remove checkbox instead. Only touch fields that are actually
-    # changing: a bare SET on every field, unconditionally, would silently
-    # wipe an existing image every time the admin only meant to change the
-    # other one.
-    updates: dict[str, Any] = {}
-    for field, new_url, remove in (
-        ("banner_image_url", banner_url, remove_banner_image),
-        ("banner_image_url_2", banner_url_2, remove_banner_image_2),
-        ("banner_image_url_3", banner_url_3, remove_banner_image_3),
-        ("logo_url", logo_url, remove_logo_image),
-    ):
-        if new_url:
-            updates[field] = new_url
-        elif remove:
-            updates[field] = None
-
-    if updates:
+    # explicit Remove checkbox instead.
+    if logo_url:
         EVENTS().update_item(
             Key={"event_id": event_id},
-            UpdateExpression="SET " + ", ".join(f"{k} = :{k}" for k in updates),
-            ExpressionAttributeValues={f":{k}": v for k, v in updates.items()},
+            UpdateExpression="SET logo_url = :u",
+            ExpressionAttributeValues={":u": logo_url},
         )
+    elif remove_logo_image:
+        EVENTS().update_item(
+            Key={"event_id": event_id},
+            UpdateExpression="SET logo_url = :u",
+            ExpressionAttributeValues={":u": None},
+        )
+    return RedirectResponse("/admin/events", status_code=303)
+
+
+@router.post("/events/{event_id}/banner-pool")
+def add_banner_pool_image(request: Request, event_id: str, image: UploadFile = File(...)) -> Response:
+    url, upload_error = _maybe_upload_image(image, event_id, "Banner image")
+    if upload_error:
+        return _events_page(request, error=upload_error, status_code=400)
+    if not url:
+        return _events_page(request, error="Choose an image to add.", status_code=400)
+
+    event = EVENTS().get_item(Key={"event_id": event_id}).get("Item") or {}
+    pool = list(event.get("banner_image_urls") or [])
+    pool.append(url)
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        UpdateExpression="SET banner_image_urls = :p",
+        ExpressionAttributeValues={":p": pool},
+    )
+    return RedirectResponse("/admin/events", status_code=303)
+
+
+@router.post("/events/{event_id}/banner-pool/remove")
+def remove_banner_pool_image(event_id: str, url: str = Form(...)) -> RedirectResponse:
+    event = EVENTS().get_item(Key={"event_id": event_id}).get("Item") or {}
+    pool = [u for u in (event.get("banner_image_urls") or []) if u != url]
+    EVENTS().update_item(
+        Key={"event_id": event_id},
+        UpdateExpression="SET banner_image_urls = :p",
+        ExpressionAttributeValues={":p": pool},
+    )
     return RedirectResponse("/admin/events", status_code=303)
 
 

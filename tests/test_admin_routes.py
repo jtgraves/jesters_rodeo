@@ -219,153 +219,166 @@ def test_event_admin_pages_carry_the_image_size_guard(admin_client):
         assert "after resizing" in resp.text, path
 
 
-def test_admin_can_create_event_with_uploaded_images(admin_client):
+def test_admin_can_create_event_with_a_logo(admin_client):
     resp = admin_client.post(
         "/admin/events",
         data=_create_event_form(),
-        files={
-            "banner_image": ("banner.jpg", b"fake-jpeg-bytes", "image/jpeg"),
-            "logo_image": ("logo.png", b"fake-png-bytes", "image/png"),
-        },
+        files={"logo_image": ("logo.png", b"fake-png-bytes", "image/png")},
         follow_redirects=False,
     )
     assert resp.status_code == 303
     event = EVENTS().get_item(Key={"event_id": "evt_2027"})["Item"]
-    assert event["banner_image_url"].startswith("https://event-images-test.s3.")
     assert event["logo_url"].startswith("https://event-images-test.s3.")
+    assert event["banner_image_urls"] == []  # built afterward, on the Events page
 
     # Confirm the object actually landed in S3, not just a plausible-looking URL.
-    key = event["banner_image_url"].split(".amazonaws.com/", 1)[1]
+    key = event["logo_url"].split(".amazonaws.com/", 1)[1]
     obj = boto3.client("s3", region_name="us-east-1").get_object(
         Bucket="event-images-test", Key=key
     )
-    assert obj["Body"].read() == b"fake-jpeg-bytes"
+    assert obj["Body"].read() == b"fake-png-bytes"
 
 
-def test_admin_can_upload_event_images(admin_client):
+def test_admin_can_upload_event_logo(admin_client):
     _put_event()  # no images set
     resp = admin_client.post(
         "/admin/events/evt_2026/images",
-        files={"banner_image": ("banner.jpg", b"fake-jpeg-bytes", "image/jpeg")},
+        files={"logo_image": ("logo.png", b"fake-png-bytes", "image/png")},
         follow_redirects=False,
     )
     assert resp.status_code == 303
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
-    assert event["banner_image_url"].startswith("https://event-images-test.s3.")
-    assert event.get("logo_url") is None  # untouched: no file, no remove checkbox
-
-
-def test_admin_can_remove_event_images(admin_client):
-    _put_event(banner_image_url="https://example.com/b.jpg", logo_url="https://example.com/l.png")
-    admin_client.post(
-        "/admin/events/evt_2026/images",
-        data={"remove_banner_image": "1", "remove_logo_image": "1"},
-        follow_redirects=False,
-    )
-    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
-    assert event.get("banner_image_url") is None
-    assert event.get("logo_url") is None
-
-
-def test_admin_uploading_one_image_does_not_touch_the_other(admin_client):
-    _put_event(banner_image_url="https://example.com/b.jpg", logo_url="https://example.com/l.png")
-    admin_client.post(
-        "/admin/events/evt_2026/images",
-        files={"logo_image": ("logo.png", b"new-logo-bytes", "image/png")},
-        follow_redirects=False,
-    )
-    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
-    assert event["banner_image_url"] == "https://example.com/b.jpg"  # untouched
     assert event["logo_url"].startswith("https://event-images-test.s3.")
 
 
-def test_admin_can_create_event_with_three_banner_images(admin_client):
-    resp = admin_client.post(
-        "/admin/events",
-        data=_create_event_form(),
-        files={
-            "banner_image": ("b1.jpg", b"banner-one", "image/jpeg"),
-            "banner_image_2": ("b2.jpg", b"banner-two", "image/jpeg"),
-            "banner_image_3": ("b3.jpg", b"banner-three", "image/jpeg"),
-        },
-        follow_redirects=False,
-    )
-    assert resp.status_code == 303
-    event = EVENTS().get_item(Key={"event_id": "evt_2027"})["Item"]
-    for field in ("banner_image_url", "banner_image_url_2", "banner_image_url_3"):
-        assert event[field].startswith("https://event-images-test.s3.")
-
-    key = event["banner_image_url_3"].split(".amazonaws.com/", 1)[1]
-    obj = boto3.client("s3", region_name="us-east-1").get_object(
-        Bucket="event-images-test", Key=key
-    )
-    assert obj["Body"].read() == b"banner-three"
-
-
-def test_admin_can_upload_extra_banner_images(admin_client):
-    _put_event(banner_image_url="https://example.com/b1.jpg")
-    resp = admin_client.post(
-        "/admin/events/evt_2026/images",
-        files={
-            "banner_image_2": ("b2.jpg", b"banner-two", "image/jpeg"),
-            "banner_image_3": ("b3.png", b"banner-three", "image/png"),
-        },
-        follow_redirects=False,
-    )
-    assert resp.status_code == 303
-    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
-    assert event["banner_image_url"] == "https://example.com/b1.jpg"  # untouched
-    assert event["banner_image_url_2"].startswith("https://event-images-test.s3.")
-    assert event["banner_image_url_3"].startswith("https://event-images-test.s3.")
-
-
-def test_admin_can_remove_a_single_extra_banner_image(admin_client):
-    _put_event(
-        banner_image_url="https://example.com/b1.jpg",
-        banner_image_url_2="https://example.com/b2.jpg",
-        banner_image_url_3="https://example.com/b3.jpg",
-    )
+def test_admin_can_remove_event_logo(admin_client):
+    _put_event(logo_url="https://example.com/l.png")
     admin_client.post(
         "/admin/events/evt_2026/images",
-        data={"remove_banner_image_2": "1"},
+        data={"remove_logo_image": "1"},
         follow_redirects=False,
     )
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
-    assert event["banner_image_url"] == "https://example.com/b1.jpg"
-    assert event.get("banner_image_url_2") is None
-    assert event["banner_image_url_3"] == "https://example.com/b3.jpg"
+    assert event.get("logo_url") is None
 
 
-def test_admin_rejects_oversized_image(admin_client):
+def test_admin_rejects_oversized_logo(admin_client):
     _put_event()
     oversized = b"x" * (2 * 1024 * 1024 + 1)
     resp = admin_client.post(
         "/admin/events/evt_2026/images",
-        files={"banner_image": ("banner.jpg", oversized, "image/jpeg")},
+        files={"logo_image": ("logo.jpg", oversized, "image/jpeg")},
         follow_redirects=False,
     )
     assert resp.status_code == 400
     assert "under 2mb" in resp.text.lower()
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
-    assert event.get("banner_image_url") is None
+    assert event.get("logo_url") is None
 
 
-def test_admin_rejects_non_image_content_type(admin_client):
+def test_admin_rejects_non_image_logo_content_type(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/images",
-        files={"banner_image": ("banner.txt", b"not an image", "text/plain")},
+        files={"logo_image": ("logo.txt", b"not an image", "text/plain")},
         follow_redirects=False,
     )
     assert resp.status_code == 400
     assert "must be a jpeg, png, gif, or webp" in resp.text.lower()
 
 
-def test_admin_events_page_shows_current_image_preview(admin_client):
-    _put_event(banner_image_url="https://example.com/b.jpg")
+# ---- Banner photo pool ----
+
+def test_admin_can_build_a_banner_pool_one_image_at_a_time(admin_client):
+    _put_event()  # no banner images set
+    for name, body in [("b1.jpg", b"banner-one"), ("b2.jpg", b"banner-two"), ("b3.jpg", b"banner-three")]:
+        resp = admin_client.post(
+            "/admin/events/evt_2026/banner-pool",
+            files={"image": (name, body, "image/jpeg")},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert len(event["banner_image_urls"]) == 3
+    for url in event["banner_image_urls"]:
+        assert url.startswith("https://event-images-test.s3.")
+
+    # Confirm the last upload actually landed in S3 with its own bytes.
+    key = event["banner_image_urls"][-1].split(".amazonaws.com/", 1)[1]
+    obj = boto3.client("s3", region_name="us-east-1").get_object(
+        Bucket="event-images-test", Key=key
+    )
+    assert obj["Body"].read() == b"banner-three"
+
+
+def test_admin_adding_a_banner_pool_image_does_not_touch_the_logo(admin_client):
+    _put_event(logo_url="https://example.com/l.png")
+    admin_client.post(
+        "/admin/events/evt_2026/banner-pool",
+        files={"image": ("b1.jpg", b"banner-one", "image/jpeg")},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["logo_url"] == "https://example.com/l.png"  # untouched
+    assert len(event["banner_image_urls"]) == 1
+
+
+def test_admin_can_remove_one_banner_pool_image(admin_client):
+    _put_event(banner_image_urls=[
+        "https://example.com/b1.jpg", "https://example.com/b2.jpg", "https://example.com/b3.jpg",
+    ])
+    resp = admin_client.post(
+        "/admin/events/evt_2026/banner-pool/remove",
+        data={"url": "https://example.com/b2.jpg"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["banner_image_urls"] == [
+        "https://example.com/b1.jpg", "https://example.com/b3.jpg",
+    ]
+
+
+def test_admin_rejects_oversized_banner_pool_image(admin_client):
+    _put_event()
+    oversized = b"x" * (2 * 1024 * 1024 + 1)
+    resp = admin_client.post(
+        "/admin/events/evt_2026/banner-pool",
+        files={"image": ("banner.jpg", oversized, "image/jpeg")},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    assert "under 2mb" in resp.text.lower()
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("banner_image_urls") in (None, [])
+
+
+def test_admin_rejects_non_image_banner_pool_content_type(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/banner-pool",
+        files={"image": ("banner.txt", b"not an image", "text/plain")},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    assert "must be a jpeg, png, gif, or webp" in resp.text.lower()
+
+
+def test_admin_events_page_shows_banner_pool_thumbnails(admin_client):
+    _put_event(banner_image_urls=["https://example.com/b.jpg"])
     resp = admin_client.get("/admin/events")
     assert 'src="https://example.com/b.jpg"' in resp.text
     assert "event-image-preview" in resp.text
+    assert "1 image)" in resp.text
+
+
+def test_admin_events_page_handles_events_with_no_banner_pool_key_at_all(admin_client):
+    # Events created before this feature existed have no banner_image_urls
+    # key in DynamoDB at all -- not None, entirely absent.
+    _put_event()
+    resp = admin_client.get("/admin/events")
+    assert resp.status_code == 200
+    assert "0 images)" in resp.text
 
 
 def test_admin_can_edit_event_details(admin_client):

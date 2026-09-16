@@ -1,14 +1,33 @@
 {% if event.banner_message %}
 <div class="event-banner event-banner--{{ event.banner_style or 'notice' }}" role="alert">{{ event.banner_message }}</div>
 {% endif %}
-{% set banner_images = [event.banner_image_url, event.banner_image_url_2, event.banner_image_url_3] | select | list %}
+{# banner_image_urls is the pool an admin manages on the Events page. Older
+   events that predate the pool fall back to the three fixed legacy slots. #}
+{% set pool = event.banner_image_urls or ([event.banner_image_url, event.banner_image_url_2, event.banner_image_url_3] | select | list) %}
+{% set banner_images = pool | shuffled %}
+{% set n = banner_images | length %}
 <div class="event-hero-wrap">
-{% if banner_images | length > 1 %}
-{# Two or three banners cross-fade on a pure-CSS timed loop -- see .event-hero-rotator. #}
-<div class="event-hero-rotator event-hero-rotator--{{ banner_images | length }}">
-  {% for src in banner_images %}<img class="event-hero" src="{{ src }}" alt="">{% endfor %}
+{% if n > 1 %}
+{# Every image in the pool cross-fades on a pure-CSS timed loop, no JS: each
+   gets an equal "slot" (6s) of a duration-N*6s cycle, staggered by
+   animation-delay. The keyframe's percentage offsets depend on N, so it's
+   computed here rather than fixed in style.css -- see .event-hero-rotator. #}
+{% set slot_seconds = 6 %}
+{% set slot_pct = 100 / n %}
+<div class="event-hero-rotator">
+  <style>
+    @keyframes heroFade-{{ event.event_id }} {
+      0%, {{ "%.4f"|format(slot_pct) }}%, 100% { opacity: 0; }
+      {{ "%.4f"|format(slot_pct / 6) }}%, {{ "%.4f"|format(slot_pct * 5 / 6) }}% { opacity: 0.5; }
+    }
+  </style>
+  {% for src in banner_images %}
+  <img class="event-hero" src="{{ src }}" alt=""
+       style="animation: heroFade-{{ event.event_id }} {{ n * slot_seconds }}s linear infinite;
+              animation-delay: {{ loop.index0 * slot_seconds }}s;">
+  {% endfor %}
 </div>
-{% elif banner_images | length == 1 %}
+{% elif n == 1 %}
 <img class="event-hero" src="{{ banner_images[0] }}" alt="">
 {% else %}
 <div class="event-hero event-hero--fallback"></div>
