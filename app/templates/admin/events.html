@@ -16,6 +16,9 @@
       <label>Name <input type="text" name="name" value="{{ e.name }}" required></label>
       <label>Date <input type="text" name="date" value="{{ e.date }}" placeholder="YYYY-MM-DD" required></label>
       <label>Location <input type="text" name="location" value="{{ e.location }}" required></label>
+      <label>Ticket price (cents)
+        <input type="number" name="ticket_price_cents" value="{{ e.ticket_price_cents }}" min="0" required>
+      </label>
       <label>Address <input type="text" name="address" value="{{ e.address or '' }}"></label>
       <label>Description
         <textarea name="description" class="richtext-input" required>{{ e.description }}</textarea>

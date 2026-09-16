@@ -375,6 +375,7 @@ def test_admin_can_edit_event_details(admin_client):
         data={
             "name": "New Name", "date": "2026-04-01",
             "description": "New description.", "location": "Baton Rouge",
+            "ticket_price_cents": "20000",
             "address": "1 Main St", "contact_name": "Jo", "contact_email": "jo@x.test",
             "contact_phone": "555-9",
         },
@@ -386,6 +387,7 @@ def test_admin_can_edit_event_details(admin_client):
     assert event["date"] == "2026-04-01"
     assert event["description"] == "New description."
     assert event["location"] == "Baton Rouge"
+    assert int(event["ticket_price_cents"]) == 20000
     assert event["address"] == "1 Main St"
     assert event["contact_name"] == "Jo"
     assert event["contact_email"] == "jo@x.test"
@@ -396,7 +398,8 @@ def test_admin_edit_event_details_rejects_blank_date(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "  ", "description": "D", "location": "L"},
+        data={"name": "N", "date": "  ", "description": "D", "location": "L",
+              "ticket_price_cents": "15000"},
         follow_redirects=False,
     )
     assert resp.status_code == 400
@@ -404,11 +407,25 @@ def test_admin_edit_event_details_rejects_blank_date(admin_client):
     assert event["date"] == "2026-03-14"  # unchanged
 
 
+def test_admin_edit_event_details_rejects_negative_price(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_cents": "-1"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert int(event["ticket_price_cents"]) == 15000  # unchanged
+
+
 def test_admin_edit_event_details_clears_blank_contact_fields(admin_client):
     _put_event(address="old addr", contact_name="Old Contact")
     admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L"},
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_cents": "15000"},
         follow_redirects=False,
     )
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
@@ -437,7 +454,8 @@ def test_admin_edit_event_details_rejects_blank_fields(admin_client):
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
         data={"name": "  ", "date": "2026-03-14",
-              "description": "New description.", "location": "Baton Rouge"},
+              "description": "New description.", "location": "Baton Rouge",
+              "ticket_price_cents": "15000"},
         follow_redirects=False,
     )
     assert resp.status_code == 400
@@ -451,6 +469,7 @@ def test_admin_events_page_prefills_details_form(admin_client):
     assert 'value="Existing Name"' in resp.text
     assert 'value="Existing Location"' in resp.text
     assert 'value="2026-03-14"' in resp.text  # date, from _put_event's default
+    assert 'value="15000"' in resp.text  # ticket_price_cents, from _put_event's default
 
 
 def test_admin_can_set_event_banner(admin_client):

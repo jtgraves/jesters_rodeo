@@ -312,6 +312,7 @@ def update_event_details(
     date: str = Form(...),
     description: str = Form(...),
     location: str = Form(...),
+    ticket_price_cents: int = Form(...),
     address: str = Form(""),
     contact_name: str = Form(""),
     contact_email: str = Form(""),
@@ -322,16 +323,20 @@ def update_event_details(
         return _events_page(
             request, error="Name, date, description, and location can't be empty.", status_code=400
         )
+    if ticket_price_cents < 0:
+        return _events_page(request, error="Ticket price can't be negative.", status_code=400)
     EVENTS().update_item(
         Key={"event_id": event_id},
         # name and location are both DynamoDB reserved words, hence the aliases.
         UpdateExpression=(
-            "SET #n = :n, #d = :date, description = :desc, #l = :l, address = :addr, "
+            "SET #n = :n, #d = :date, description = :desc, #l = :l, "
+            "ticket_price_cents = :price, address = :addr, "
             "contact_name = :cn, contact_email = :ce, contact_phone = :cp"
         ),
         ExpressionAttributeNames={"#n": "name", "#d": "date", "#l": "location"},
         ExpressionAttributeValues={
             ":n": name, ":date": date, ":desc": description, ":l": location,
+            ":price": ticket_price_cents,
             ":addr": address.strip() or None,
             ":cn": contact_name.strip() or None,
             ":ce": contact_email.strip() or None,
