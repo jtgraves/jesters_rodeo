@@ -1,6 +1,9 @@
 {% extends "admin/_base.html" %}
 {% block content %}
 <h1>Clown Management</h1>
+<p>Logins and admin access — invite a clown, promote or demote an
+   admin, remove someone's account entirely. For roster data (years ridden, lieutenant
+   status, active/inactive), use <a href="/admin/clowns/manage">Manage Roster</a>.</p>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
 <form method="post" action="/admin/clown_mgmt">

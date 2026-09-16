@@ -1,6 +1,9 @@
 {% extends "admin/_base.html" %}
 {% block content %}
 <h1>Manage Roster</h1>
+<p>Roster data for every clown — years ridden, lieutenant status,
+   active/inactive — including historical riders with no login of their own. To invite
+   someone or change who's an admin, use <a href="/admin/clown_mgmt">Clown Management</a>.</p>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
 <div class="table-scroll">

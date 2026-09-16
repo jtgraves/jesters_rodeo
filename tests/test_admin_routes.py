@@ -1436,6 +1436,15 @@ def test_admin_nav_shows_clown_mgmt_link(admin_client):
     assert 'href="/admin/clown_mgmt"' in resp.text
 
 
+def test_clown_mgmt_and_manage_roster_pages_cross_link_each_other(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=_FAKE_CLOWNS):
+        resp = admin_client.get("/admin/clown_mgmt")
+    assert 'href="/admin/clowns/manage"' in resp.text
+
+    resp = admin_client.get("/admin/clowns/manage")
+    assert 'href="/admin/clown_mgmt"' in resp.text
+
+
 def test_banner_names_the_section_for_an_admin(admin_client):
     _put_event()
     # An admin on an admin-only page sees the admin banner...
