@@ -237,7 +237,9 @@ def test_checkout_creates_pending_order_and_redirects(mock_create, dynamodb_tabl
     orders = ORDERS().scan()["Items"]
     assert len(orders) == 1
     assert orders[0]["status"] == "pending"
-    assert int(orders[0]["total_cents"]) == 30000
+    # 2 x $150.00 = $300.00, + a $9.27 processing fee the buyer covers.
+    assert int(orders[0]["processing_fee_cents"]) == 927
+    assert int(orders[0]["total_cents"]) == 30927
     assert orders[0]["stripe_checkout_session_id"] == "cs_test_123"
 
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
@@ -263,14 +265,19 @@ def test_checkout_charges_the_discounted_total_not_the_subtotal(mock_create, dyn
     # buyer paid full price while the order recorded the discount.
     assert line_item["price_data"]["unit_amount"] == 24000
     assert line_item["quantity"] == 1
+    # The processing fee is computed on the discounted total, not the subtotal.
+    fee_item = kwargs["line_items"][-1]
+    assert fee_item["price_data"]["unit_amount"] == 748
+    assert fee_item["price_data"]["product_data"]["name"] == "Card processing fee"
 
     order = ORDERS().scan()["Items"][0]
-    assert int(order["total_cents"]) == 24000
+    assert int(order["processing_fee_cents"]) == 748
+    assert int(order["total_cents"]) == 24748
     assert order["discount_code"] == "MEMBER20", "codes are stored normalized"
 
 
 @patch("app.routes.public.stripe.checkout.Session.create")
-def test_checkout_adds_donation_as_a_second_line_item(mock_create, dynamodb_tables):
+def test_checkout_adds_donation_and_processing_fee_as_separate_line_items(mock_create, dynamodb_tables):
     _put_event(charity_name="Habitat NOLA")
     mock_create.return_value = _stripe_session()
 
@@ -279,18 +286,23 @@ def test_checkout_adds_donation_as_a_second_line_item(mock_create, dynamodb_tabl
     assert resp.status_code == 303
     _, kwargs = mock_create.call_args
     items = kwargs["line_items"]
-    assert len(items) == 2
+    assert len(items) == 3
     assert items[0]["price_data"]["unit_amount"] == 30000  # tickets only
     assert items[1]["price_data"]["unit_amount"] == 2500
     assert items[1]["price_data"]["product_data"]["name"] == "Donation to Habitat NOLA"
+    # The fee is computed on tickets + donation together (32500), not tickets alone.
+    assert items[2]["price_data"]["unit_amount"] == 1002
+    assert items[2]["price_data"]["product_data"]["name"] == "Card processing fee"
 
     order = ORDERS().scan()["Items"][0]
     assert int(order["donation_cents"]) == 2500
-    assert int(order["total_cents"]) == 32500
+    assert int(order["processing_fee_cents"]) == 1002
+    assert int(order["total_cents"]) == 33502
 
 
 @patch("app.routes.public.stripe.checkout.Session.create")
-def test_checkout_without_donation_has_one_line_item(mock_create, dynamodb_tables):
+def test_checkout_without_donation_has_two_line_items(mock_create, dynamodb_tables):
+    """No donation -> just the ticket line and the processing fee line."""
     _put_event()
     mock_create.return_value = _stripe_session()
 
@@ -298,7 +310,8 @@ def test_checkout_without_donation_has_one_line_item(mock_create, dynamodb_table
 
     assert resp.status_code == 303
     _, kwargs = mock_create.call_args
-    assert len(kwargs["line_items"]) == 1
+    assert len(kwargs["line_items"]) == 2
+    assert kwargs["line_items"][1]["price_data"]["product_data"]["name"] == "Card processing fee"
     assert int(ORDERS().scan()["Items"][0]["donation_cents"]) == 0
 
 
@@ -547,6 +560,21 @@ def test_confirmation_page_shows_whole_dollar_donation(dynamodb_tables):
     resp = client.get("/order/ord_c/confirmation")
     assert resp.status_code == 200
     assert "$25 donation" in resp.text
+
+
+def test_confirmation_page_shows_processing_fee_when_present(dynamodb_tables):
+    _put_event()
+    ORDERS().put_item(Item={
+        "order_id": "ord_f", "event_id": "evt_2026", "buyer_name": "Jane",
+        "buyer_email": "jane@example.com", "quantity": 1, "unit_price_cents": 15000,
+        "discount_code": None, "donation_cents": 0, "processing_fee_cents": 479,
+        "total_cents": 15479, "status": "paid", "created_at": "2026-01-01T00:00:00Z",
+        "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
+    })
+    resp = client.get("/order/ord_f/confirmation")
+    assert resp.status_code == 200
+    assert "$4.79" in resp.text
+    assert "processing fee" in resp.text.lower()
 
 
 @patch("app.routes.public.stripe.checkout.Session.create")

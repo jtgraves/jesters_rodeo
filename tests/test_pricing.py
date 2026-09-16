@@ -1,6 +1,9 @@
 from app.models import DiscountCode
 from app.pricing import (
     MAX_TICKETS_PER_ORDER,
+    STRIPE_FIXED_FEE_CENTS,
+    STRIPE_PERCENT_FEE,
+    compute_processing_fee,
     compute_total,
     validate_discount_code,
     validate_quantity,
@@ -24,6 +27,31 @@ def test_compute_total_fixed_discount():
 def test_compute_total_fixed_discount_floors_at_zero():
     code = DiscountCode(code="HUGE", event_id="evt_2026", discount_type="fixed", discount_value=99999)
     assert compute_total(15000, 1, code) == 0
+
+
+def test_compute_processing_fee_zero_and_negative_subtotal():
+    assert compute_processing_fee(0) == 0
+    assert compute_processing_fee(-100) == 0
+
+
+def test_compute_processing_fee_known_values():
+    # Verified by hand against the gross-up formula; also pins the constants.
+    assert compute_processing_fee(30000) == 927
+    assert compute_processing_fee(24000) == 748
+    assert compute_processing_fee(15000) == 479
+    assert compute_processing_fee(100) == 34
+
+
+def test_compute_processing_fee_organizer_nets_the_full_subtotal():
+    """The whole point: after Stripe takes its cut of (subtotal + fee), the
+    organizer's net should be >= the original subtotal (rounding up, never
+    down, is what guarantees this)."""
+    for subtotal in (100, 1500, 15000, 30000, 123456):
+        fee = compute_processing_fee(subtotal)
+        total_charged = subtotal + fee
+        stripes_cut = total_charged * STRIPE_PERCENT_FEE + STRIPE_FIXED_FEE_CENTS
+        net_to_organizer = total_charged - stripes_cut
+        assert net_to_organizer >= subtotal - 1  # within a rounding cent
 
 
 def test_validate_discount_code_none():

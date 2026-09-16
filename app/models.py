@@ -84,6 +84,11 @@ class Order(BaseModel):
     # separate Stripe line item. Stored in cents for consistency with every
     # other money field; always a multiple of 100.
     donation_cents: int = 0
+    # The card processing fee passed on to the buyer -- see
+    # pricing.compute_processing_fee. Charged as a third Stripe line item;
+    # included in total_cents. Zero on a comped ("give tickets") order, which
+    # never touches Stripe.
+    processing_fee_cents: int = 0
     total_cents: int
     stripe_checkout_session_id: str | None = None
     stripe_payment_intent_id: str | None = None

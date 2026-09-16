@@ -492,12 +492,13 @@ def export_orders(request: Request, event_id: str = "") -> Response:
     writer = csv.writer(buf)
     writer.writerow([
         "order_id", "buyer_name", "buyer_email", "quantity",
-        "donation_usd", "total_usd", "status", "created_at",
+        "donation_usd", "processing_fee_usd", "total_usd", "status", "created_at",
     ])
     for o in orders:
         writer.writerow([
             o["order_id"], _csv_safe(o["buyer_name"]), _csv_safe(o["buyer_email"]),
             int(o["quantity"]), _format_cents(int(o.get("donation_cents", 0))),
+            _format_cents(int(o.get("processing_fee_cents", 0))),
             _format_cents(int(o["total_cents"])), o["status"], o["created_at"],
         ])
     return Response(

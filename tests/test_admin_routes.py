@@ -1134,6 +1134,13 @@ def test_orders_export_has_donation_column_not_attendees(admin_client):
     assert "25.00" in resp.text
 
 
+def test_orders_export_has_processing_fee_column(admin_client):
+    _put_order("ord_f", quantity=1, total_cents=15479, processing_fee_cents=479)
+    resp = admin_client.get("/admin/orders/export?event_id=evt_2026")
+    assert "processing_fee_usd" in resp.text
+    assert "4.79" in resp.text
+
+
 # ---- Past beneficiaries ----
 
 def test_beneficiaries_admin_page_renders(admin_client):

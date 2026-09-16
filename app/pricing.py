@@ -1,8 +1,33 @@
 from __future__ import annotations
 
+import math
+
 from app.models import DiscountCode
 
 MAX_TICKETS_PER_ORDER = 20
+
+# Stripe's standard US card rate. An ESTIMATE, not the actual per-charge rate:
+# Amex, international, and manually-keyed cards run higher, and Stripe doesn't
+# reveal the real rate until a charge settles. Every platform that "passes on"
+# the fee (Eventbrite included) accepts this same estimate and eats small
+# variances either way -- adjust here if it's ever wrong enough to matter.
+STRIPE_PERCENT_FEE = 0.029
+STRIPE_FIXED_FEE_CENTS = 30
+
+
+def compute_processing_fee(subtotal_cents: int) -> int:
+    """The amount to add on top of `subtotal_cents` so that, after Stripe
+    takes its cut of the WHOLE charge (subtotal + this fee), the organizer
+    still nets the full subtotal -- the standard "buyer covers the fee"
+    gross-up: total = (subtotal + fixed) / (1 - rate).
+
+    Rounds up: undercharging by even a fraction of a cent would mean the
+    organizer doesn't quite net the target.
+    """
+    if subtotal_cents <= 0:
+        return 0
+    total_charged = math.ceil((subtotal_cents + STRIPE_FIXED_FEE_CENTS) / (1 - STRIPE_PERCENT_FEE))
+    return total_charged - subtotal_cents
 
 
 def compute_total(unit_price_cents: int, quantity: int, discount_code: DiscountCode | None) -> int:

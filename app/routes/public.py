@@ -24,6 +24,7 @@ from app.db import (
 from app.models import DiscountCode, normalize_code
 from app.pricing import (
     MAX_TICKETS_PER_ORDER,
+    compute_processing_fee,
     compute_total,
     validate_discount_code,
     validate_quantity,
@@ -203,7 +204,11 @@ def checkout(
         return _register_page(request, fresh, "Sorry — those tickets were just claimed.")
 
     ticket_total = compute_total(unit_price, quantity, code_obj)
-    total = ticket_total + donation_cents
+    # The processing fee covers Stripe's cut of the WHOLE charge (tickets +
+    # donation), not just the ticket portion -- that's what Stripe actually
+    # takes its percentage of. See pricing.compute_processing_fee.
+    processing_fee_cents = compute_processing_fee(ticket_total + donation_cents)
+    total = ticket_total + donation_cents + processing_fee_cents
 
     order_id = f"ord_{uuid.uuid4().hex}"
     ORDERS().put_item(Item={
@@ -215,6 +220,7 @@ def checkout(
         "unit_price_cents": unit_price,
         "discount_code": code_obj.code if code_obj else None,
         "donation_cents": donation_cents,
+        "processing_fee_cents": processing_fee_cents,
         "total_cents": total,
         "stripe_checkout_session_id": None,
         "stripe_payment_intent_id": None,
@@ -243,6 +249,15 @@ def checkout(
                     "name": f"Donation to {charity}" if charity else "Donation",
                 },
                 "unit_amount": donation_cents,
+            },
+            "quantity": 1,
+        })
+    if processing_fee_cents:
+        line_items.append({
+            "price_data": {
+                "currency": "usd",
+                "product_data": {"name": "Card processing fee"},
+                "unit_amount": processing_fee_cents,
             },
             "quantity": 1,
         })

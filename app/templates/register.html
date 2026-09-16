@@ -12,6 +12,7 @@
 
 <div class="register-panel">
   <p class="ticket-price">${{ "%.2f"|format(event.ticket_price_cents / 100) }} <span>per ticket</span></p>
+  <p class="field-hint">A small card processing fee is added at checkout.</p>
 
   {% if event.tickets_sold_count >= event.capacity %}
     <p>This event is sold out. <a href="/waitlist?event_id={{ event.event_id }}">Join the waitlist</a>.</p>
