@@ -1,6 +1,10 @@
 import io
 from unittest.mock import patch
 
+import boto3
+import pytest
+from botocore.exceptions import ClientError
+
 from app import auth
 from app.config import settings
 from app.db import CLOWN_PROFILES, KREWE_LINKS
@@ -660,6 +664,48 @@ def test_manage_delete_removes_profile(dynamodb_tables):
     finally:
         ctx.stop()
     assert "clown_del" not in [p["clown_id"] for p in CLOWN_PROFILES().scan()["Items"]]
+
+
+def _assert_s3_object_gone(url):
+    key = url.split(".amazonaws.com/", 1)[1]
+    with pytest.raises(ClientError):
+        boto3.client("s3", region_name="us-east-1").get_object(Bucket="event-images-test", Key=key)
+
+
+def test_deleting_a_clown_profile_deletes_its_photo_from_s3(dynamodb_tables):
+    c, ctx = _client(sub="sub-photo", admin=True)
+    try:
+        c.post(
+            "/admin/clowns/profile", data={"display_name": "Photo Clown"},
+            files={"photo": ("p.jpg", b"photo-bytes", "image/jpeg")}, follow_redirects=False,
+        )
+        profile = CLOWN_PROFILES().scan()["Items"][0]
+        url = profile["photo_url"]
+        assert url
+        resp = c.post(f"/admin/clowns/manage/{profile['clown_id']}/delete", follow_redirects=False)
+        assert resp.status_code == 303
+    finally:
+        ctx.stop()
+    _assert_s3_object_gone(url)
+
+
+def test_replacing_a_clown_photo_deletes_the_old_one_from_s3(dynamodb_tables):
+    c, ctx = _client(sub="sub-photo2")
+    try:
+        c.post(
+            "/admin/clowns/profile", data={"display_name": "Old Photo"},
+            files={"photo": ("old.jpg", b"old-bytes", "image/jpeg")}, follow_redirects=False,
+        )
+        old_url = CLOWN_PROFILES().scan()["Items"][0]["photo_url"]
+        c.post(
+            "/admin/clowns/profile", data={"display_name": "New Photo"},
+            files={"photo": ("new.jpg", b"new-bytes", "image/jpeg")}, follow_redirects=False,
+        )
+        new_url = CLOWN_PROFILES().scan()["Items"][0]["photo_url"]
+        assert new_url != old_url
+    finally:
+        ctx.stop()
+    _assert_s3_object_gone(old_url)
 
 
 def test_manage_delete_is_admin_only(dynamodb_tables):

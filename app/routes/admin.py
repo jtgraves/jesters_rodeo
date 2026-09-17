@@ -130,6 +130,30 @@ def _maybe_upload_image(
         return None, str(exc)
 
 
+def _delete_event_image(url: str | None) -> None:
+    """Best-effort cleanup of an S3 object this app uploaded, called whenever
+    a stored reference to it is about to be removed or replaced. Every
+    *_url field only ever points at our own bucket (set exclusively by
+    _upload_event_image) or is a pre-existing/legacy value from before this
+    cleanup existed -- either way, an unrecognized URL is left alone rather
+    than guessed at. Never raises: a failed delete (already gone, a
+    transient error) must not block the save/remove action that triggered
+    it, and just leaves the object for a future manual sweep.
+    """
+    if not url:
+        return
+    prefix = f"https://{settings.event_images_bucket}.s3.{settings.aws_region}.amazonaws.com/"
+    if not url.startswith(prefix):
+        return
+    key = url[len(prefix):]
+    try:
+        boto3.client("s3", region_name=settings.aws_region).delete_object(
+            Bucket=settings.event_images_bucket, Key=key
+        )
+    except Exception:
+        logger.warning("Failed to delete S3 object for a removed image: %s", key)
+
+
 def _parse_timeline(
     times: list[str], activities: list[str], details: list[str]
 ) -> list[dict]:
@@ -263,17 +287,13 @@ def update_event_images(
     # A file input can't be pre-filled with "the current image", so "no new
     # file chosen" has to mean leave-as-is, not clear -- clearing needs the
     # explicit Remove checkbox instead.
-    if logo_url:
+    if logo_url or remove_logo_image:
+        event = EVENTS().get_item(Key={"event_id": event_id}).get("Item") or {}
+        _delete_event_image(event.get("logo_url"))
         EVENTS().update_item(
             Key={"event_id": event_id},
             UpdateExpression="SET logo_url = :u",
             ExpressionAttributeValues={":u": logo_url},
-        )
-    elif remove_logo_image:
-        EVENTS().update_item(
-            Key={"event_id": event_id},
-            UpdateExpression="SET logo_url = :u",
-            ExpressionAttributeValues={":u": None},
         )
     return RedirectResponse("/admin/events", status_code=303)
 
@@ -306,6 +326,7 @@ def remove_banner_pool_image(event_id: str, url: str = Form(...)) -> RedirectRes
         UpdateExpression="SET banner_image_urls = :p",
         ExpressionAttributeValues={":p": pool},
     )
+    _delete_event_image(url)
     return RedirectResponse("/admin/events", status_code=303)
 
 
@@ -1000,6 +1021,8 @@ def update_charity(
     if upload_error:
         return _charity_page(request, event_id, error=upload_error, status_code=400)
 
+    event = EVENTS().get_item(Key={"event_id": event_id}).get("Item") or {}
+
     values = {
         "charity_name": charity_name.strip() or None,
         "charity_description": charity_description.strip() or None,
@@ -1013,8 +1036,10 @@ def update_charity(
         "charity_banner_caption_3": charity_banner_caption_3.strip() or None,
     }
     if logo_url:
+        _delete_event_image(event.get("charity_logo_url"))
         values["charity_logo_url"] = logo_url
     elif remove_charity_logo:
+        _delete_event_image(event.get("charity_logo_url"))
         values["charity_logo_url"] = None
     # A file input can't say "keep the current image", so only touch a banner
     # slot when a new file came in or Remove was ticked -- mirrors
@@ -1025,8 +1050,10 @@ def update_charity(
         ("charity_banner_image_url_3", banner_3_url, remove_charity_banner_image_3),
     ):
         if new_url:
+            _delete_event_image(event.get(field))
             values[field] = new_url
         elif remove:
+            _delete_event_image(event.get(field))
             values[field] = None
 
     EVENTS().update_item(
@@ -1129,6 +1156,8 @@ def create_beneficiary(
 
 @router.post("/beneficiaries/{beneficiary_id}/delete")
 def delete_beneficiary(beneficiary_id: str) -> RedirectResponse:
+    item = PAST_BENEFICIARIES().get_item(Key={"beneficiary_id": beneficiary_id}).get("Item") or {}
+    _delete_event_image(item.get("logo_url"))
     PAST_BENEFICIARIES().delete_item(Key={"beneficiary_id": beneficiary_id})
     return RedirectResponse("/admin/beneficiaries", status_code=303)
 
@@ -1578,6 +1607,7 @@ def update_my_profile(
             {"profile": profile, "error": photo_error}, status_code=400,
         )
     if photo_url:
+        _delete_event_image(profile.get("photo_url"))
         fields["photo_url"] = photo_url
     _update_clown_fields(profile["clown_id"], fields)
     return RedirectResponse("/admin/clowns/profile", status_code=303)
@@ -1764,6 +1794,8 @@ def unlink_clown_account(clown_id: str) -> RedirectResponse:
 
 @router.post("/clowns/manage/{clown_id}/delete")
 def delete_clown_profile(clown_id: str) -> RedirectResponse:
+    profile = CLOWN_PROFILES().get_item(Key={"clown_id": clown_id}).get("Item") or {}
+    _delete_event_image(profile.get("photo_url"))
     CLOWN_PROFILES().delete_item(Key={"clown_id": clown_id})
     return RedirectResponse("/admin/clowns/manage", status_code=303)
 

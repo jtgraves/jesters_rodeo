@@ -14,6 +14,7 @@ from aws_cdk import (
     aws_events_targets as targets,
     aws_iam as iam,
     aws_lambda as _lambda,
+    aws_logs as logs,
     aws_route53 as route53,
     aws_route53_targets as route53_targets,
     aws_s3 as s3,
@@ -94,10 +95,19 @@ class JestersRodeoStack(Stack):
         # is negligible, and mangum's request-level "METHOD path status" line
         # is what makes a stuck checkout/webhook diagnosable at all from
         # CloudWatch after the fact.
+        #
+        # log_retention: without it, Lambda's auto-created log group keeps
+        # everything forever -- the one cost in this stack with no ceiling,
+        # since every other resource here is billed by actual usage. 90 days
+        # is well past what a stuck-checkout investigation ever needs.
+        # DESTROY (not RETAIN, unlike the tables/bucket/user pool): logs are
+        # operational exhaust, not data worth blocking a stack teardown over.
         log_settings = dict(
             logging_format=_lambda.LoggingFormat.JSON,
             application_log_level_v2=_lambda.ApplicationLogLevel.INFO,
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            log_retention=logs.RetentionDays.THREE_MONTHS,
+            log_retention_removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Deliberately not common_env: this function has no use for Stripe/

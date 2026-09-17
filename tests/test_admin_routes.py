@@ -339,6 +339,72 @@ def test_admin_can_remove_one_banner_pool_image(admin_client):
     ]
 
 
+def _assert_s3_object_gone(url):
+    key = url.split(".amazonaws.com/", 1)[1]
+    with pytest.raises(ClientError):
+        boto3.client("s3", region_name="us-east-1").get_object(Bucket="event-images-test", Key=key)
+
+
+def test_removing_a_banner_pool_image_deletes_it_from_s3(admin_client):
+    _put_event()
+    admin_client.post(
+        "/admin/events/evt_2026/banner-pool",
+        files={"image": ("b1.jpg", b"banner-one", "image/jpeg")},
+        follow_redirects=False,
+    )
+    url = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["banner_image_urls"][0]
+    admin_client.post(
+        "/admin/events/evt_2026/banner-pool/remove", data={"url": url}, follow_redirects=False,
+    )
+    _assert_s3_object_gone(url)
+
+
+def test_removing_the_event_logo_deletes_it_from_s3(admin_client):
+    _put_event()
+    admin_client.post(
+        "/admin/events/evt_2026/images",
+        files={"logo_image": ("logo.png", b"logo-bytes", "image/png")},
+        follow_redirects=False,
+    )
+    url = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["logo_url"]
+    admin_client.post(
+        "/admin/events/evt_2026/images", data={"remove_logo_image": "1"}, follow_redirects=False,
+    )
+    _assert_s3_object_gone(url)
+
+
+def test_replacing_the_event_logo_deletes_the_old_one_from_s3(admin_client):
+    _put_event()
+    admin_client.post(
+        "/admin/events/evt_2026/images",
+        files={"logo_image": ("old.png", b"old-bytes", "image/png")},
+        follow_redirects=False,
+    )
+    old_url = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["logo_url"]
+    admin_client.post(
+        "/admin/events/evt_2026/images",
+        files={"logo_image": ("new.png", b"new-bytes", "image/png")},
+        follow_redirects=False,
+    )
+    new_url = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["logo_url"]
+    assert new_url != old_url
+    _assert_s3_object_gone(old_url)
+
+
+def test_deleting_a_beneficiary_deletes_its_logo_from_s3(admin_client):
+    admin_client.post(
+        "/admin/beneficiaries",
+        data={"name": "Habitat NOLA"},
+        files={"logo": ("logo.png", b"logo-bytes", "image/png")},
+        follow_redirects=False,
+    )
+    item = PAST_BENEFICIARIES().scan()["Items"][0]
+    admin_client.post(
+        f"/admin/beneficiaries/{item['beneficiary_id']}/delete", follow_redirects=False,
+    )
+    _assert_s3_object_gone(item["logo_url"])
+
+
 def test_admin_rejects_oversized_banner_pool_image(admin_client):
     _put_event()
     oversized = b"x" * (2 * 1024 * 1024 + 1)
@@ -1087,6 +1153,26 @@ def test_update_charity_uploads_logo_and_banner_images_with_captions(admin_clien
     assert event["charity_banner_caption"] == "Build day"
     assert event.get("charity_banner_caption_2") is None
     assert event["charity_banner_caption_3"] == "Ribbon cutting"
+
+
+def test_replacing_the_charity_logo_deletes_the_old_one_from_s3(admin_client):
+    _put_event()
+    admin_client.post(
+        "/admin/charity",
+        data={"event_id": "evt_2026", "charity_name": "Habitat NOLA"},
+        files={"charity_logo": ("old.png", b"old-bytes", "image/png")},
+        follow_redirects=False,
+    )
+    old_url = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["charity_logo_url"]
+    admin_client.post(
+        "/admin/charity",
+        data={"event_id": "evt_2026", "charity_name": "Habitat NOLA"},
+        files={"charity_logo": ("new.png", b"new-bytes", "image/png")},
+        follow_redirects=False,
+    )
+    new_url = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["charity_logo_url"]
+    assert new_url != old_url
+    _assert_s3_object_gone(old_url)
 
 
 def test_update_charity_removes_one_banner_slot_and_leaves_others(admin_client):
