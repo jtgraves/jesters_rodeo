@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from unittest.mock import patch
 
+import pytest
+
 from app import config
 
 
@@ -69,6 +71,43 @@ def test_apply_secure_params_updates_session_secret_when_present(mock_load):
     s = _fresh_settings()
     config._apply_secure_params(s)
     assert s.session_secret == "new-secret"
+
+
+@patch("app.config._load_secure_params")
+def test_apply_secure_params_refuses_the_public_default_when_deployed(mock_load, monkeypatch):
+    monkeypatch.setenv("SECURE_PARAM_PREFIX", "/jesters-rodeo/prod")
+    mock_load.return_value = {"stripe_mode": "test"}  # no session_secret came back
+    s = _fresh_settings()
+    # conftest.py sets SESSION_SECRET for every test; force the actual
+    # "nothing has ever overridden it" state this test means to exercise.
+    s.session_secret = config._INSECURE_DEFAULT_SESSION_SECRET
+    with pytest.raises(RuntimeError, match="session_secret"):
+        config._apply_secure_params(s)
+
+
+@patch("app.config._load_secure_params")
+def test_apply_secure_params_does_not_raise_without_the_prefix(mock_load, monkeypatch):
+    # Local dev / pytest: SECURE_PARAM_PREFIX is never set, so a missing
+    # session_secret is expected (there's no SSM to have set it from) and
+    # must not crash the app.
+    monkeypatch.delenv("SECURE_PARAM_PREFIX", raising=False)
+    mock_load.return_value = {}
+    s = _fresh_settings()
+    s.session_secret = config._INSECURE_DEFAULT_SESSION_SECRET
+    config._apply_secure_params(s)  # must not raise
+    assert s.session_secret == config._INSECURE_DEFAULT_SESSION_SECRET
+
+
+@patch("app.config._load_secure_params")
+def test_apply_secure_params_does_not_raise_once_a_real_secret_is_already_loaded(mock_load, monkeypatch):
+    # A later refresh that comes back empty (a transient SSM hiccup) must not
+    # crash a container that already has a real secret from an earlier load.
+    monkeypatch.setenv("SECURE_PARAM_PREFIX", "/jesters-rodeo/prod")
+    mock_load.return_value = {}
+    s = _fresh_settings()
+    s.session_secret = "already-loaded-real-secret"
+    config._apply_secure_params(s)  # must not raise
+    assert s.session_secret == "already-loaded-real-secret"  # untouched
 
 
 @patch("app.config._load_secure_params")

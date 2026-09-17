@@ -378,6 +378,14 @@ class JestersRodeoStack(Stack):
             self_sign_up_enabled=False,
             sign_in_aliases=cognito.SignInAliases(email=True),
             password_policy=cognito.PasswordPolicy(min_length=12),
+            # Admins can refund payments, export buyer PII, and promote/demote
+            # other admins -- a password alone must not be enough. TOTP (an
+            # authenticator app), not SMS: free, and not SIM-swap-phishable.
+            # Entirely handled by the Hosted UI; no app code involved. An
+            # admin who signed in before this deploy is walked through
+            # one-time QR-code enrollment on their very next sign-in.
+            mfa=cognito.Mfa.REQUIRED,
+            mfa_second_factor=cognito.MfaSecondFactor(sms=False, otp=True),
             removal_policy=RemovalPolicy.RETAIN,
         )
         user_pool_domain = user_pool.add_domain(

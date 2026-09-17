@@ -7,6 +7,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
+# The one secret whose "unset" default is a real, working, publicly-known
+# value -- unlike the Stripe fields (default ""), which just fail loudly at
+# the first Stripe call. Session cookies signed with this string are
+# forgeable by anyone who's read this file. See _apply_secure_params: in the
+# deployed environment (SECURE_PARAM_PREFIX set), still landing on this
+# value after a load is treated as fatal, not a silent fallback.
+_INSECURE_DEFAULT_SESSION_SECRET = "dev-only-insecure-secret"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -38,7 +46,7 @@ class Settings(BaseSettings):
     # and tests that never exercise that path don't need it set.
     announcement_lambda_name: str = ""
     session_cookie_name: str = "jr_session"
-    session_secret: str = "dev-only-insecure-secret"
+    session_secret: str = _INSECURE_DEFAULT_SESSION_SECRET
     aws_region: str = "us-east-1"
     base_url: str = "http://localhost:8000"
 
@@ -102,6 +110,21 @@ def _apply_secure_params(target: Settings) -> None:
 
     if raw.get("session_secret"):
         target.session_secret = raw["session_secret"]
+    elif (
+        os.environ.get("SECURE_PARAM_PREFIX")
+        and target.session_secret == _INSECURE_DEFAULT_SESSION_SECRET
+    ):
+        # We're running in the deployed environment (SECURE_PARAM_PREFIX is
+        # set only by the CDK stack -- local dev and pytest never reach this
+        # branch) and no real session_secret has ever been loaded. Every
+        # session cookie would be signed with a value anyone can read in this
+        # file. Refuse to start rather than silently serve forgeable
+        # sessions; fix by setting "<SecureParamPrefix>/session_secret" in
+        # SSM (see README.md).
+        raise RuntimeError(
+            "session_secret is not set in SSM. Refusing to start with the "
+            "public default -- set the session_secret SSM parameter and retry."
+        )
 
     # stripe_mode must never silently fail open into live: anything other
     # than exactly "live" (missing, misspelled, empty) is treated as "test".
