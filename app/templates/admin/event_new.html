@@ -10,7 +10,7 @@
   <input name="location" placeholder="Location" required>
   <input name="address" placeholder="Address (optional, for the map)">
   <textarea name="description" class="richtext-input" placeholder="Description" required></textarea>
-  <input name="ticket_price_cents" placeholder="Price (cents)" required>
+  <input type="number" name="ticket_price_dollars" min="0" step="0.01" placeholder="Price ($, e.g. 15.00)" required>
   <input name="capacity" placeholder="Capacity" required>
   <input name="contact_name" placeholder="Contact name (optional)">
   <input type="email" name="contact_email" placeholder="Contact email (optional)">

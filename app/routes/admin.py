@@ -46,7 +46,7 @@ from app.models import (
     Ticket,
     normalize_code,
 )
-from app.pricing import MAX_TICKETS_PER_ORDER
+from app.pricing import MAX_TICKETS_PER_ORDER, parse_dollars_to_cents
 from app.templating import templates
 
 logger = logging.getLogger(__name__)
@@ -204,7 +204,7 @@ def create_event(
     date: str = Form(...),
     location: str = Form(...),
     description: str = Form(...),
-    ticket_price_cents: int = Form(...),
+    ticket_price_dollars: str = Form(...),
     capacity: int = Form(...),
     address: str = Form(""),
     contact_name: str = Form(""),
@@ -216,6 +216,13 @@ def create_event(
     timeline_details: list[str] = Form([]),
 ) -> Response:
     event_id = f"evt_{year}"
+    try:
+        ticket_price_cents = parse_dollars_to_cents(ticket_price_dollars)
+    except ValueError:
+        return _new_event_page(
+            request, error="Ticket price must be a valid, non-negative dollar amount.",
+            status_code=400,
+        )
     logo_url, upload_error = _maybe_upload_image(logo_image, event_id, "Logo")
     if upload_error:
         return _new_event_page(request, error=upload_error, status_code=400)
@@ -338,7 +345,8 @@ def update_event_details(
     date: str = Form(...),
     description: str = Form(...),
     location: str = Form(...),
-    ticket_price_cents: int = Form(...),
+    ticket_price_dollars: str = Form(...),
+    capacity: int = Form(...),
     address: str = Form(""),
     contact_name: str = Form(""),
     contact_email: str = Form(""),
@@ -349,20 +357,30 @@ def update_event_details(
         return _events_page(
             request, error="Name, date, description, and location can't be empty.", status_code=400
         )
-    if ticket_price_cents < 0:
-        return _events_page(request, error="Ticket price can't be negative.", status_code=400)
+    try:
+        ticket_price_cents = parse_dollars_to_cents(ticket_price_dollars)
+    except ValueError:
+        return _events_page(
+            request, error="Ticket price must be a valid, non-negative dollar amount.",
+            status_code=400,
+        )
+    if capacity < 0:
+        return _events_page(request, error="Capacity can't be negative.", status_code=400)
     EVENTS().update_item(
         Key={"event_id": event_id},
-        # name and location are both DynamoDB reserved words, hence the aliases.
+        # name, location, and capacity are all DynamoDB reserved words, hence
+        # the aliases.
         UpdateExpression=(
             "SET #n = :n, #d = :date, description = :desc, #l = :l, "
-            "ticket_price_cents = :price, address = :addr, "
+            "ticket_price_cents = :price, #cap = :cap, address = :addr, "
             "contact_name = :cn, contact_email = :ce, contact_phone = :cp"
         ),
-        ExpressionAttributeNames={"#n": "name", "#d": "date", "#l": "location"},
+        ExpressionAttributeNames={
+            "#n": "name", "#d": "date", "#l": "location", "#cap": "capacity",
+        },
         ExpressionAttributeValues={
             ":n": name, ":date": date, ":desc": description, ":l": location,
-            ":price": ticket_price_cents,
+            ":price": ticket_price_cents, ":cap": capacity,
             ":addr": address.strip() or None,
             ":cn": contact_name.strip() or None,
             ":ce": contact_email.strip() or None,

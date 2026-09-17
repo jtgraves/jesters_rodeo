@@ -1,10 +1,27 @@
 from __future__ import annotations
 
 import math
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from app.models import DiscountCode
 
 MAX_TICKETS_PER_ORDER = 20
+
+
+def parse_dollars_to_cents(value: str) -> int:
+    """Parse an admin-typed dollar amount ("15", "15.5", "15.50") into whole
+    cents. Decimal, not float: currency math has no business rounding
+    through binary floating point. Raises ValueError -- callers already have
+    an established pattern for turning that into a form re-render with an
+    error -- for anything that isn't a valid, non-negative amount.
+    """
+    try:
+        dollars = Decimal(value.strip())
+    except (InvalidOperation, AttributeError):
+        raise ValueError("not a valid dollar amount")
+    if dollars < 0:
+        raise ValueError("amount can't be negative")
+    return int((dollars * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 # Stripe's standard US card rate. An ESTIMATE, not the actual per-charge rate:
 # Amex, international, and manually-keyed cards run higher, and Stripe doesn't

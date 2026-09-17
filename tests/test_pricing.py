@@ -1,3 +1,5 @@
+import pytest
+
 from app.models import DiscountCode
 from app.pricing import (
     MAX_TICKETS_PER_ORDER,
@@ -5,9 +7,38 @@ from app.pricing import (
     STRIPE_PERCENT_FEE,
     compute_processing_fee,
     compute_total,
+    parse_dollars_to_cents,
     validate_discount_code,
     validate_quantity,
 )
+
+
+def test_parse_dollars_to_cents_whole_and_fractional():
+    assert parse_dollars_to_cents("15") == 1500
+    assert parse_dollars_to_cents("15.00") == 1500
+    assert parse_dollars_to_cents("15.5") == 1550
+    assert parse_dollars_to_cents("15.99") == 1599
+    assert parse_dollars_to_cents("0") == 0
+
+
+def test_parse_dollars_to_cents_strips_whitespace():
+    assert parse_dollars_to_cents("  15.00  ") == 1500
+
+
+def test_parse_dollars_to_cents_rounds_sub_cent_amounts():
+    assert parse_dollars_to_cents("15.005") == 1501  # round-half-up, not banker's rounding
+    assert parse_dollars_to_cents("15.004") == 1500
+
+
+def test_parse_dollars_to_cents_rejects_negative():
+    with pytest.raises(ValueError):
+        parse_dollars_to_cents("-5")
+
+
+def test_parse_dollars_to_cents_rejects_garbage():
+    for garbage in ("abc", "", "  ", "$15", "15,00"):
+        with pytest.raises(ValueError):
+            parse_dollars_to_cents(garbage)
 
 
 def test_compute_total_no_discount():
