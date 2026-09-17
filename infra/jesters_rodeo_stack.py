@@ -99,15 +99,15 @@ class JestersRodeoStack(Stack):
         # log_retention: without it, Lambda's auto-created log group keeps
         # everything forever -- the one cost in this stack with no ceiling,
         # since every other resource here is billed by actual usage. 90 days
-        # is well past what a stuck-checkout investigation ever needs.
-        # DESTROY (not RETAIN, unlike the tables/bucket/user pool): logs are
-        # operational exhaust, not data worth blocking a stack teardown over.
+        # is well past what a stuck-checkout investigation ever needs. (No
+        # companion removal-policy prop here -- log_retention provisions the
+        # log group via CDK's own custom resource, which doesn't expose one;
+        # the log group is disposable operational exhaust either way.)
         log_settings = dict(
             logging_format=_lambda.LoggingFormat.JSON,
             application_log_level_v2=_lambda.ApplicationLogLevel.INFO,
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             log_retention=logs.RetentionDays.THREE_MONTHS,
-            log_retention_removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Deliberately not common_env: this function has no use for Stripe/
