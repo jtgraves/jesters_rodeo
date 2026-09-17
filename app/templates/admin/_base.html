@@ -12,12 +12,15 @@
       <a class="brand" href="{{ '/admin/events' if admin else '/admin/clowns/resources' }}">
         {{ "Reaux-de-Eaux Clowns" if in_clowns_section else "Reaux-de-Eaux Admins" }}
       </a>
-      {# Only shown when Stripe is actually taking real cards -- a normal day
-         in test mode looks exactly like it always has. stripe_mode() reads
-         live (see app/templating.py), so flipping SSM's stripe_mode reaches
-         this within the refresh TTL, not just at the next deploy. #}
-      {% if admin and stripe_mode() == "live" %}
-      <span class="stripe-live-badge" title="Stripe is in live mode: real cards, real charges.">LIVE</span>
+      {# Always shown to admins, either way -- knowing you're safely in test
+         mode matters as much as being warned you're live. stripe_mode()
+         reads live (see app/templating.py), so flipping SSM's stripe_mode
+         reaches this within the refresh TTL, not just at the next deploy. #}
+      {% if admin %}
+      <span class="stripe-mode-badge stripe-mode-badge--{{ stripe_mode() }}"
+            title="Stripe is in {{ stripe_mode() }} mode{{ ': real cards, real charges.' if stripe_mode() == 'live' else '.' }}">
+        {{ stripe_mode() | upper }}
+      </span>
       {% endif %}
     </div>
     {# Pure-CSS hamburger: a checkbox + label toggle the menu, no JS. One

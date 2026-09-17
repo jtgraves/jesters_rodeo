@@ -1500,4 +1500,23 @@ def test_banner_names_the_section_for_an_admin(admin_client):
 def test_banner_names_the_clowns_section_for_a_member(member_client):
     resp = member_client.get("/admin/clowns/resources")
     assert "Reaux-de-Eaux Clowns" in resp.text
+
+
+def test_admin_nav_shows_test_mode_badge_by_default(admin_client):
+    resp = admin_client.get("/admin/events")
+    assert "stripe-mode-badge--test" in resp.text
+    assert "TEST" in resp.text
+    assert "stripe-mode-badge--live" not in resp.text
+
+
+def test_admin_nav_shows_live_mode_badge_when_live(admin_client, monkeypatch):
+    monkeypatch.setattr(settings, "stripe_mode", "live")
+    resp = admin_client.get("/admin/events")
+    assert "stripe-mode-badge--live" in resp.text
+    assert "stripe-mode-badge--test" not in resp.text
+
+
+def test_member_does_not_see_the_stripe_mode_badge(member_client):
+    resp = member_client.get("/admin/clowns/resources")
+    assert "stripe-mode-badge" not in resp.text
     assert "Reaux-de-Eaux Admins" not in resp.text

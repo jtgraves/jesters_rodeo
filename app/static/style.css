@@ -117,16 +117,23 @@ th, td {
   color: var(--color-text);
   text-decoration: none;
 }
-/* Subtle by design: real money is flowing, but this shouldn't shout. Test
-   mode (the everyday state) shows nothing at all here. */
-.stripe-live-badge {
+/* Shown to admins in both modes -- confirming "safely in test" matters as
+   much as being warned "this is live". Live stays loud (real money is
+   flowing); test stays deliberately muted so it doesn't compete with it. */
+.stripe-mode-badge {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--color-danger);
-  border: 1px solid var(--color-danger);
   border-radius: var(--radius);
   padding: 0.1rem 0.4rem;
+}
+.stripe-mode-badge--live {
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+.stripe-mode-badge--test {
+  color: var(--color-muted);
+  border: 1px solid var(--color-border);
 }
 .nav-toggle-checkbox { display: none; }
 .nav-toggle-label {

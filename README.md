@@ -50,7 +50,8 @@ every request — checkout, the Stripe webhook, and every admin page view —
 within about 60 seconds. A missing or misspelled `stripe_mode` always falls
 back to `"test"`, never `"live"`.
 
-While in live mode, admins see a small **LIVE** badge in the nav — nothing
-shows in test mode, which is the everyday state. See `docs/processing-fee.md`
+Admins always see a small mode badge in the nav — a muted **TEST** in test
+mode, a louder **LIVE** once real cards are running — so which mode is active
+is never a guess. See `docs/processing-fee.md`
 and the "Stripe setup" / "Secrets" sections of `docs/DEPLOYMENT.md` for the
 first-time setup of both key sets.
