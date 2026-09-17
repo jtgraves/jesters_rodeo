@@ -9,7 +9,7 @@ from fastapi import HTTPException, Request, Response
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from jose import jwt
 
-from app.config import settings
+from app.config import refresh_secure_params_if_stale, settings
 
 JWKS_TIMEOUT_SECONDS = 5
 JWKS_CACHE_TTL_SECONDS = 3600
@@ -161,6 +161,11 @@ def _authenticated_claims(request: Request) -> dict:
     # Stashed so templates (the shared admin nav) can vary by role without
     # every route threading it through the context dict.
     request.state.is_admin = is_admin(claims)
+    # Gates every admin/member page view, so this doubles as the refresh
+    # point for settings.stripe_mode/keys -- a flip in SSM reaches the next
+    # admin request (and the nav's mode badge) within the TTL, not just the
+    # routes that call Stripe directly.
+    refresh_secure_params_if_stale()
     return claims
 
 

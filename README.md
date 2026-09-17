@@ -20,3 +20,37 @@ CDK context values. See `docs/DEPLOYMENT.md` for the full procedure.
       -c site_url=https://register.example.com \
       -c cognito_domain_prefix=jesters-rodeo-admin \
       -c ses_sender_email=noreply@example.com
+
+## Switching Stripe modes
+
+Both a test and a live Stripe credential set live side by side in SSM Parameter
+Store, under `<SecureParamPrefix>/`:
+
+    stripe_mode                    ("test" or "live")
+    stripe_test_secret_key         stripe_live_secret_key
+    stripe_test_webhook_secret     stripe_live_webhook_secret
+    stripe_test_publishable_key    stripe_live_publishable_key
+
+`SecureParamPrefix` is a `cdk deploy` output, e.g. `/jesters-rodeo/JestersRodeoStack`.
+
+**To go live**, or **back to test**, flip one value — no redeploy, no code
+change:
+
+    aws ssm put-parameter --type String --overwrite \
+      --name "<SecureParamPrefix>/stripe_mode" --value "live"   # or "test"
+
+Console works too: Systems Manager → Parameter Store → `<SecureParamPrefix>/stripe_mode`
+→ Edit → change the value → Save. Rotating the actual key values (e.g. after a
+Stripe key rotation) works the same way — they're `SecureString` parameters,
+edited via the same Edit button, masked with a "Show" toggle.
+
+The app re-checks SSM at most once a minute (`SECURE_PARAMS_TTL_SECONDS` in
+`app/config.py`) rather than only at Lambda cold start, so the flip reaches
+every request — checkout, the Stripe webhook, and every admin page view —
+within about 60 seconds. A missing or misspelled `stripe_mode` always falls
+back to `"test"`, never `"live"`.
+
+While in live mode, admins see a small **LIVE** badge in the nav — nothing
+shows in test mode, which is the everyday state. See `docs/processing-fee.md`
+and the "Stripe setup" / "Secrets" sections of `docs/DEPLOYMENT.md` for the
+first-time setup of both key sets.

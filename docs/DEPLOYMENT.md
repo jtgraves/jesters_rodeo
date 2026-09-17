@@ -54,23 +54,36 @@ and `SecureParamPrefix` outputs.
 
 ## Secrets (Task 13)
 
-Create all four SecureString parameters under `SecureParamPrefix` before the
-first real checkout. Start with Stripe **test** keys.
+Create these SecureString/String parameters under `SecureParamPrefix` before
+the first real checkout. Test and live Stripe credentials live side by side —
+`stripe_mode` picks which pair is active, so both sets can be filled in ahead
+of time and switched with no redeploy. See README.md's "Switching Stripe
+modes" for how to flip it later.
 
 ```bash
 PREFIX=<the SecureParamPrefix output, e.g. /jesters-rodeo/prod>
 
-aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_secret_key"      --value "sk_test_..."
-aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_webhook_secret"  --value "whsec_..."
-aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_publishable_key" --value "pk_test_..."
-aws ssm put-parameter --type SecureString --name "$PREFIX/session_secret"         --value "$(openssl rand -hex 32)"
+aws ssm put-parameter --type String       --name "$PREFIX/stripe_mode"                  --value "test"
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_test_secret_key"       --value "sk_test_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_test_webhook_secret"   --value "whsec_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_test_publishable_key"  --value "pk_test_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_live_secret_key"       --value "sk_live_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_live_webhook_secret"   --value "whsec_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_live_publishable_key"  --value "pk_live_..."
+aws ssm put-parameter --type SecureString --name "$PREFIX/session_secret"               --value "$(openssl rand -hex 32)"
 ```
+
+The live-mode values can be filled in with placeholders and rotated in later,
+once that Stripe account and webhook exist (see "Stripe setup" below) — an
+empty/placeholder live key just means switching to live mode too early fails
+loudly at checkout, not silently.
 
 The names must match exactly — they are the field names in `SECURE_FIELDS` in
 `app/config.py`. A missing or misnamed parameter does not fail the deploy: the
-app logs a warning at cold start and falls back to an empty/default value, so
-grep CloudWatch Logs for `is missing or unreadable` after the first request.
-Add `--overwrite` to rotate a value that already exists.
+app logs a warning at cold start (and at every refresh — see README.md) and
+falls back to an empty/default value, so grep CloudWatch Logs for `is missing
+or unreadable` after the first request. Add `--overwrite` to rotate a value
+that already exists.
 
 ## SES production access
 
@@ -92,10 +105,12 @@ for testing and fatal on sale day, so do it early.
    **`checkout.session.completed`** and **`checkout.session.expired`**. Both are
    required: without the expiry event, abandoned checkouts hold their seats
    until the cleanup job catches them.
-3. Copy the signing secret into the `stripe_webhook_secret` parameter.
-4. Complete a full test purchase before switching to live keys. Going live means
-   new live-mode keys *and* a new live-mode webhook endpoint with its own
-   signing secret — the test-mode secret will not validate live events.
+3. Copy the signing secret into the `stripe_test_webhook_secret` parameter.
+4. Complete a full test purchase (`stripe_mode` = `test`) before going live.
+   Going live means new live-mode keys *and* a **separate** live-mode webhook
+   endpoint with its own signing secret — copy that one into
+   `stripe_live_webhook_secret`. A test-mode secret will not validate live
+   events or vice versa.
 
 ## Create the first admin user
 
@@ -126,4 +141,6 @@ on `/admin/events` with a session cookie.
 5. Refund the test order and confirm the ticket then reports "voided" at
    check-in and capacity is returned.
 6. Export the CSV and open it in a spreadsheet.
-7. Switch to live Stripe keys, then open registration.
+7. Flip `stripe_mode` to `live` (README.md, "Switching Stripe modes"), confirm
+   the **LIVE** badge appears in the admin nav within a minute, then open
+   registration.

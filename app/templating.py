@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
+from app.config import settings
 from app.richtext import render_richtext
 
 templates = Jinja2Templates(directory="app/templates")
@@ -49,6 +50,12 @@ def _shuffled(items: list) -> list:
 
 
 templates.env.filters["shuffled"] = _shuffled
+
+# A callable, not a value: registered once at import, but auth.py refreshes
+# settings.stripe_mode on every admin page view, so calling this at render
+# time (stripe_mode() in a template) reads the current mode, not a snapshot
+# from whenever this module happened to be imported.
+templates.env.globals["stripe_mode"] = lambda: settings.stripe_mode
 
 # Cache-busting token for /static/style.css. The <link> URL is otherwise
 # identical across deploys, so a browser that cached the stylesheet can serve

@@ -6,7 +6,7 @@ import stripe
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException, Request
 
-from app.config import settings
+from app.config import refresh_secure_params_if_stale, settings
 from app.db import EVENTS, ORDERS
 from app.fulfillment import fulfill_order, flag_fulfillment_error
 
@@ -132,6 +132,11 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
+    # Stripe calls this endpoint directly -- it doesn't go through
+    # auth._authenticated_claims, so it needs its own refresh: a stripe_mode
+    # flip must reach the very next delivery, live and test webhooks sign
+    # with different secrets.
+    refresh_secure_params_if_stale()
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, settings.stripe_webhook_secret

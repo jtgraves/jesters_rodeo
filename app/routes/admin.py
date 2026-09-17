@@ -51,7 +51,6 @@ from app.templating import templates
 
 logger = logging.getLogger(__name__)
 
-stripe.api_key = settings.stripe_secret_key
 # Admin-only by default -- a new route is locked down unless it's deliberately
 # put on member_router below.
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
@@ -546,6 +545,10 @@ def refund_order(order_id: str) -> Response:
     # A comped order has no Stripe payment behind it -- "refunding" it just
     # voids the tickets and frees the seats, which the code below already does.
     if not order_item.get("comp"):
+        # require_admin already ran refresh_secure_params_if_stale for this
+        # request (see auth._authenticated_claims), so settings.stripe_secret_key
+        # is current -- just pick it up before the call.
+        stripe.api_key = settings.stripe_secret_key
         try:
             stripe.Refund.create(payment_intent=order_item["stripe_payment_intent_id"])
         except Exception:

@@ -111,10 +111,22 @@ th, td {
   justify-content: space-between;
   position: relative;
 }
+.site-nav-brand-group { display: flex; align-items: center; gap: 0.5rem; }
 .brand {
   font-weight: 600;
   color: var(--color-text);
   text-decoration: none;
+}
+/* Subtle by design: real money is flowing, but this shouldn't shout. Test
+   mode (the everyday state) shows nothing at all here. */
+.stripe-live-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.4rem;
 }
 .nav-toggle-checkbox { display: none; }
 .nav-toggle-label {

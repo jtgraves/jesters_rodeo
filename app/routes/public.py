@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from app.config import settings
+from app.config import refresh_secure_params_if_stale, settings
 from app.db import (
     DISCOUNT_CODES,
     EVENTS,
@@ -32,7 +32,6 @@ from app.pricing import (
 from app.templating import templates
 
 logger = logging.getLogger(__name__)
-stripe.api_key = settings.stripe_secret_key
 router = APIRouter()
 
 # Stripe requires checkout session `expires_at` to be at least 30 minutes out;
@@ -261,6 +260,10 @@ def checkout(
             },
             "quantity": 1,
         })
+    # Refreshed here rather than once at import: a stripe_mode flip in SSM
+    # must reach the very next checkout, not just the next cold start.
+    refresh_secure_params_if_stale()
+    stripe.api_key = settings.stripe_secret_key
     try:
         session = stripe.checkout.Session.create(
             mode="payment",
