@@ -63,7 +63,12 @@ class JestersRodeoStack(Stack):
             "SES_SENDER_EMAIL": sender_email,
             "COGNITO_USER_POOL_ID": user_pool.user_pool_id,
             "COGNITO_APP_CLIENT_ID": user_pool_client.user_pool_client_id,
-            "COGNITO_DOMAIN": f"{cognito_domain_prefix}.auth.{self.region}.amazoncognito.com",
+            # Derived from user_pool_domain itself, not re-built from the raw
+            # cognito_domain_prefix context value -- _create_auth appends
+            # "-v2" to the prefix it actually uses (see its comments), and
+            # duplicating that suffix logic here would silently drift the
+            # moment either copy changed.
+            "COGNITO_DOMAIN": f"{user_pool_domain.domain_name}.auth.{self.region}.amazoncognito.com",
             "BASE_URL": site_url,
             # NOTE: no AWS_REGION here. It is a reserved Lambda environment
             # variable — setting it fails the deployment outright — and Lambda
@@ -185,7 +190,7 @@ class JestersRodeoStack(Stack):
         # every user is a clown (member); the ones in the "admins" group are
         # clowns with full admin privileges.
         cognito.CfnUserPoolGroup(
-            self, "AdminsGroup",
+            self, "AdminsGroupV2",
             user_pool_id=user_pool.user_pool_id,
             group_name="admins",
             description="Clowns with full admin privileges",
@@ -383,10 +388,24 @@ class JestersRodeoStack(Stack):
         }
 
     def _create_auth(self, domain_prefix: str, site_url: str):
+        # AdminUserPoolV2 / -V2 suffixes throughout: Cognito flatly refuses to
+        # change sign_in_case_sensitive on an existing pool (confirmed against
+        # AWS's own docs -- "you can't change ... from case-sensitive to
+        # case-insensitive. Instead, migrate your users to a new user pool"),
+        # and even if it didn't, CloudFormation's own metadata for that
+        # property is misleadingly optimistic ("Update requires: No
+        # interruption"), which would make it attempt an in-place update that
+        # the Cognito API would then reject -- a failed update on a live
+        # stack. New logical IDs force CDK to CREATE a fresh pool instead of
+        # trying to mutate the old one. The old pool (AdminUserPool, no
+        # longer referenced anywhere in this file) is RemovalPolicy.RETAIN,
+        # so it survives, orphaned, as a fallback until manually deleted --
+        # its 2 existing users need to be recreated in this new pool.
         user_pool = cognito.UserPool(
-            self, "AdminUserPool",
+            self, "AdminUserPoolV2",
             self_sign_up_enabled=False,
             sign_in_aliases=cognito.SignInAliases(email=True),
+            sign_in_case_sensitive=False,
             password_policy=cognito.PasswordPolicy(min_length=12),
             # Admins can refund payments, export buyer PII, and promote/demote
             # other admins -- a password alone must not be enough. TOTP (an
@@ -398,15 +417,24 @@ class JestersRodeoStack(Stack):
             mfa_second_factor=cognito.MfaSecondFactor(sms=False, otp=True),
             removal_policy=RemovalPolicy.RETAIN,
         )
+        # A new prefix, not the original: Cognito domain prefixes are
+        # globally unique, so a same-prefix domain on the new pool can't be
+        # created while the old one (still attached to the old, retained
+        # pool) exists -- and UserPoolDomain's Domain/UserPoolId properties
+        # both require CloudFormation replacement, so reusing the prefix
+        # would mean gambling on delete-then-create replacement ordering
+        # against a live stack. This prefix is an internal OAuth redirect
+        # target the app builds itself (COGNITO_DOMAIN); nobody bookmarks or
+        # types it, so the rename is invisible to end users.
         user_pool_domain = user_pool.add_domain(
-            "AdminHostedUiDomain",
-            cognito_domain=cognito.CognitoDomainOptions(domain_prefix=domain_prefix),
+            "AdminHostedUiDomainV2",
+            cognito_domain=cognito.CognitoDomainOptions(domain_prefix=f"{domain_prefix}-v2"),
         )
         # generate_secret=False: the app uses the authorization-code flow with
         # PKCE (Task 8), so there is no client secret to smuggle into a Lambda
         # environment variable and therefore none to leak via CloudFormation.
         user_pool_client = user_pool.add_client(
-            "AdminUserPoolClient",
+            "AdminUserPoolClientV2",
             generate_secret=False,
             auth_flows=cognito.AuthFlow(user_srp=True),
             o_auth=cognito.OAuthSettings(
