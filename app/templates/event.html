@@ -32,6 +32,17 @@
   </aside>
 </div>
 
+{% if event.perks %}
+<section class="event-perks">
+  <h2>What's Included</h2>
+  <ul class="perks-list">
+    {% for perk in event.perks %}
+    <li>{{ perk }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 {% if event.charity_name %}
 <section class="event-charity">
   <h2>This year's event will be benefitting</h2>
@@ -39,6 +50,20 @@
   <img class="event-charity-logo" src="{{ event.charity_logo_url }}" alt="{{ event.charity_name }}">
   {% endif %}
   <p><a href="/charity">Click here for more information about {{ event.charity_name }}</a></p>
+</section>
+{% endif %}
+
+{% set gallery_images = event.banner_image_urls or [] %}
+{% if gallery_images | length > 1 %}
+{# The hero above cross-fades through this same pool one at a time -- this
+   grid surfaces the rest of it at once, further down the page, rather than
+   requiring every photo to be seen only in rotation. #}
+<section class="event-gallery">
+  <div class="event-gallery-grid">
+    {% for src in gallery_images %}
+    <img src="{{ src }}" alt="">
+    {% endfor %}
+  </div>
 </section>
 {% endif %}
 
@@ -57,22 +82,32 @@
 {% endif %}
 
 {% set map_query = event.address or event.location %}
-{% if map_query %}
-<section class="event-map">
-  <h2>Location</h2>
-  <p>{{ event.address or event.location }}</p>
-  {# Keyless Google Maps embed -- no API key / billing, just an iframe. #}
-  <iframe title="Map of {{ event.location }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
-          src="https://www.google.com/maps?q={{ map_query | urlencode }}&output=embed"></iframe>
-</section>
-{% endif %}
-
-{% if event.contact_name or event.contact_email or event.contact_phone %}
-<section class="event-contact">
-  <h2>Contact</h2>
-  {% if event.contact_name %}<p>{{ event.contact_name }}</p>{% endif %}
-  {% if event.contact_email %}<p><a href="mailto:{{ event.contact_email }}">{{ event.contact_email }}</a></p>{% endif %}
-  {% if event.contact_phone %}<p><a href="tel:{{ event.contact_phone }}">{{ event.contact_phone | phone }}</a></p>{% endif %}
+{% set has_contact = event.contact_name or event.contact_email or event.contact_phone %}
+{% if map_query or has_contact %}
+{# Map and Contact used to be two stacked full-width sections; merged into
+   one two-column "Visit Us" area (single column on mobile -- see
+   .event-visit-grid) so the page reads as one logistics block instead of
+   two separate scroll-stops for closely related info. #}
+<section class="event-visit">
+  <h2>Visit Us</h2>
+  <div class="event-visit-grid">
+    {% if map_query %}
+    <div class="event-map">
+      <p>{{ event.address or event.location }}</p>
+      {# Keyless Google Maps embed -- no API key / billing, just an iframe. #}
+      <iframe title="Map of {{ event.location }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+              src="https://www.google.com/maps?q={{ map_query | urlencode }}&output=embed"></iframe>
+    </div>
+    {% endif %}
+    {% if has_contact %}
+    <div class="event-contact">
+      <h3>Contact</h3>
+      {% if event.contact_name %}<p>{{ event.contact_name }}</p>{% endif %}
+      {% if event.contact_email %}<p><a href="mailto:{{ event.contact_email }}">{{ event.contact_email }}</a></p>{% endif %}
+      {% if event.contact_phone %}<p><a href="tel:{{ event.contact_phone }}">{{ event.contact_phone | phone }}</a></p>{% endif %}
+    </div>
+    {% endif %}
+  </div>
 </section>
 {% endif %}
 {% endblock %}

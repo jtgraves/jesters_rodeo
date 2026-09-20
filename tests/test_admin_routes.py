@@ -621,6 +621,33 @@ def test_admin_edit_event_details_rejects_garbage_price_increase_amount(admin_cl
     assert event.get("price_increase_date") is None  # unchanged, nothing written
 
 
+def test_admin_can_set_perks(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "perks_text": "Brass band\nWestern beads\n\n  \nCommemorative gift  "},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    # blank/whitespace-only lines dropped, real lines trimmed
+    assert event["perks"] == ["Brass band", "Western beads", "Commemorative gift"]
+
+
+def test_admin_can_clear_perks(admin_client):
+    _put_event(perks=["Old perk"])
+    admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300", "perks_text": ""},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["perks"] == []
+
+
 def test_admin_edit_event_details_clears_blank_contact_fields(admin_client):
     _put_event(address="old addr", contact_name="Old Contact")
     admin_client.post(

@@ -139,6 +139,53 @@ def test_event_page_links_to_register_and_has_no_inline_form(dynamodb_tables):
     assert 'action="/checkout"' not in resp.text  # the form moved to its own page
 
 
+def test_event_page_shows_perks_list(dynamodb_tables):
+    _put_event(perks=["Brass band accompaniment", "Western beads to wear and throw"])
+    resp = client.get("/")
+    assert "event-perks" in resp.text
+    assert "Brass band accompaniment" in resp.text
+    assert "Western beads to wear and throw" in resp.text
+
+
+def test_event_page_has_no_perks_section_when_empty(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "event-perks" not in resp.text
+
+
+def test_event_page_shows_gallery_with_multiple_pool_images(dynamodb_tables):
+    urls = ["https://example.com/g1.jpg", "https://example.com/g2.jpg"]
+    _put_event(banner_image_urls=urls)
+    resp = client.get("/")
+    assert "event-gallery" in resp.text
+    for url in urls:
+        assert f'src="{url}"' in resp.text
+
+
+def test_event_page_no_gallery_with_a_single_pool_image(dynamodb_tables):
+    # The hero already shows the one image statically -- a gallery below it
+    # showing the same single photo again would be pure duplication.
+    _put_event(banner_image_urls=["https://example.com/only.jpg"])
+    resp = client.get("/")
+    assert "event-gallery" not in resp.text
+
+
+def test_event_page_no_gallery_without_banner_images(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "event-gallery" not in resp.text
+
+
+def test_event_page_merges_map_and_contact_into_one_visit_section(dynamodb_tables):
+    _put_event(address="123 Bourbon St, New Orleans, LA", contact_name="Jane Krewe")
+    resp = client.get("/")
+    assert "event-visit" in resp.text
+    assert "event-map" in resp.text
+    assert "event-contact" in resp.text
+    assert "Jane Krewe" in resp.text
+    assert ">Visit Us<" in resp.text
+
+
 def test_event_page_embeds_a_map_for_the_address(dynamodb_tables):
     _put_event(address="123 Bourbon St, New Orleans, LA")
     resp = client.get("/")

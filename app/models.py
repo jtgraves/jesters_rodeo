@@ -77,6 +77,12 @@ class Event(BaseModel):
     # Ordered schedule shown in the "Timeline" section of the event page.
     # Each item: {"time": "7:30pm", "activity": "...", "details": "..."}.
     timeline: list[dict] = []
+    # The "What's Included" value-prop list on the event page -- one short
+    # phrase per item (e.g. "Brass band accompaniment with police escort").
+    # A plain list, not timeline's richer time/activity/details shape: these
+    # items don't need their own edit-in-place admin rows, so they're edited
+    # as one per line in a single textarea -- see update_event_details.
+    perks: list[str] = []
     # Up to three banner images for the top of the public /charity page,
     # shown as a clickable carousel; each has an optional caption below it.
     charity_banner_image_url: str | None = None

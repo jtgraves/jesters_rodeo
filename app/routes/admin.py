@@ -353,6 +353,7 @@ def update_event_details(
     contact_phone: str = Form(""),
     price_increase_date: str = Form(""),
     price_increase_dollars: str = Form(""),
+    perks_text: str = Form(""),
 ) -> Response:
     name, date, description, location = name.strip(), date.strip(), description.strip(), location.strip()
     if not name or not date or not description or not location:
@@ -389,6 +390,10 @@ def update_event_details(
                 status_code=400,
             )
 
+    # One item per line; blank lines dropped so stray extra newlines from
+    # copy-pasted text don't turn into empty bullets on the public page.
+    perks = [line.strip() for line in perks_text.splitlines() if line.strip()]
+
     EVENTS().update_item(
         Key={"event_id": event_id},
         # name, location, and capacity are all DynamoDB reserved words, hence
@@ -397,7 +402,8 @@ def update_event_details(
             "SET #n = :n, #d = :date, description = :desc, #l = :l, "
             "ticket_price_cents = :price, #cap = :cap, address = :addr, "
             "contact_name = :cn, contact_email = :ce, contact_phone = :cp, "
-            "price_increase_date = :pid, price_increase_cents = :pic"
+            "price_increase_date = :pid, price_increase_cents = :pic, "
+            "perks = :perks"
         ),
         ExpressionAttributeNames={
             "#n": "name", "#d": "date", "#l": "location", "#cap": "capacity",
@@ -411,6 +417,7 @@ def update_event_details(
             ":cp": contact_phone.strip() or None,
             ":pid": price_increase_date or None,
             ":pic": price_increase_cents,
+            ":perks": perks,
         },
     )
     return RedirectResponse("/admin/events", status_code=303)

@@ -35,6 +35,10 @@
       <label>Description
         <textarea name="description" class="richtext-input" required>{{ e.description }}</textarea>
       </label>
+      <label>What's included (one per line)
+        <textarea name="perks_text" placeholder="e.g.&#10;Brass band accompaniment with police escort&#10;Western-themed beads to wear and throw">{{ (e.perks or []) | join('\n') }}</textarea>
+      </label>
+      <p class="field-hint">Shown as a short list on the event page, near the ticket button.</p>
       <label>Contact name <input type="text" name="contact_name" value="{{ e.contact_name or '' }}"></label>
       <label>Contact email <input type="email" name="contact_email" value="{{ e.contact_email or '' }}"></label>
       <label>Contact phone <input type="tel" name="contact_phone" value="{{ e.contact_phone or '' }}"></label>
