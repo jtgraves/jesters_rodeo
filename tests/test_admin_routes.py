@@ -1157,6 +1157,7 @@ def test_update_charity_saves_fields(admin_client):
         "/admin/charity",
         data={
             "event_id": "evt_2026",
+            "giving_back_description": "We've been giving back for years.",
             "charity_name": "  Habitat NOLA  ",
             "charity_description": "We build homes.",
             "charity_website_url": "https://habitat.example",
@@ -1169,6 +1170,7 @@ def test_update_charity_saves_fields(admin_client):
     assert resp.status_code == 303
     assert resp.headers["location"] == "/admin/charity?event_id=evt_2026"
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["giving_back_description"] == "We've been giving back for years."
     assert event["charity_name"] == "Habitat NOLA"
     assert event["charity_description"] == "We build homes."
     assert event["charity_website_url"] == "https://habitat.example"
@@ -1176,7 +1178,11 @@ def test_update_charity_saves_fields(admin_client):
 
 
 def test_update_charity_clears_blank_fields(admin_client):
-    _put_event(charity_name="Old Name", charity_contact_name="Old Pat")
+    _put_event(
+        charity_name="Old Name",
+        charity_contact_name="Old Pat",
+        giving_back_description="Old story.",
+    )
     admin_client.post(
         "/admin/charity",
         data={"event_id": "evt_2026", "charity_name": "", "charity_contact_name": ""},
@@ -1185,6 +1191,7 @@ def test_update_charity_clears_blank_fields(admin_client):
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
     assert event.get("charity_name") is None
     assert event.get("charity_contact_name") is None
+    assert event.get("giving_back_description") is None
 
 
 def test_update_charity_rejects_bad_website_url(admin_client):

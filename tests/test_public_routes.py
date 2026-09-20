@@ -360,6 +360,31 @@ def test_charity_page_is_graceful_when_not_set(dynamodb_tables):
     assert "hasn't been announced" in resp.text
 
 
+def test_charity_page_shows_giving_back_overview(dynamodb_tables):
+    _put_event(
+        charity_name="Habitat NOLA",
+        giving_back_description="We give back to New Orleans every year.",
+    )
+    resp = client.get("/charity")
+    assert "We give back to New Orleans every year." in resp.text
+
+
+def test_charity_page_shows_giving_back_overview_before_charity_is_chosen(dynamodb_tables):
+    # The krewe's own story can be published even before this year's specific
+    # charity has been decided -- it isn't gated on charity_name.
+    _put_event(giving_back_description="We give back to New Orleans every year.")
+    resp = client.get("/charity")
+    assert resp.status_code == 200
+    assert "We give back to New Orleans every year." in resp.text
+    assert "hasn't been announced" in resp.text
+
+
+def test_charity_page_omits_overview_section_when_unset(dynamodb_tables):
+    _put_event(charity_name="Habitat NOLA")
+    resp = client.get("/charity")
+    assert "charity-overview" not in resp.text
+
+
 def test_charity_page_renders_banner_carousel(dynamodb_tables):
     _put_event(
         charity_name="Habitat NOLA",

@@ -1006,6 +1006,7 @@ def charity_admin_page(request: Request, event_id: str = "") -> Response:
 def update_charity(
     request: Request,
     event_id: str = Form(...),
+    giving_back_description: str = Form(""),
     charity_name: str = Form(""),
     charity_description: str = Form(""),
     charity_website_url: str = Form(""),
@@ -1042,6 +1043,7 @@ def update_charity(
     event = EVENTS().get_item(Key={"event_id": event_id}).get("Item") or {}
 
     values = {
+        "giving_back_description": giving_back_description.strip() or None,
         "charity_name": charity_name.strip() or None,
         "charity_description": charity_description.strip() or None,
         "charity_website_url": website or None,

@@ -50,6 +50,12 @@ class Event(BaseModel):
     contact_name: str | None = None
     contact_email: str | None = None
     contact_phone: str | None = None
+    # The overall "why we give back" story -- distinct from charity_description
+    # below, which is specifically about *this year's* chosen charity. This
+    # field is the krewe's own evergreen framing (e.g. "we've been doing this
+    # for years, last year we raised $X"); it can be set and shown even before
+    # this year's charity_name has been decided.
+    giving_back_description: str | None = None
     # The charity this event benefits. Managed per-event on the admin Charity
     # page; surfaced on the public event page and the /charity page.
     charity_name: str | None = None
