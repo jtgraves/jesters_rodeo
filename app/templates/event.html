@@ -17,7 +17,10 @@
   </div>
 
   <aside class="ticket-card" id="tickets">
-    <p class="ticket-price">${{ "%.2f"|format(event.ticket_price_cents / 100) }} <span>per ticket</span></p>
+    <p class="ticket-price">${{ "%.2f"|format(current_ticket_price_cents(event) / 100) }} <span>per ticket</span></p>
+    {% if price_increase_is_upcoming(event) %}
+    <p class="ticket-price-increase">Price increases to ${{ "%.2f"|format(event.price_increase_cents / 100) }} on {{ event.price_increase_date }}</p>
+    {% endif %}
 
     {% if event.tickets_sold_count >= event.capacity %}
       <p>This event is sold out. <a href="/waitlist?event_id={{ event.event_id }}">Join the waitlist</a>.</p>
@@ -76,7 +79,7 @@
 
 {% block footer %}
 <div class="mobile-cta-bar">
-  <span>${{ "%.2f"|format(event.ticket_price_cents / 100) }}</span>
+  <span>${{ "%.2f"|format(current_ticket_price_cents(event) / 100) }}</span>
   <a href="/register?event_id={{ event.event_id }}" class="mobile-cta-link">Get Tickets</a>
 </div>
 {{ super() }}

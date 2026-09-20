@@ -550,6 +550,77 @@ def test_admin_edit_event_details_accepts_fractional_dollars(admin_client):
     assert int(event["ticket_price_cents"]) == 3750
 
 
+def test_admin_can_set_price_increase(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_date": "2026-03-01", "price_increase_dollars": "95.00"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["price_increase_date"] == "2026-03-01"
+    assert int(event["price_increase_cents"]) == 9500
+
+
+def test_admin_can_clear_price_increase(admin_client):
+    _put_event(price_increase_date="2026-03-01", price_increase_cents=9500)
+    admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_date": "", "price_increase_dollars": ""},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("price_increase_date") is None
+    assert event.get("price_increase_cents") is None
+
+
+def test_admin_edit_event_details_rejects_price_increase_date_without_amount(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_date": "2026-03-01"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("price_increase_date") is None  # unchanged, nothing written
+
+
+def test_admin_edit_event_details_rejects_price_increase_amount_without_date(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_dollars": "95.00"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("price_increase_cents") is None  # unchanged, nothing written
+
+
+def test_admin_edit_event_details_rejects_garbage_price_increase_amount(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_date": "2026-03-01", "price_increase_dollars": "abc"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("price_increase_date") is None  # unchanged, nothing written
+
+
 def test_admin_edit_event_details_clears_blank_contact_fields(admin_client):
     _put_event(address="old addr", contact_name="Old Contact")
     admin_client.post(

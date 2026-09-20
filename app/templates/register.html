@@ -11,7 +11,10 @@
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
 <div class="register-panel">
-  <p class="ticket-price">${{ "%.2f"|format(event.ticket_price_cents / 100) }} <span>per ticket</span></p>
+  <p class="ticket-price">${{ "%.2f"|format(current_ticket_price_cents(event) / 100) }} <span>per ticket</span></p>
+  {% if price_increase_is_upcoming(event) %}
+  <p class="ticket-price-increase">Price increases to ${{ "%.2f"|format(event.price_increase_cents / 100) }} on {{ event.price_increase_date }}</p>
+  {% endif %}
   <p class="field-hint">A small card processing fee is added at checkout.</p>
 
   {% if event.tickets_sold_count >= event.capacity %}

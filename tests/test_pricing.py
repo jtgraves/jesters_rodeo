@@ -7,7 +7,9 @@ from app.pricing import (
     STRIPE_PERCENT_FEE,
     compute_processing_fee,
     compute_total,
+    current_ticket_price_cents,
     parse_dollars_to_cents,
+    price_increase_is_upcoming,
     validate_discount_code,
     validate_quantity,
 )
@@ -83,6 +85,33 @@ def test_compute_processing_fee_organizer_nets_the_full_subtotal():
         stripes_cut = total_charged * STRIPE_PERCENT_FEE + STRIPE_FIXED_FEE_CENTS
         net_to_organizer = total_charged - stripes_cut
         assert net_to_organizer >= subtotal - 1  # within a rounding cent
+
+
+def test_current_ticket_price_cents_no_increase_configured():
+    event = {"ticket_price_cents": 8500}
+    assert current_ticket_price_cents(event, "2026-03-14") == 8500
+
+
+def test_current_ticket_price_cents_before_increase_date():
+    event = {"ticket_price_cents": 8500, "price_increase_date": "2026-03-01", "price_increase_cents": 9500}
+    assert current_ticket_price_cents(event, "2026-02-28") == 8500
+
+
+def test_current_ticket_price_cents_on_and_after_increase_date():
+    event = {"ticket_price_cents": 8500, "price_increase_date": "2026-03-01", "price_increase_cents": 9500}
+    assert current_ticket_price_cents(event, "2026-03-01") == 9500
+    assert current_ticket_price_cents(event, "2026-03-15") == 9500
+
+
+def test_price_increase_is_upcoming():
+    event = {"ticket_price_cents": 8500, "price_increase_date": "2026-03-01", "price_increase_cents": 9500}
+    assert price_increase_is_upcoming(event, "2026-02-28") is True
+    assert price_increase_is_upcoming(event, "2026-03-01") is False
+    assert price_increase_is_upcoming(event, "2026-03-15") is False
+
+
+def test_price_increase_is_upcoming_false_when_unconfigured():
+    assert price_increase_is_upcoming({"ticket_price_cents": 8500}, "2026-03-14") is False
 
 
 def test_validate_discount_code_none():

@@ -175,6 +175,27 @@ def test_event_page_has_no_contact_section_without_contact_fields(dynamodb_table
     assert "event-contact" not in resp.text
 
 
+def test_event_page_shows_upcoming_price_increase_notice(dynamodb_tables):
+    _put_event(price_increase_date="2099-01-01", price_increase_cents=20000)
+    resp = client.get("/")
+    assert "$150.00" in resp.text  # still the base price
+    assert "increases to $200.00" in resp.text
+    assert "2099-01-01" in resp.text
+
+
+def test_event_page_shows_increased_price_without_notice_once_reached(dynamodb_tables):
+    _put_event(price_increase_date="2000-01-01", price_increase_cents=20000)
+    resp = client.get("/")
+    assert "$200.00" in resp.text
+    assert "increases to" not in resp.text
+
+
+def test_event_page_has_no_price_increase_notice_when_unconfigured(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "increases to" not in resp.text
+
+
 def test_register_page_shows_form_header_and_cancel(dynamodb_tables):
     _put_event()
     resp = client.get("/register?event_id=evt_2026")
@@ -244,6 +265,35 @@ def test_checkout_creates_pending_order_and_redirects(mock_create, dynamodb_tabl
 
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
     assert int(event["tickets_sold_count"]) == 2, "capacity is reserved at checkout"
+
+
+@patch("app.routes.public.stripe.checkout.Session.create")
+def test_checkout_charges_increased_price_once_the_date_has_passed(mock_create, dynamodb_tables):
+    _put_event(price_increase_date="2000-01-01", price_increase_cents=20000)  # long past
+    mock_create.return_value = _stripe_session()
+
+    resp = _checkout(quantity="1")
+
+    assert resp.status_code == 303
+    _, kwargs = mock_create.call_args
+    line_item = kwargs["line_items"][0]
+    assert line_item["price_data"]["unit_amount"] == 20000  # not the base 15000
+
+    order = ORDERS().scan()["Items"][0]
+    assert int(order["unit_price_cents"]) == 20000
+
+
+@patch("app.routes.public.stripe.checkout.Session.create")
+def test_checkout_still_charges_base_price_before_increase_date(mock_create, dynamodb_tables):
+    _put_event(price_increase_date="2099-01-01", price_increase_cents=20000)  # far future
+    mock_create.return_value = _stripe_session()
+
+    resp = _checkout(quantity="1")
+
+    assert resp.status_code == 303
+    _, kwargs = mock_create.call_args
+    line_item = kwargs["line_items"][0]
+    assert line_item["price_data"]["unit_amount"] == 15000  # base price, increase not reached
 
 
 @patch("app.routes.public.stripe.checkout.Session.create")

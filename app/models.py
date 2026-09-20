@@ -22,6 +22,15 @@ class Event(BaseModel):
     location: str
     description: str
     ticket_price_cents: int
+    # An optional scheduled early-bird-style price increase: from
+    # price_increase_date (an ISO "YYYY-MM-DD" string) onward, the effective
+    # price becomes price_increase_cents instead of ticket_price_cents. Both
+    # unset (the default) means no increase is configured. Compared as plain
+    # date strings -- no timezone math, the increase takes effect at the
+    # start of that day UTC. See pricing.current_ticket_price_cents, the one
+    # place this pair is ever read.
+    price_increase_date: str | None = None
+    price_increase_cents: int | None = None
     capacity: int
     tickets_sold_count: int = 0
     registration_open: bool = False
