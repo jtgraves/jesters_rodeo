@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.db import DISCOUNT_CODES, EVENTS, FAQ_ENTRIES, ORDERS, PAST_BENEFICIARIES, WAITLIST
+from app.db import EVENTS, FAQ_ENTRIES, ORDERS, PAST_BENEFICIARIES, WAITLIST
 from app.main import app
 
 client = TestClient(app)
@@ -23,7 +23,7 @@ def _put_event(**overrides):
 def _checkout(**overrides):
     data = {
         "event_id": "evt_2026", "quantity": "2", "buyer_name": "Jane Doe",
-        "buyer_email": "jane@example.com", "discount_code": "",
+        "buyer_email": "jane@example.com",
     }
     data.update(overrides)
     return client.post("/checkout", data=data, follow_redirects=False)
@@ -344,36 +344,6 @@ def test_checkout_still_charges_base_price_before_increase_date(mock_create, dyn
 
 
 @patch("app.routes.public.stripe.checkout.Session.create")
-def test_checkout_charges_the_discounted_total_not_the_subtotal(mock_create, dynamodb_tables):
-    """The regression that matters most: Stripe must be told the discounted price."""
-    _put_event()
-    DISCOUNT_CODES().put_item(Item={
-        "code": "MEMBER20", "event_id": "evt_2026", "discount_type": "percent",
-        "discount_value": 20, "max_uses": None, "uses_count": 0, "active": True,
-    })
-    mock_create.return_value = _stripe_session()
-
-    resp = _checkout(quantity="2", discount_code="member20")
-
-    assert resp.status_code == 303
-    _, kwargs = mock_create.call_args
-    line_item = kwargs["line_items"][0]
-    # 2 x $150.00 = $300.00, less 20% = $240.00. Charging 30000 here means the
-    # buyer paid full price while the order recorded the discount.
-    assert line_item["price_data"]["unit_amount"] == 24000
-    assert line_item["quantity"] == 1
-    # The processing fee is computed on the discounted total, not the subtotal.
-    fee_item = kwargs["line_items"][-1]
-    assert fee_item["price_data"]["unit_amount"] == 748
-    assert fee_item["price_data"]["product_data"]["name"] == "Card processing fee"
-
-    order = ORDERS().scan()["Items"][0]
-    assert int(order["processing_fee_cents"]) == 748
-    assert int(order["total_cents"]) == 24748
-    assert order["discount_code"] == "MEMBER20", "codes are stored normalized"
-
-
-@patch("app.routes.public.stripe.checkout.Session.create")
 def test_checkout_adds_donation_and_processing_fee_as_separate_line_items(mock_create, dynamodb_tables):
     _put_event(charity_name="Habitat NOLA")
     mock_create.return_value = _stripe_session()
@@ -675,7 +645,7 @@ def test_confirmation_page_shows_whole_dollar_donation(dynamodb_tables):
     ORDERS().put_item(Item={
         "order_id": "ord_c", "event_id": "evt_2026", "buyer_name": "Jane",
         "buyer_email": "jane@example.com", "quantity": 1, "unit_price_cents": 15000,
-        "discount_code": None, "donation_cents": 2500, "total_cents": 17500,
+        "donation_cents": 2500, "total_cents": 17500,
         "status": "paid", "created_at": "2026-01-01T00:00:00Z",
         "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
     })
@@ -689,7 +659,7 @@ def test_confirmation_page_shows_processing_fee_when_present(dynamodb_tables):
     ORDERS().put_item(Item={
         "order_id": "ord_f", "event_id": "evt_2026", "buyer_name": "Jane",
         "buyer_email": "jane@example.com", "quantity": 1, "unit_price_cents": 15000,
-        "discount_code": None, "donation_cents": 0, "processing_fee_cents": 479,
+        "donation_cents": 0, "processing_fee_cents": 479,
         "total_cents": 15479, "status": "paid", "created_at": "2026-01-01T00:00:00Z",
         "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
     })
@@ -699,18 +669,19 @@ def test_confirmation_page_shows_processing_fee_when_present(dynamodb_tables):
     assert "processing fee" in resp.text.lower()
 
 
-@patch("app.routes.public.stripe.checkout.Session.create")
-def test_checkout_rejects_unknown_discount_code(mock_create, dynamodb_tables):
+def test_confirmation_page_links_home_not_admin_login(dynamodb_tables):
     _put_event()
-    resp = _checkout(discount_code="NOPE-NOT-A-CODE")
-
+    ORDERS().put_item(Item={
+        "order_id": "ord_h", "event_id": "evt_2026", "buyer_name": "Jane",
+        "buyer_email": "jane@example.com", "quantity": 1, "unit_price_cents": 15000,
+        "donation_cents": 0, "total_cents": 15000, "status": "paid",
+        "created_at": "2026-01-01T00:00:00Z",
+        "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
+    })
+    resp = client.get("/order/ord_h/confirmation")
     assert resp.status_code == 200
-    body = html.unescape(resp.text).lower()
-    assert "don't recognize" in body or "not recognized" in body
-    mock_create.assert_not_called()
-    assert ORDERS().scan()["Items"] == []
-    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
-    assert int(event["tickets_sold_count"]) == 0, "a rejected order reserves nothing"
+    assert '<a href="/">Back to home</a>' in resp.text
+    assert "/admin/login" not in resp.text
 
 
 def test_checkout_rejects_when_sold_out(dynamodb_tables):

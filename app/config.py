@@ -30,7 +30,6 @@ class Settings(BaseSettings):
     events_table: str
     orders_table: str
     tickets_table: str
-    discount_codes_table: str
     waitlist_table: str
     announcements_table: str
     past_beneficiaries_table: str

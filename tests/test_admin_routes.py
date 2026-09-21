@@ -9,7 +9,6 @@ from app import auth
 from app.config import settings
 from app.db import (
     ANNOUNCEMENTS,
-    DISCOUNT_CODES,
     EVENTS,
     FAQ_ENTRIES,
     ORDERS,
@@ -74,7 +73,7 @@ def _put_order(order_id="ord_1", **overrides):
         "order_id": order_id, "event_id": "evt_2026", "buyer_name": "Jane",
         "buyer_email": "jane@example.com",
         "quantity": 2, "unit_price_cents": 15000, "total_cents": 30000,
-        "status": "paid", "created_at": "2026-01-01T00:00:00Z", "discount_code": None,
+        "status": "paid", "created_at": "2026-01-01T00:00:00Z",
         "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
     }
     item.update(overrides)
@@ -1108,61 +1107,6 @@ def test_orders_export_neutralizes_spreadsheet_formulas(admin_client):
     data_row = [l for l in lines if "ord_evil" in l][0]
     # The buyer_name field should be escaped with a single quote prefix
     assert ",'=" in data_row  # Escaped formula marker
-
-
-def _create_code(admin_client, **overrides):
-    data = {
-        "code": "MEMBER20", "event_id": "evt_2026",
-        "discount_type": "percent", "discount_value": "20", "max_uses": "",
-    }
-    data.update(overrides)
-    return admin_client.post("/admin/discount-codes", data=data, follow_redirects=False)
-
-
-def test_discount_code_is_stored_normalized(admin_client):
-    _create_code(admin_client, code=" member20 ")
-    assert DISCOUNT_CODES().get_item(Key={"code": "MEMBER20"}).get("Item") is not None
-
-
-def test_discount_code_with_unknown_type_is_rejected(admin_client):
-    """Checkout reads codes back through a strict model.
-
-    An unrecognized discount_type written here would be a ValidationError — a
-    500 — for every customer who typed the code, long after the admin who made
-    the typo has gone home.
-    """
-    resp = _create_code(admin_client, code="BOGUS", discount_type="bogus")
-
-    assert resp.status_code == 400
-    assert "percent" in resp.text and "fixed" in resp.text
-    assert DISCOUNT_CODES().get_item(Key={"code": "BOGUS"}).get("Item") is None
-
-
-def test_percent_discount_over_100_is_rejected(admin_client):
-    """101% clamps the total to 0 via compute_total's floor — free tickets."""
-    resp = _create_code(admin_client, code="FREE", discount_type="percent",
-                        discount_value="150")
-
-    assert resp.status_code == 400
-    assert "between 0 and 100" in resp.text
-    assert DISCOUNT_CODES().get_item(Key={"code": "FREE"}).get("Item") is None
-
-
-def test_negative_discount_value_is_rejected(admin_client):
-    """A negative percent doesn't discount — it charges MORE than the subtotal."""
-    for discount_type in ("percent", "fixed"):
-        resp = _create_code(admin_client, code="SURCHARGE",
-                            discount_type=discount_type, discount_value="-50")
-        assert resp.status_code == 400, discount_type
-        assert DISCOUNT_CODES().get_item(Key={"code": "SURCHARGE"}).get("Item") is None
-
-
-def test_valid_fixed_discount_is_accepted(admin_client):
-    resp = _create_code(admin_client, code="TENOFF", discount_type="fixed",
-                        discount_value="1000")
-    assert resp.status_code == 303
-    code = DISCOUNT_CODES().get_item(Key={"code": "TENOFF"})["Item"]
-    assert int(code["discount_value"]) == 1000
 
 
 def test_waitlist_notify_marks_entry(admin_client):

@@ -22,7 +22,7 @@ def _put_order(order_id: str, minutes_ago: int, quantity: int = 1, status: str =
         "order_id": order_id, "event_id": "evt_2026", "buyer_name": order_id,
         "buyer_email": f"{order_id}@example.com",
         "quantity": quantity, "unit_price_cents": 15000, "total_cents": 15000 * quantity,
-        "status": status, "created_at": _ts(minutes_ago), "discount_code": None,
+        "status": status, "created_at": _ts(minutes_ago),
         "stripe_checkout_session_id": None, "stripe_payment_intent_id": None,
     })
 

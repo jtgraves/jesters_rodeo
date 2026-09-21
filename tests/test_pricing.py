@@ -1,16 +1,13 @@
 import pytest
 
-from app.models import DiscountCode
 from app.pricing import (
     MAX_TICKETS_PER_ORDER,
     STRIPE_FIXED_FEE_CENTS,
     STRIPE_PERCENT_FEE,
     compute_processing_fee,
-    compute_total,
     current_ticket_price_cents,
     parse_dollars_to_cents,
     price_increase_is_upcoming,
-    validate_discount_code,
     validate_quantity,
 )
 
@@ -41,25 +38,6 @@ def test_parse_dollars_to_cents_rejects_garbage():
     for garbage in ("abc", "", "  ", "$15", "15,00"):
         with pytest.raises(ValueError):
             parse_dollars_to_cents(garbage)
-
-
-def test_compute_total_no_discount():
-    assert compute_total(15000, 2, None) == 30000
-
-
-def test_compute_total_percent_discount():
-    code = DiscountCode(code="MEMBER20", event_id="evt_2026", discount_type="percent", discount_value=20)
-    assert compute_total(15000, 2, code) == 24000
-
-
-def test_compute_total_fixed_discount():
-    code = DiscountCode(code="SAVE10", event_id="evt_2026", discount_type="fixed", discount_value=1000)
-    assert compute_total(15000, 1, code) == 14000
-
-
-def test_compute_total_fixed_discount_floors_at_zero():
-    code = DiscountCode(code="HUGE", event_id="evt_2026", discount_type="fixed", discount_value=99999)
-    assert compute_total(15000, 1, code) == 0
 
 
 def test_compute_processing_fee_zero_and_negative_subtotal():
@@ -112,32 +90,6 @@ def test_price_increase_is_upcoming():
 
 def test_price_increase_is_upcoming_false_when_unconfigured():
     assert price_increase_is_upcoming({"ticket_price_cents": 8500}, "2026-03-14") is False
-
-
-def test_validate_discount_code_none():
-    valid, err = validate_discount_code(None, "evt_2026")
-    assert valid is True
-    assert err == ""
-
-
-def test_validate_discount_code_wrong_event():
-    code = DiscountCode(code="X", event_id="evt_2025", discount_type="fixed", discount_value=100)
-    valid, err = validate_discount_code(code, "evt_2026")
-    assert valid is False
-    assert "not valid" in err.lower()
-
-
-def test_validate_discount_code_exhausted():
-    code = DiscountCode(code="X", event_id="evt_2026", discount_type="fixed", discount_value=100, max_uses=5, uses_count=5)
-    valid, err = validate_discount_code(code, "evt_2026")
-    assert valid is False
-    assert "exhausted" in err.lower() or "used" in err.lower()
-
-
-def test_validate_discount_code_inactive():
-    code = DiscountCode(code="X", event_id="evt_2026", discount_type="fixed", discount_value=100, active=False)
-    valid, err = validate_discount_code(code, "evt_2026")
-    assert valid is False
 
 
 def test_validate_quantity_accepts_normal_order():

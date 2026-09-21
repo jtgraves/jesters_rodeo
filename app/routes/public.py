@@ -13,7 +13,6 @@ from fastapi.responses import RedirectResponse
 
 from app.config import refresh_secure_params_if_stale, settings
 from app.db import (
-    DISCOUNT_CODES,
     EVENTS,
     FAQ_ENTRIES,
     ORDERS,
@@ -21,13 +20,10 @@ from app.db import (
     WAITLIST,
     paginate,
 )
-from app.models import DiscountCode, normalize_code
 from app.pricing import (
     MAX_TICKETS_PER_ORDER,
     compute_processing_fee,
-    compute_total,
     current_ticket_price_cents,
-    validate_discount_code,
     validate_quantity,
 )
 from app.templating import templates
@@ -155,7 +151,6 @@ def checkout(
     buyer_name: str = Form(...),
     buyer_email: str = Form(...),
     donation_dollars: str = Form(""),
-    discount_code: str = Form(""),
 ):
     event = EVENTS().get_item(Key={"event_id": event_id}).get("Item")
     if not event:
@@ -189,27 +184,11 @@ def checkout(
             return _register_page(request, event, "A donation can't be negative.")
         donation_cents = donation_dollars_int * 100
 
-    # Resolve the discount code BEFORE reserving capacity, so a rejected code
-    # never leaves a phantom reservation behind.
-    code_obj: DiscountCode | None = None
-    if discount_code.strip():
-        code_key = normalize_code(discount_code)
-        code_item = DISCOUNT_CODES().get_item(Key={"code": code_key}).get("Item")
-        if code_item is None:
-            # validate_discount_code(None, ...) is valid-by-design so that "no
-            # code supplied" is legal. A failed *lookup* must be caught here or
-            # a typo silently charges full price with no message shown.
-            return _register_page(request, event, "We don't recognize that discount code.")
-        code_obj = DiscountCode(**code_item)
-        valid, err = validate_discount_code(code_obj, event_id)
-        if not valid:
-            return _register_page(request, event, err)
-
     if not _reserve_capacity(event_id, quantity, capacity):
         fresh = EVENTS().get_item(Key={"event_id": event_id}).get("Item", event)
         return _register_page(request, fresh, "Sorry — those tickets were just claimed.")
 
-    ticket_total = compute_total(unit_price, quantity, code_obj)
+    ticket_total = unit_price * quantity
     # The processing fee covers Stripe's cut of the WHOLE charge (tickets +
     # donation), not just the ticket portion -- that's what Stripe actually
     # takes its percentage of. See pricing.compute_processing_fee.
@@ -224,7 +203,6 @@ def checkout(
         "buyer_email": buyer_email,
         "quantity": quantity,
         "unit_price_cents": unit_price,
-        "discount_code": code_obj.code if code_obj else None,
         "donation_cents": donation_cents,
         "processing_fee_cents": processing_fee_cents,
         "total_cents": total,
@@ -235,9 +213,9 @@ def checkout(
     })
 
     ticket_word = "ticket" if quantity == 1 else "tickets"
-    # ONE line item priced at the recomputed ticket total. Sending
-    # unit_amount=unit_price with quantity=N would charge the undiscounted
-    # subtotal while the order records the discount.
+    # ONE line item priced at the ticket total, quantity 1 -- reads more
+    # clearly on the Stripe receipt as "$300.00 for 2 tickets" than as a
+    # per-unit price times a quantity.
     line_items = [{
         "price_data": {
             "currency": "usd",
