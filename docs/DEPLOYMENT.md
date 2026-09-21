@@ -20,7 +20,7 @@ also be committed into `cdk.json`'s `context` block if you prefer):
 | --- | --- |
 | `site_url` | Public base URL, no trailing slash |
 | `cognito_domain_prefix` | Globally unique Hosted UI prefix, e.g. `jesters-rodeo-admin` |
-| `ses_sender_email` | The From address for confirmation emails |
+| `ses_sender_email` | The From address for confirmation emails -- must be at `domain_name` when that's configured (see SES production access below) |
 
 Two more are optional and must be supplied together to enable a custom domain:
 `domain_name` and `hosted_zone_id`.
@@ -94,8 +94,19 @@ needs attention. Add `--overwrite` to rotate a value that already exists.
 
 New accounts start in the SES sandbox and can only send to verified addresses.
 Before go-live:
-1. Confirm the `ses_sender_email` identity (CDK requests verification; click the
-   link in the email AWS sends).
+1. Confirm the `ses_sender_email` identity.
+   - **With `domain_name`/`hosted_zone_id` configured** (the recommended
+     path): the stack verifies a *domain* identity for `domain_name`, with
+     DKIM — CDK writes the DKIM and MAIL FROM records into the Route 53
+     hosted zone itself, so there's no manual click-through step. `Verified`
+     status in the SES console can lag a few minutes behind the deploy while
+     those DNS records propagate. `ses_sender_email` must be an address at
+     that same domain (e.g. `noreply@register.example.com`) — DKIM signing
+     applies to the domain in the message's From header, so an address on a
+     different domain wouldn't actually be covered by it.
+   - **Without a custom domain**: the stack falls back to a plain email
+     identity for `ses_sender_email` itself — click the verification link
+     AWS emails to that address.
 2. In the SES console choose **Request production access**, describing the use
    case as transactional order-confirmation email for an event registration
    site. It is free and usually approved within a day.

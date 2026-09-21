@@ -45,9 +45,35 @@ class JestersRodeoStack(Stack):
             cognito_domain_prefix, site_url
         )
 
-        ses.EmailIdentity(
-            self, "SesSenderIdentity", identity=ses.Identity.email(sender_email)
-        )
+        # A domain identity (with DKIM), not a plain email identity: outgoing
+        # mail sends from an address at domain_name now (e.g.
+        # noreply@jesters.rodeo), and DKIM only ever applies to the domain in
+        # the message's From header -- verifying jesters.rodeo without also
+        # sending from it would leave the DKIM setup unused. Specifically a
+        # PublicHostedZone (not route53.HostedZone's plainer IHostedZone):
+        # EmailIdentity's public_hosted_zone() helper needs that more
+        # specific interface to auto-write the DKIM/MAIL FROM CNAME records
+        # into it -- no manual DNS step, unlike Identity.domain(). The same
+        # zone reference is reused below by _create_custom_domain, since
+        # IPublicHostedZone is-a IHostedZone. Falls back to the original
+        # plain-email identity when no custom domain is configured at all
+        # (e.g. a from-scratch deploy before domain_name/hosted_zone_id are
+        # set).
+        hosted_zone = None
+        if domain_name and hosted_zone_id:
+            hosted_zone = route53.PublicHostedZone.from_public_hosted_zone_attributes(
+                self, "HostedZone",
+                hosted_zone_id=hosted_zone_id,
+                zone_name=".".join(domain_name.split(".")[-2:]),
+            )
+            ses.EmailIdentity(
+                self, "SesSenderIdentity",
+                identity=ses.Identity.public_hosted_zone(hosted_zone),
+            )
+        else:
+            ses.EmailIdentity(
+                self, "SesSenderIdentity", identity=ses.Identity.email(sender_email)
+            )
 
         common_env = {
             "EVENTS_TABLE": tables["events"].table_name,
@@ -246,8 +272,8 @@ class JestersRodeoStack(Stack):
         )
         rule.add_target(targets.LambdaFunction(cleanup_lambda))
 
-        if domain_name and hosted_zone_id:
-            self._create_custom_domain(http_api, domain_name, hosted_zone_id)
+        if hosted_zone is not None:
+            self._create_custom_domain(http_api, domain_name, hosted_zone)
 
         CfnOutput(self, "ApiUrl", value=http_api.api_endpoint)
         CfnOutput(self, "SiteUrl", value=site_url)
@@ -452,12 +478,11 @@ class JestersRodeoStack(Stack):
         )
         return user_pool, user_pool_client, user_pool_domain
 
-    def _create_custom_domain(self, http_api, domain_name: str, hosted_zone_id: str) -> None:
-        zone = route53.HostedZone.from_hosted_zone_attributes(
-            self, "HostedZone",
-            hosted_zone_id=hosted_zone_id,
-            zone_name=".".join(domain_name.split(".")[-2:]),
-        )
+    def _create_custom_domain(self, http_api, domain_name: str, zone: route53.IHostedZone) -> None:
+        # zone is the same PublicHostedZone reference the SES domain identity
+        # uses (imported once in __init__) -- IPublicHostedZone is-a
+        # IHostedZone, so it works here unchanged; importing it a second time
+        # under a second logical id would just be redundant.
         certificate = acm.Certificate(
             self, "SiteCertificate",
             domain_name=domain_name,
