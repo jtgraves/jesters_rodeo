@@ -23,7 +23,6 @@ from app.config import settings
 from app.db import (
     ANNOUNCEMENTS,
     CLOWN_PROFILES,
-    DISCOUNT_CODES,
     EVENTS,
     FAQ_ENTRIES,
     KREWE_LINKS,
@@ -38,13 +37,11 @@ from app.fulfillment import fulfill_order, flag_fulfillment_error
 from app.models import (
     Announcement,
     ClownProfile,
-    DiscountCode,
     FaqEntry,
     KreweLink,
     Order,
     PastBeneficiary,
     Ticket,
-    normalize_code,
 )
 from app.pricing import MAX_TICKETS_PER_ORDER, parse_dollars_to_cents
 from app.templating import templates
@@ -643,7 +640,6 @@ def give_tickets(
     quantity: int = Form(...),
     buyer_name: str = Form(...),
     buyer_email: str = Form(...),
-    discount_code: str = Form(""),
 ) -> Response:
     event = EVENTS().get_item(Key={"event_id": event_id}).get("Item")
     if not event:
@@ -674,7 +670,6 @@ def give_tickets(
         "order_id": order_id, "event_id": event_id,
         "buyer_name": buyer_name, "buyer_email": buyer_email,
         "quantity": quantity, "unit_price_cents": 0,
-        "discount_code": discount_code.strip() or None,
         "donation_cents": 0, "total_cents": 0,
         "stripe_checkout_session_id": None, "stripe_payment_intent_id": None,
         "status": "paid", "comp": True,
@@ -694,89 +689,6 @@ def give_tickets(
             status_code=500,
         )
     return RedirectResponse(f"/admin/orders?event_id={event_id}", status_code=303)
-
-
-def _discount_codes_page(
-    request: Request, event_id: str, error: str | None = None, status_code: int = 200
-) -> Response:
-    codes = paginate(DISCOUNT_CODES().scan, FilterExpression=Attr("event_id").eq(event_id))
-    return templates.TemplateResponse(
-        request, "admin/discount_codes.html",
-        {"codes": codes, "event_id": event_id, "error": error},
-        status_code=status_code,
-    )
-
-
-@router.get("/discount-codes")
-def list_discount_codes(request: Request, event_id: str = "") -> Response:
-    redirect = _resolve_event_id(request, event_id, "/admin/discount-codes")
-    if redirect is not None:
-        return redirect
-    return _discount_codes_page(request, event_id)
-
-
-def _validate_discount_value(discount_type: str, discount_value: int) -> str | None:
-    """Reject values that would misprice tickets. Returns an error, or None.
-
-    A percent over 100 makes tickets free once compute_total's max(_, 0) floor
-    kicks in; a negative percent makes them cost MORE than the subtotal. Neither
-    is ever intended, and neither is visible until a customer hits checkout.
-    """
-    if discount_type == "percent" and not 0 <= discount_value <= 100:
-        return "A percent discount must be between 0 and 100."
-    if discount_type == "fixed" and discount_value < 0:
-        return "A fixed discount cannot be negative."
-    return None
-
-
-@router.post("/discount-codes")
-def create_discount_code(
-    request: Request,
-    code: str = Form(...),
-    event_id: str = Form(...),
-    discount_type: str = Form(...),
-    discount_value: int = Form(...),
-    max_uses: str = Form(""),
-) -> Response:
-    item = {
-        # Stored normalized so lookup at checkout is case-insensitive.
-        "code": normalize_code(code),
-        "event_id": event_id,
-        "discount_type": discount_type,
-        "discount_value": discount_value,
-        "max_uses": int(max_uses) if max_uses.strip() else None,
-        "uses_count": 0,
-        "active": True,
-    }
-
-    # Checkout reads codes back through DiscountCode(**item). Validating with
-    # the same model HERE turns "every customer who types this code gets a 500"
-    # into "the admin who typed it wrong sees why", at the moment they typed it.
-    try:
-        DiscountCode(**item)
-    except ValidationError:
-        return _discount_codes_page(
-            request, event_id,
-            error="Discount type must be either 'percent' or 'fixed'.",
-            status_code=400,
-        )
-
-    error = _validate_discount_value(discount_type, discount_value)
-    if error:
-        return _discount_codes_page(request, event_id, error=error, status_code=400)
-
-    DISCOUNT_CODES().put_item(Item=item)
-    return RedirectResponse(f"/admin/discount-codes?event_id={event_id}", status_code=303)
-
-
-@router.post("/discount-codes/{code}/deactivate")
-def deactivate_discount_code(code: str, event_id: str = Form(...)) -> RedirectResponse:
-    DISCOUNT_CODES().update_item(
-        Key={"code": normalize_code(code)},
-        UpdateExpression="SET active = :f",
-        ExpressionAttributeValues={":f": False},
-    )
-    return RedirectResponse(f"/admin/discount-codes?event_id={event_id}", status_code=303)
 
 
 @member_router.get("/waitlist")
@@ -968,9 +880,9 @@ def create_announcement(
         "status": "queued", "recipient_count": None, "sent_count": 0,
         "error": None, "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    # Same "validate with the model that reads it back" guard as discount
-    # codes: a tampered/malformed audience value gets a friendly 400 instead
-    # of an unhandled 500 from pydantic.
+    # Validate with the same model that reads this back: a tampered/malformed
+    # audience value gets a friendly 400 instead of an unhandled 500 from
+    # pydantic.
     try:
         Announcement(**item)
     except ValidationError:

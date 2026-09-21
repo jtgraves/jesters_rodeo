@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.db import DISCOUNT_CODES, EVENTS, ORDERS, TICKETS
+from app.db import EVENTS, ORDERS, TICKETS
 from app.main import app
 
 client = TestClient(app)
@@ -25,7 +25,7 @@ def _put_order(order_id: str, **overrides) -> None:
         "buyer_email": "jane@example.com",
         "quantity": 2, "unit_price_cents": 15000, "total_cents": 30000,
         "status": "pending", "created_at": "2026-01-01T00:00:00Z",
-        "discount_code": None, "stripe_checkout_session_id": "cs_test_123",
+        "stripe_checkout_session_id": "cs_test_123",
         "stripe_payment_intent_id": None,
     }
     item.update(overrides)
@@ -99,23 +99,6 @@ def test_webhook_delivered_twice_fulfils_exactly_once(mock_construct, dynamodb_t
     assert first.status_code == 200 and second.status_code == 200
     assert len(TICKETS().scan()["Items"]) == 2, "quantity of 2, not doubled by the retry"
     assert mock_email.call_count == 1
-
-
-@patch("app.routes.webhooks.stripe.Webhook.construct_event")
-def test_webhook_increments_discount_code_usage(mock_construct, dynamodb_tables):
-    _put_event()
-    DISCOUNT_CODES().put_item(Item={
-        "code": "MEMBER20", "event_id": "evt_2026", "discount_type": "percent",
-        "discount_value": 20, "max_uses": None, "uses_count": 3, "active": True,
-    })
-    _put_order("ord_3", quantity=1, total_cents=12000, discount_code="MEMBER20")
-    mock_construct.return_value = _stripe_event("ord_3")
-
-    with patch("app.fulfillment.send_confirmation_email"):
-        _post_webhook()
-
-    code = DISCOUNT_CODES().get_item(Key={"code": "MEMBER20"})["Item"]
-    assert int(code["uses_count"]) == 4
 
 
 @patch("app.routes.webhooks.stripe.Webhook.construct_event")

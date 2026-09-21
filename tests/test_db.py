@@ -1,4 +1,4 @@
-from app.models import Event, Order, Ticket, DiscountCode, WaitlistEntry
+from app.models import Event, Order, Ticket, WaitlistEntry
 
 
 def test_event_defaults():
@@ -25,7 +25,6 @@ def test_order_defaults():
         buyer_email="jane@example.com",
         quantity=2,
         unit_price_cents=15000,
-        discount_code=None,
         total_cents=30000,
         stripe_checkout_session_id=None,
         stripe_payment_intent_id=None,
@@ -36,7 +35,6 @@ def test_order_defaults():
 
 
 from app.db import EVENTS, WAITLIST, paginate
-from app.models import normalize_code
 
 
 def test_events_table_roundtrip(dynamodb_tables):
@@ -44,11 +42,6 @@ def test_events_table_roundtrip(dynamodb_tables):
     table.put_item(Item={"event_id": "evt_2026", "year": 2026, "name": "Test"})
     resp = table.get_item(Key={"event_id": "evt_2026"})
     assert resp["Item"]["name"] == "Test"
-
-
-def test_normalize_code_is_case_and_space_insensitive():
-    assert normalize_code(" member20 ") == "MEMBER20"
-    assert normalize_code("Member20") == "MEMBER20"
 
 
 def test_paginate_follows_last_evaluated_key(dynamodb_tables):

@@ -5,15 +5,6 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-def normalize_code(raw: str) -> str:
-    """Discount codes are case-insensitive and whitespace-tolerant.
-
-    Applied on both write and lookup so `member20`, ` MEMBER20 `, and
-    `Member20` all resolve to the same stored item.
-    """
-    return raw.strip().upper()
-
-
 class Event(BaseModel):
     event_id: str
     year: int
@@ -79,7 +70,6 @@ class Order(BaseModel):
     buyer_email: str
     quantity: int
     unit_price_cents: int
-    discount_code: str | None = None
     # An optional whole-dollar donation to the event's charity, charged as a
     # separate Stripe line item. Stored in cents for consistency with every
     # other money field; always a multiple of 100.
@@ -95,8 +85,8 @@ class Order(BaseModel):
     status: Literal["pending", "paid", "refunded", "canceled", "expired"] = "pending"
     created_at: str
     # Set by the webhook when the payment succeeded but fulfilment (tickets,
-    # discount tally, confirmation email) did not. Absent on every order that
-    # went through cleanly.
+    # confirmation email) did not. Absent on every order that went through
+    # cleanly.
     fulfillment_error: bool = False
     # An order created by an admin from the "give tickets" page: paid, $0, no
     # Stripe payment behind it.
@@ -112,16 +102,6 @@ class Ticket(BaseModel):
     checked_in_at: str | None = None
     voided: bool = False
     voided_at: str | None = None
-
-
-class DiscountCode(BaseModel):
-    code: str
-    event_id: str
-    discount_type: Literal["percent", "fixed"]
-    discount_value: int
-    max_uses: int | None = None
-    uses_count: int = 0
-    active: bool = True
 
 
 class WaitlistEntry(BaseModel):

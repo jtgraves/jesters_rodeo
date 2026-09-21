@@ -10,7 +10,6 @@ os.environ.setdefault("STRIPE_PUBLISHABLE_KEY", "pk_test_dummy")
 os.environ.setdefault("EVENTS_TABLE", "Events")
 os.environ.setdefault("ORDERS_TABLE", "Orders")
 os.environ.setdefault("TICKETS_TABLE", "Tickets")
-os.environ.setdefault("DISCOUNT_CODES_TABLE", "DiscountCodes")
 os.environ.setdefault("WAITLIST_TABLE", "Waitlist")
 os.environ.setdefault("ANNOUNCEMENTS_TABLE", "Announcements")
 os.environ.setdefault("ANNOUNCEMENT_LAMBDA_NAME", "test-announcement-lambda")
@@ -70,12 +69,6 @@ def dynamodb_tables():
                 "KeySchema": [{"AttributeName": "order_id", "KeyType": "HASH"}],
                 "Projection": {"ProjectionType": "ALL"},
             }],
-            BillingMode="PAY_PER_REQUEST",
-        )
-        client.create_table(
-            TableName="DiscountCodes",
-            KeySchema=[{"AttributeName": "code", "KeyType": "HASH"}],
-            AttributeDefinitions=[{"AttributeName": "code", "AttributeType": "S"}],
             BillingMode="PAY_PER_REQUEST",
         )
         client.create_table(

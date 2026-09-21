@@ -64,10 +64,6 @@ def TICKETS() -> Any:
     return get_table(settings.tickets_table)
 
 
-def DISCOUNT_CODES() -> Any:
-    return get_table(settings.discount_codes_table)
-
-
 def WAITLIST() -> Any:
     return get_table(settings.waitlist_table)
 

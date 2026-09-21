@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from app.db import DISCOUNT_CODES, ORDERS, TICKETS
+from app.db import ORDERS, TICKETS
 from app.emails import send_confirmation_email
 from app.models import Order, Ticket
 from app.tickets import generate_ticket_id
@@ -11,8 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def fulfill_order(order_id: str, order_item: dict) -> None:
-    """Create one ticket per unit, tally any discount code, and email the buyer
-    their tickets.
+    """Create one ticket per unit and email the buyer their tickets.
 
     Shared by the Stripe webhook (a completed checkout) and the admin
     "give tickets" page (a comped order). The caller is responsible for having
@@ -32,13 +31,6 @@ def fulfill_order(order_id: str, order_item: dict) -> None:
         }
         TICKETS().put_item(Item=ticket_item)
         tickets.append(Ticket(**ticket_item))
-
-    if order_item.get("discount_code"):
-        DISCOUNT_CODES().update_item(
-            Key={"code": order_item["discount_code"]},
-            UpdateExpression="SET uses_count = uses_count + :one",
-            ExpressionAttributeValues={":one": 1},
-        )
 
     send_confirmation_email(Order(**order_item), tickets)
 
