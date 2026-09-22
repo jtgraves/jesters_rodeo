@@ -682,7 +682,39 @@ img.event-hero { opacity: 0.5; }
 }
 .register-cancel { color: var(--color-muted); }
 
-.mobile-cta-bar { display: none; }
+/* Was mobile-only (hidden here, re-enabled under the max-width query below);
+   now always on -- the desktop .ticket-card is only sticky within
+   .event-layout, so once the page has scrolled past that (easy, now that
+   there's a lot more content below it: perks, charity, timeline, gallery,
+   visit-us), there was no way to buy tickets without scrolling back up. This
+   bar stays reachable regardless of scroll position, same as it always did
+   on mobile -- name kept as "mobile-cta-bar" to avoid an unrelated rename,
+   but it's no longer mobile-only. */
+.mobile-cta-bar {
+  display: flex;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-1) var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  z-index: 2;
+}
+.mobile-cta-link {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+/* Scoped to the event page only (via body.has-mobile-cta), not every page --
+   a body-wide selector here would pad the bottom of admin pages, the
+   confirmation page, etc. for no reason. */
+body.has-mobile-cta { padding-bottom: 4rem; }
 
 @media (min-width: 800px) {
   .event-layout { grid-template-columns: 2fr 1fr; align-items: start; }
@@ -690,34 +722,6 @@ img.event-hero { opacity: 0.5; }
      fixed nav bar above the content to leave room for. */
   .ticket-card { position: sticky; top: var(--space-2); }
   .event-visit-grid { grid-template-columns: 3fr 2fr; align-items: start; }
-}
-
-@media (max-width: 799px) {
-  .mobile-cta-bar {
-    display: flex;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--color-surface);
-    border-top: 1px solid var(--color-border);
-    padding: var(--space-1) var(--space-2);
-    align-items: center;
-    justify-content: space-between;
-    font-weight: 600;
-    z-index: 2;
-  }
-  .mobile-cta-link {
-    background: var(--color-accent);
-    color: var(--color-accent-contrast);
-    padding: 0.6rem 1.2rem;
-    border-radius: var(--radius);
-    text-decoration: none;
-  }
-  /* Scoped to the event page only (via body.has-mobile-cta), not every page
-     -- a body-wide selector here would pad the bottom of admin pages, the
-     confirmation page, etc. for no reason. */
-  body.has-mobile-cta { padding-bottom: 4rem; }
 }
 
 /* ---- Admin: inline per-row image-upload form ---- */
