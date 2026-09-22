@@ -53,20 +53,6 @@
 </section>
 {% endif %}
 
-{% set gallery_images = event.banner_image_urls or [] %}
-{% if gallery_images | length > 1 %}
-{# The hero above cross-fades through this same pool one at a time -- this
-   grid surfaces the rest of it at once, further down the page, rather than
-   requiring every photo to be seen only in rotation. #}
-<section class="event-gallery">
-  <div class="event-gallery-grid">
-    {% for src in gallery_images %}
-    <img src="{{ src }}" alt="">
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-
 {% if event.timeline %}
 <section class="event-timeline">
   <h2>Timeline</h2>
@@ -78,6 +64,20 @@
     </li>
     {% endfor %}
   </ul>
+</section>
+{% endif %}
+
+{% set gallery_images = event.banner_image_urls or [] %}
+{% if gallery_images | length > 1 %}
+{# The hero above cross-fades through this same pool one at a time -- this
+   grid surfaces the rest of it at once, further down the page, rather than
+   requiring every photo to be seen only in rotation. #}
+<section class="event-gallery">
+  <div class="event-gallery-grid">
+    {% for src in gallery_images %}
+    <img src="{{ src }}" alt="">
+    {% endfor %}
+  </div>
 </section>
 {% endif %}
 
