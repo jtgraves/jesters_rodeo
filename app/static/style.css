@@ -678,6 +678,19 @@ img.event-hero { opacity: 0.5; }
 .register-panel form textarea { display: block; width: 100%; margin-top: 0.25rem; }
 .ticket-card form button,
 .register-panel form button { width: 100%; margin-top: var(--space-1); }
+/* Real money rides on quantity/donation_dollars: a native number-input
+   spinner arrow is an easy accidental tap (mobile) or scroll-while-hovering
+   (desktop) away from silently changing either one -- doubling the charge
+   on quantity, or adding an unintended donation on an otherwise-untouched,
+   empty field. Hiding the spinner removes that vector; the field is still a
+   real <input type="number"> (keyboard entry, inputmode="numeric" on mobile
+   unaffected), just without the clickable/scrollable arrows. */
+.register-panel form input[type="number"]::-webkit-outer-spin-button,
+.register-panel form input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.register-panel form input[type="number"] { -moz-appearance: textfield; }
 
 .ticket-cta {
   display: block;
