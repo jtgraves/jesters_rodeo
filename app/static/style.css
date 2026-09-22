@@ -402,7 +402,16 @@ img.event-hero { opacity: 0.5; }
 /* Rendered richtext output (event/charity/beneficiary descriptions, clown
    bios, FAQ answers) -- app/richtext.py emits its own <p>/<h3-5>/<ul>, so no
    `white-space: pre-line` is needed on these fields anymore. */
-.richtext { overflow-wrap: anywhere; }
+.richtext {
+  overflow-wrap: anywhere;
+  text-align: justify;
+  /* Justified text without hyphenation tends to open ugly gaps between
+     words, especially in the narrower single-column layout on mobile --
+     hyphens: auto lets the browser break long words at the line edge
+     instead of stretching the whole line to compensate. Needs the
+     <html lang="en"> already set in base.html to know hyphenation rules. */
+  hyphens: auto;
+}
 .richtext > :first-child { margin-top: 0; }
 .richtext > :last-child { margin-bottom: 0; }
 .richtext h3 { font-size: 1.1rem; margin: var(--space-2) 0 var(--space-1); }
