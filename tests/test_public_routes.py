@@ -199,6 +199,18 @@ def test_event_page_map_falls_back_to_location_without_address(dynamodb_tables):
     assert "google.com/maps?q=New" in resp.text
 
 
+def test_event_header_location_links_to_the_address(dynamodb_tables):
+    _put_event(address="123 Bourbon St, New Orleans, LA")
+    resp = client.get("/")
+    assert 'href="https://www.google.com/maps/search/?api=1&query=123' in resp.text
+
+
+def test_event_header_location_link_falls_back_to_location_without_address(dynamodb_tables):
+    _put_event()  # location is "New Orleans", no address
+    resp = client.get("/")
+    assert 'href="https://www.google.com/maps/search/?api=1&query=New' in resp.text
+
+
 def test_event_page_shows_contact_section_when_set(dynamodb_tables):
     _put_event(
         contact_name="Jane Krewe", contact_email="jane@krewe.org",

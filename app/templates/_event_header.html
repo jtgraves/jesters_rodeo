@@ -1,4 +1,12 @@
 <div class="event-header">
   <h1>{{ event.name }}</h1>
-  <p class="event-meta"><span>🗓 {{ event.date }}</span><span>📍 {{ event.location }}</span></p>
+  {# Links to the same address-or-location value the Visit Us map section
+     uses, via Google's documented Maps Search URL -- opens Maps directly
+     (app on mobile, maps.google.com on desktop), unlike the ?q=...&output=
+     embed form used for the iframe there, which isn't meant to be a
+     standalone clickable link. #}
+  <p class="event-meta">
+    <span>🗓 {{ event.date }}</span>
+    <span>📍 <a href="https://www.google.com/maps/search/?api=1&query={{ (event.address or event.location) | urlencode }}" target="_blank" rel="noopener">{{ event.location }}</a></span>
+  </p>
 </div>
