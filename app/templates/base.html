@@ -15,6 +15,12 @@
    label), the same mechanic as the admin nav. #}
 <nav class="public-nav">
   <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox">
+  {# Empty by default (most public pages already show their own context --
+     event.name in _event_header.html, the charity/beneficiary content
+     itself). Pages with no such context of their own (FAQ, Past
+     Beneficiaries) override this to show the site name here, the same way
+     admin's .brand wordmark anchors every /admin page's nav. #}
+  {% block nav_brand %}{% endblock %}
   <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">☰</label>
   <div class="nav-links">
     <a href="/">Event</a>

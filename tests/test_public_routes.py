@@ -565,10 +565,10 @@ def test_beneficiaries_page_empty_state(dynamodb_tables):
     assert 'src="/static/img/jester-rider.png"' in resp.text
 
 
-def test_beneficiaries_page_shows_site_name_in_header(dynamodb_tables):
+def test_beneficiaries_page_shows_site_name_in_nav(dynamodb_tables):
     resp = client.get("/beneficiaries")
     body = html.unescape(resp.text)
-    assert body.index("Jesters' Reaux-de-Eaux") < body.index("<h1>Past Beneficiaries</h1>")
+    assert '<a class="public-nav-brand" href="/">Jesters\' Reaux-de-Eaux</a>' in body
 
 
 def test_beneficiaries_page_lists_sorted_with_details(dynamodb_tables):
@@ -610,10 +610,10 @@ def test_faq_page_empty_state(dynamodb_tables):
     assert 'src="/static/img/jester-rider.png"' in resp.text
 
 
-def test_faq_page_shows_site_name_in_header(dynamodb_tables):
+def test_faq_page_shows_site_name_in_nav(dynamodb_tables):
     resp = client.get("/faq")
     body = html.unescape(resp.text)
-    assert body.index("Jesters' Reaux-de-Eaux") < body.index("<h1>FAQ</h1>")
+    assert '<a class="public-nav-brand" href="/">Jesters\' Reaux-de-Eaux</a>' in body
 
 
 def test_faq_page_lists_entries_in_order(dynamodb_tables):

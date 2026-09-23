@@ -198,13 +198,17 @@ th, td {
   vertical-align: middle;
 }
 
-/* ---- Public nav: no bar of its own, no wordmark -- just a hamburger in the
+/* ---- Public nav: no bar of its own by default -- just a hamburger in the
    top-right at every width. On pages with a banner (body.has-hero) it floats
-   over the top of it. Reuses the .nav-toggle-* / .nav-links mechanics. ---- */
+   over the top of it. Reuses the .nav-toggle-* / .nav-links mechanics.
+   nav_brand (base.html) is an empty block most pages leave unset; the few
+   that override it (FAQ, Past Beneficiaries) get a wordmark on the left,
+   the same role .brand plays in the admin nav. ---- */
 .public-nav {
   position: relative; /* anchors the dropdown */
   z-index: 10;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   padding: var(--space-1) var(--space-2);
   /* Overridden below by body.has-hero .public-nav (higher specificity, a
@@ -217,6 +221,16 @@ th, td {
    gradient backgrounds above -- both the hero and non-hero cases want the
    same color, so it's set once here rather than duplicated per case. */
 .public-nav .nav-toggle-label { display: block; color: #fff; }
+/* margin-right: auto rather than justify-content: space-between on
+   .public-nav itself -- pages that never set nav_brand render nothing here,
+   and space-between with only the hamburger left as a flex item would pull
+   it away from the right edge, changing the (unrelated) common case. */
+.public-nav-brand {
+  margin-right: auto;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
 .public-nav .nav-links {
   display: none;
   position: absolute;
@@ -521,18 +535,6 @@ img.event-hero { opacity: 0.5; }
   object-fit: contain;
 }
 .charity-kicker { color: var(--color-muted); margin: 0; }
-/* Same treatment as .charity-kicker, generalized: a small site-name label
-   above a bare page <h1> (FAQ, Past Beneficiaries) that otherwise shows no
-   branding at all -- unlike the event page, which has event.name in its own
-   header, these are easy to land on via a shared link with zero context. */
-.site-kicker {
-  color: var(--color-muted);
-  margin: 0 0 0.15rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.8rem;
-}
 .charity-overview { margin-bottom: var(--space-3); }
 .charity-contact { margin-top: var(--space-2); }
 .charity-contact p { margin: 0.25rem 0; }
