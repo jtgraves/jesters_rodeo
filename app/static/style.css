@@ -207,8 +207,16 @@ th, td {
   display: flex;
   justify-content: flex-end;
   padding: var(--space-1) var(--space-2);
+  /* Overridden below by body.has-hero .public-nav (higher specificity, a
+     dark gradient instead) when there's a photo to float over -- this is
+     the plain "no hero" case, a solid purple strip instead of blending
+     into the page background. */
+  background: var(--color-accent);
 }
-.public-nav .nav-toggle-label { display: block; }  /* hamburger shown at all widths */
+/* hamburger shown at all widths; white to read against the purple/dark-
+   gradient backgrounds above -- both the hero and non-hero cases want the
+   same color, so it's set once here rather than duplicated per case. */
+.public-nav .nav-toggle-label { display: block; color: #fff; }
 .public-nav .nav-links {
   display: none;
   position: absolute;
@@ -239,7 +247,6 @@ body.has-hero .public-nav {
   right: 0;
   background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
 }
-body.has-hero .public-nav .nav-toggle-label { color: #fff; }
 body.has-hero .public-nav .nav-links {
   /* dark panel so links stay legible when it opens over a photo */
   background: rgba(0, 0, 0, 0.92);
@@ -468,6 +475,19 @@ img.event-hero { opacity: 0.5; }
   object-fit: contain;
 }
 .charity-kicker { color: var(--color-muted); margin: 0; }
+/* Same treatment as .charity-kicker, generalized: a small site-name label
+   above a bare page <h1> (FAQ, Past Beneficiaries) that otherwise shows no
+   branding at all -- unlike the event page, which has event.name in its own
+   header, these are easy to land on via a shared link with zero context. */
+.site-kicker {
+  color: var(--color-muted);
+  margin: 0 0 0.15rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+}
+.charity-overview { margin-bottom: var(--space-3); }
 .charity-contact { margin-top: var(--space-2); }
 .charity-contact p { margin: 0.25rem 0; }
 
