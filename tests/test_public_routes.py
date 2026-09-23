@@ -183,7 +183,7 @@ def test_event_page_merges_map_and_contact_into_one_visit_section(dynamodb_table
     assert "event-map" in resp.text
     assert "event-contact" in resp.text
     assert "Jane Krewe" in resp.text
-    assert ">Visit Us<" in resp.text
+    assert ">Join us at New Orleans!<" in resp.text
 
 
 def test_event_page_embeds_a_map_for_the_address(dynamodb_tables):
