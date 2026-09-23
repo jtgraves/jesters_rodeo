@@ -98,8 +98,9 @@ th, td {
    dropdown at every width: it carries the clown-facing pages and the
    admin-only sections together, too many links for an inline bar. ---- */
 .site-nav {
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  /* Purple, matching .public-nav's hero-less treatment -- same strip
+     look across both the clown/admin side and the public side. */
+  background: var(--color-accent);
 }
 .site-nav-bar {
   max-width: 900px;
@@ -114,18 +115,21 @@ th, td {
 .site-nav-brand-group { display: flex; align-items: center; gap: 0.5rem; }
 .brand {
   font-weight: 600;
-  color: var(--color-text);
+  color: #fff;
   text-decoration: none;
 }
 /* Shown to admins in both modes -- confirming "safely in test" matters as
    much as being warned "this is live". Live stays loud (real money is
-   flowing); test stays deliberately muted so it doesn't compete with it. */
+   flowing); test stays deliberately muted so it doesn't compete with it.
+   A white chip behind each, rather than relying on the colored text/border
+   alone, keeps them legible regardless of the nav's own background. */
 .stripe-mode-badge {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   border-radius: var(--radius);
   padding: 0.1rem 0.4rem;
+  background: var(--color-surface);
 }
 .stripe-mode-badge--live {
   color: var(--color-danger);
@@ -144,6 +148,9 @@ th, td {
   padding: 0.5rem;
   user-select: none;
 }
+/* White hamburger to read against .site-nav's purple, same as .public-nav's
+   own scoped override below. */
+.site-nav .nav-toggle-label { color: #fff; }
 .nav-links {
   display: none;
   flex-direction: column;
