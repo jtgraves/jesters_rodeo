@@ -565,6 +565,12 @@ def test_beneficiaries_page_empty_state(dynamodb_tables):
     assert 'src="/static/img/jester-rider.png"' in resp.text
 
 
+def test_beneficiaries_page_shows_site_name_in_header(dynamodb_tables):
+    resp = client.get("/beneficiaries")
+    body = html.unescape(resp.text)
+    assert body.index("Jesters' Reaux-de-Eaux") < body.index("<h1>Past Beneficiaries</h1>")
+
+
 def test_beneficiaries_page_lists_sorted_with_details(dynamodb_tables):
     _put_beneficiary("ben_1", name="Habitat NOLA", year=2024, amount_cents=1500000,
                      description="Builds homes.", website_url="https://habitat.example",
@@ -602,6 +608,12 @@ def test_faq_page_empty_state(dynamodb_tables):
     assert "<h1>FAQ</h1>" in resp.text
     assert "will show up here soon" in resp.text
     assert 'src="/static/img/jester-rider.png"' in resp.text
+
+
+def test_faq_page_shows_site_name_in_header(dynamodb_tables):
+    resp = client.get("/faq")
+    body = html.unescape(resp.text)
+    assert body.index("Jesters' Reaux-de-Eaux") < body.index("<h1>FAQ</h1>")
 
 
 def test_faq_page_lists_entries_in_order(dynamodb_tables):
