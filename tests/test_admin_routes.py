@@ -549,6 +549,104 @@ def test_admin_edit_event_details_accepts_fractional_dollars(admin_client):
     assert int(event["ticket_price_cents"]) == 3750
 
 
+def test_admin_can_set_price_increase(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_date": "2026-03-01", "price_increase_dollars": "95.00"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["price_increase_date"] == "2026-03-01"
+    assert int(event["price_increase_cents"]) == 9500
+
+
+def test_admin_can_clear_price_increase(admin_client):
+    _put_event(price_increase_date="2026-03-01", price_increase_cents=9500)
+    admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_date": "", "price_increase_dollars": ""},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("price_increase_date") is None
+    assert event.get("price_increase_cents") is None
+
+
+def test_admin_edit_event_details_rejects_price_increase_date_without_amount(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_date": "2026-03-01"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("price_increase_date") is None  # unchanged, nothing written
+
+
+def test_admin_edit_event_details_rejects_price_increase_amount_without_date(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_dollars": "95.00"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("price_increase_cents") is None  # unchanged, nothing written
+
+
+def test_admin_edit_event_details_rejects_garbage_price_increase_amount(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "price_increase_date": "2026-03-01", "price_increase_dollars": "abc"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event.get("price_increase_date") is None  # unchanged, nothing written
+
+
+def test_admin_can_set_perks(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300",
+              "perks_text": "Brass band\nWestern beads\n\n  \nCommemorative gift  "},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    # blank/whitespace-only lines dropped, real lines trimmed
+    assert event["perks"] == ["Brass band", "Western beads", "Commemorative gift"]
+
+
+def test_admin_can_clear_perks(admin_client):
+    _put_event(perks=["Old perk"])
+    admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "85.00", "capacity": "300", "perks_text": ""},
+        follow_redirects=False,
+    )
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["perks"] == []
+
+
 def test_admin_edit_event_details_clears_blank_contact_fields(admin_client):
     _put_event(address="old addr", contact_name="Old Contact")
     admin_client.post(
@@ -1101,6 +1199,7 @@ def test_update_charity_saves_fields(admin_client):
         "/admin/charity",
         data={
             "event_id": "evt_2026",
+            "giving_back_description": "We've been giving back for years.",
             "charity_name": "  Habitat NOLA  ",
             "charity_description": "We build homes.",
             "charity_website_url": "https://habitat.example",
@@ -1113,6 +1212,7 @@ def test_update_charity_saves_fields(admin_client):
     assert resp.status_code == 303
     assert resp.headers["location"] == "/admin/charity?event_id=evt_2026"
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert event["giving_back_description"] == "We've been giving back for years."
     assert event["charity_name"] == "Habitat NOLA"
     assert event["charity_description"] == "We build homes."
     assert event["charity_website_url"] == "https://habitat.example"
@@ -1120,7 +1220,11 @@ def test_update_charity_saves_fields(admin_client):
 
 
 def test_update_charity_clears_blank_fields(admin_client):
-    _put_event(charity_name="Old Name", charity_contact_name="Old Pat")
+    _put_event(
+        charity_name="Old Name",
+        charity_contact_name="Old Pat",
+        giving_back_description="Old story.",
+    )
     admin_client.post(
         "/admin/charity",
         data={"event_id": "evt_2026", "charity_name": "", "charity_contact_name": ""},
@@ -1129,6 +1233,7 @@ def test_update_charity_clears_blank_fields(admin_client):
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
     assert event.get("charity_name") is None
     assert event.get("charity_contact_name") is None
+    assert event.get("giving_back_description") is None
 
 
 def test_update_charity_rejects_bad_website_url(admin_client):

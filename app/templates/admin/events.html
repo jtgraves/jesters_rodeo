@@ -20,10 +20,24 @@
                value="{{ '%.2f'|format(e.ticket_price_cents / 100) }}" min="0" step="0.01" required>
       </label>
       <label>Capacity <input type="number" name="capacity" value="{{ e.capacity }}" min="0" required></label>
+      <fieldset>
+        <legend>Scheduled price increase (optional)</legend>
+        <label>Increase date <input type="date" name="price_increase_date" value="{{ e.price_increase_date or '' }}"></label>
+        <label>New price ($)
+          <input type="number" name="price_increase_dollars"
+                 value="{{ '%.2f'|format(e.get('price_increase_cents') / 100) if e.get('price_increase_cents') is not none else '' }}"
+                 min="0" step="0.01">
+        </label>
+        <p class="field-hint">Both fields together, or leave both blank to remove the increase. The ticket price shown to buyers switches over automatically on the date.</p>
+      </fieldset>
       <label>Address <input type="text" name="address" value="{{ e.address or '' }}"></label>
       <label>Description
         <textarea name="description" class="richtext-input" required>{{ e.description }}</textarea>
       </label>
+      <label>What's included (one per line)
+        <textarea name="perks_text" placeholder="e.g.&#10;Brass band accompaniment with police escort&#10;Western-themed beads to wear and throw">{{ (e.perks or []) | join('\n') }}</textarea>
+      </label>
+      <p class="field-hint">Shown as a short list on the event page, near the ticket button.</p>
       <label>Contact name <input type="text" name="contact_name" value="{{ e.contact_name or '' }}"></label>
       <label>Contact email <input type="email" name="contact_email" value="{{ e.contact_email or '' }}"></label>
       <label>Contact phone <input type="tel" name="contact_phone" value="{{ e.contact_phone or '' }}"></label>

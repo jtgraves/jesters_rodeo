@@ -11,6 +11,12 @@
 
 <form method="post" action="/admin/charity" enctype="multipart/form-data" class="event-images-form">
   <input type="hidden" name="event_id" value="{{ event_id }}">
+  <label>Overall giving-back story
+    <textarea name="giving_back_description" class="richtext-input"
+              placeholder="e.g. our krewe's tradition of giving back, independent of which charity this year benefits">{{ event.giving_back_description or '' }}</textarea>
+  </label>
+  <p class="field-hint">Shown on the public /charity page above this year's charity, and even before one is chosen below.</p>
+
   <label>Charity name <input type="text" name="charity_name" value="{{ event.charity_name or '' }}"></label>
   <label>Description
     <textarea name="charity_description" class="richtext-input">{{ event.charity_description or '' }}</textarea>

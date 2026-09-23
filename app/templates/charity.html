@@ -42,6 +42,9 @@
 {% endblock %}
 
 {% block content %}
+{% if event and event.giving_back_description %}
+<section class="charity-overview richtext">{{ event.giving_back_description | richtext }}</section>
+{% endif %}
 {% if event and event.charity_name %}
 <section class="charity-detail">
   <p class="charity-kicker">This year's event will be benefitting</p>

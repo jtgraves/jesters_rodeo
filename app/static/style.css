@@ -409,7 +409,16 @@ img.event-hero { opacity: 0.5; }
 /* Rendered richtext output (event/charity/beneficiary descriptions, clown
    bios, FAQ answers) -- app/richtext.py emits its own <p>/<h3-5>/<ul>, so no
    `white-space: pre-line` is needed on these fields anymore. */
-.richtext { overflow-wrap: anywhere; }
+.richtext {
+  overflow-wrap: anywhere;
+  text-align: justify;
+  /* Justified text without hyphenation tends to open ugly gaps between
+     words, especially in the narrower single-column layout on mobile --
+     hyphens: auto lets the browser break long words at the line edge
+     instead of stretching the whole line to compensate. Needs the
+     <html lang="en"> already set in base.html to know hyphenation rules. */
+  hyphens: auto;
+}
 .richtext > :first-child { margin-top: 0; }
 .richtext > :last-child { margin-bottom: 0; }
 .richtext h3 { font-size: 1.1rem; margin: var(--space-2) 0 var(--space-1); }
@@ -422,7 +431,9 @@ img.event-hero { opacity: 0.5; }
 .richtext-btn { font-size: 0.8rem; font-weight: 600; border: 1px solid var(--color-border); }
 .field-hint { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--color-muted); }
 
-.event-map { margin-top: var(--space-3); }
+/* Map and Contact are now sub-divs inside one .event-visit section (see
+   event.html) rather than their own top-level sections, so their spacing
+   comes from .event-visit-grid's gap, not an individual margin-top. */
 .event-map iframe {
   display: block;
   width: 100%;
@@ -430,8 +441,43 @@ img.event-hero { opacity: 0.5; }
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
 }
-.event-contact { margin-top: var(--space-3); }
 .event-contact p { margin: 0.25rem 0; }
+.event-visit-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
+
+.event-perks { text-align: center; }
+.perks-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto;
+  max-width: 32rem;
+  display: grid;
+  gap: 0.5rem;
+  text-align: left;
+}
+.perks-list li {
+  padding-left: 1.5rem;
+  position: relative;
+}
+.perks-list li::before {
+  content: "\2713";
+  position: absolute;
+  left: 0;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.event-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-1);
+}
+.event-gallery-grid img {
+  display: block;
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
 
 .event-timeline { margin-top: var(--space-3); }
 .timeline-list { list-style: none; padding-left: 0; margin: 0; }
@@ -642,6 +688,7 @@ img.event-hero { opacity: 0.5; }
 .register-panel { max-width: 32rem; margin: var(--space-2) auto 0; }
 .ticket-price { font-size: 1.3rem; font-weight: 600; margin: 0 0 var(--space-2); }
 .ticket-price span { font-size: 0.85rem; font-weight: normal; color: var(--color-muted); }
+.ticket-price-increase { font-size: 0.85rem; color: var(--color-warn); margin: calc(-1 * var(--space-1)) 0 var(--space-2); }
 .ticket-card form label,
 .register-panel form label { display: block; margin-bottom: var(--space-1); font-size: 0.9rem; }
 .ticket-card form input,
@@ -676,41 +723,46 @@ img.event-hero { opacity: 0.5; }
 }
 .register-cancel { color: var(--color-muted); }
 
-.mobile-cta-bar { display: none; }
+/* Was mobile-only (hidden here, re-enabled under the max-width query below);
+   now always on -- the desktop .ticket-card is only sticky within
+   .event-layout, so once the page has scrolled past that (easy, now that
+   there's a lot more content below it: perks, charity, timeline, gallery,
+   visit-us), there was no way to buy tickets without scrolling back up. This
+   bar stays reachable regardless of scroll position, same as it always did
+   on mobile -- name kept as "mobile-cta-bar" to avoid an unrelated rename,
+   but it's no longer mobile-only. */
+.mobile-cta-bar {
+  display: flex;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-1) var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  z-index: 2;
+}
+.mobile-cta-link {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+/* Scoped to the event page only (via body.has-mobile-cta), not every page --
+   a body-wide selector here would pad the bottom of admin pages, the
+   confirmation page, etc. for no reason. */
+body.has-mobile-cta { padding-bottom: 4rem; }
 
 @media (min-width: 800px) {
   .event-layout { grid-template-columns: 2fr 1fr; align-items: start; }
   /* No --nav-height offset here: public pages, unlike admin ones, have no
      fixed nav bar above the content to leave room for. */
   .ticket-card { position: sticky; top: var(--space-2); }
-}
-
-@media (max-width: 799px) {
-  .mobile-cta-bar {
-    display: flex;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--color-surface);
-    border-top: 1px solid var(--color-border);
-    padding: var(--space-1) var(--space-2);
-    align-items: center;
-    justify-content: space-between;
-    font-weight: 600;
-    z-index: 2;
-  }
-  .mobile-cta-link {
-    background: var(--color-accent);
-    color: var(--color-accent-contrast);
-    padding: 0.6rem 1.2rem;
-    border-radius: var(--radius);
-    text-decoration: none;
-  }
-  /* Scoped to the event page only (via body.has-mobile-cta), not every page
-     -- a body-wide selector here would pad the bottom of admin pages, the
-     confirmation page, etc. for no reason. */
-  body.has-mobile-cta { padding-bottom: 4rem; }
+  .event-visit-grid { grid-template-columns: 3fr 2fr; align-items: start; }
 }
 
 /* ---- Admin: inline per-row image-upload form ---- */

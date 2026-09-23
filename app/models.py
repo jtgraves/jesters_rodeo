@@ -13,6 +13,15 @@ class Event(BaseModel):
     location: str
     description: str
     ticket_price_cents: int
+    # An optional scheduled early-bird-style price increase: from
+    # price_increase_date (an ISO "YYYY-MM-DD" string) onward, the effective
+    # price becomes price_increase_cents instead of ticket_price_cents. Both
+    # unset (the default) means no increase is configured. Compared as plain
+    # date strings -- no timezone math, the increase takes effect at the
+    # start of that day UTC. See pricing.current_ticket_price_cents, the one
+    # place this pair is ever read.
+    price_increase_date: str | None = None
+    price_increase_cents: int | None = None
     capacity: int
     tickets_sold_count: int = 0
     registration_open: bool = False
@@ -41,6 +50,12 @@ class Event(BaseModel):
     contact_name: str | None = None
     contact_email: str | None = None
     contact_phone: str | None = None
+    # The overall "why we give back" story -- distinct from charity_description
+    # below, which is specifically about *this year's* chosen charity. This
+    # field is the krewe's own evergreen framing (e.g. "we've been doing this
+    # for years, last year we raised $X"); it can be set and shown even before
+    # this year's charity_name has been decided.
+    giving_back_description: str | None = None
     # The charity this event benefits. Managed per-event on the admin Charity
     # page; surfaced on the public event page and the /charity page.
     charity_name: str | None = None
@@ -53,6 +68,12 @@ class Event(BaseModel):
     # Ordered schedule shown in the "Timeline" section of the event page.
     # Each item: {"time": "7:30pm", "activity": "...", "details": "..."}.
     timeline: list[dict] = []
+    # The "What's Included" value-prop list on the event page -- one short
+    # phrase per item (e.g. "Brass band accompaniment with police escort").
+    # A plain list, not timeline's richer time/activity/details shape: these
+    # items don't need their own edit-in-place admin rows, so they're edited
+    # as one per line in a single textarea -- see update_event_details.
+    perks: list[str] = []
     # Up to three banner images for the top of the public /charity page,
     # shown as a clickable carousel; each has an optional caption below it.
     charity_banner_image_url: str | None = None

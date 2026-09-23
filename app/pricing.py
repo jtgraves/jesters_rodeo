@@ -45,6 +45,35 @@ def compute_processing_fee(subtotal_cents: int) -> int:
     return total_charged - subtotal_cents
 
 
+def current_ticket_price_cents(event: dict, today: str) -> int:
+    """The ticket price actually in effect right now.
+
+    `today` is an ISO "YYYY-MM-DD" string, passed in rather than read from
+    the clock here so this stays a pure, easily-tested function -- callers
+    use datetime.now(timezone.utc).date().isoformat(). If the event has a
+    scheduled increase (price_increase_date/price_increase_cents, both admin-
+    set and both required together) and today has reached that date, the
+    increased price applies; otherwise the base ticket_price_cents does.
+    This is the ONE place that decides the effective price -- both the
+    display on the ticket card and the amount actually charged at checkout
+    call it, so they can never disagree.
+    """
+    increase_date = event.get("price_increase_date")
+    increase_cents = event.get("price_increase_cents")
+    if increase_date and increase_cents is not None and today >= increase_date:
+        return int(increase_cents)
+    return int(event["ticket_price_cents"])
+
+
+def price_increase_is_upcoming(event: dict, today: str) -> bool:
+    """True when a scheduled price increase is configured and hasn't taken
+    effect yet -- used to show/hide the "increases to $X on <date>" notice
+    without duplicating current_ticket_price_cents's date comparison."""
+    increase_date = event.get("price_increase_date")
+    increase_cents = event.get("price_increase_cents")
+    return bool(increase_date and increase_cents is not None and today < increase_date)
+
+
 def validate_quantity(quantity: int, remaining: int) -> tuple[bool, str]:
     if quantity < 1:
         return False, "Please order at least 1 ticket."

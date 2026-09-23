@@ -23,6 +23,7 @@ from app.db import (
 from app.pricing import (
     MAX_TICKETS_PER_ORDER,
     compute_processing_fee,
+    current_ticket_price_cents,
     validate_quantity,
 )
 from app.templating import templates
@@ -157,7 +158,13 @@ def checkout(
             request, "no_event.html", {"error": "That event is no longer available."}
         )
 
-    unit_price = int(event["ticket_price_cents"])
+    # The effective price -- accounts for a scheduled price increase, if
+    # configured, so a purchase made after that date is charged the new
+    # price even if the buyer's page loaded before it (they'd see the
+    # increase reflected before submitting anyway, since the same function
+    # drives the ticket card display -- see current_ticket_price_cents).
+    today = datetime.now(timezone.utc).date().isoformat()
+    unit_price = current_ticket_price_cents(event, today)
     capacity = int(event["capacity"])
     remaining = capacity - int(event["tickets_sold_count"])
 

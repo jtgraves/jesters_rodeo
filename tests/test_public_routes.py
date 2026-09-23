@@ -139,6 +139,53 @@ def test_event_page_links_to_register_and_has_no_inline_form(dynamodb_tables):
     assert 'action="/checkout"' not in resp.text  # the form moved to its own page
 
 
+def test_event_page_shows_perks_list(dynamodb_tables):
+    _put_event(perks=["Brass band accompaniment", "Western beads to wear and throw"])
+    resp = client.get("/")
+    assert "event-perks" in resp.text
+    assert "Brass band accompaniment" in resp.text
+    assert "Western beads to wear and throw" in resp.text
+
+
+def test_event_page_has_no_perks_section_when_empty(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "event-perks" not in resp.text
+
+
+def test_event_page_shows_gallery_with_multiple_pool_images(dynamodb_tables):
+    urls = ["https://example.com/g1.jpg", "https://example.com/g2.jpg"]
+    _put_event(banner_image_urls=urls)
+    resp = client.get("/")
+    assert "event-gallery" in resp.text
+    for url in urls:
+        assert f'src="{url}"' in resp.text
+
+
+def test_event_page_no_gallery_with_a_single_pool_image(dynamodb_tables):
+    # The hero already shows the one image statically -- a gallery below it
+    # showing the same single photo again would be pure duplication.
+    _put_event(banner_image_urls=["https://example.com/only.jpg"])
+    resp = client.get("/")
+    assert "event-gallery" not in resp.text
+
+
+def test_event_page_no_gallery_without_banner_images(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "event-gallery" not in resp.text
+
+
+def test_event_page_merges_map_and_contact_into_one_visit_section(dynamodb_tables):
+    _put_event(address="123 Bourbon St, New Orleans, LA", contact_name="Jane Krewe")
+    resp = client.get("/")
+    assert "event-visit" in resp.text
+    assert "event-map" in resp.text
+    assert "event-contact" in resp.text
+    assert "Jane Krewe" in resp.text
+    assert ">Join us at New Orleans!<" in resp.text
+
+
 def test_event_page_embeds_a_map_for_the_address(dynamodb_tables):
     _put_event(address="123 Bourbon St, New Orleans, LA")
     resp = client.get("/")
@@ -185,6 +232,27 @@ def test_event_page_has_no_contact_section_without_contact_fields(dynamodb_table
     _put_event()
     resp = client.get("/")
     assert "event-contact" not in resp.text
+
+
+def test_event_page_shows_upcoming_price_increase_notice(dynamodb_tables):
+    _put_event(price_increase_date="2099-01-01", price_increase_cents=20000)
+    resp = client.get("/")
+    assert "$150.00" in resp.text  # still the base price
+    assert "increases to $200.00" in resp.text
+    assert "2099-01-01" in resp.text
+
+
+def test_event_page_shows_increased_price_without_notice_once_reached(dynamodb_tables):
+    _put_event(price_increase_date="2000-01-01", price_increase_cents=20000)
+    resp = client.get("/")
+    assert "$200.00" in resp.text
+    assert "increases to" not in resp.text
+
+
+def test_event_page_has_no_price_increase_notice_when_unconfigured(dynamodb_tables):
+    _put_event()
+    resp = client.get("/")
+    assert "increases to" not in resp.text
 
 
 def test_register_page_shows_form_header_and_cancel(dynamodb_tables):
@@ -256,6 +324,35 @@ def test_checkout_creates_pending_order_and_redirects(mock_create, dynamodb_tabl
 
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
     assert int(event["tickets_sold_count"]) == 2, "capacity is reserved at checkout"
+
+
+@patch("app.routes.public.stripe.checkout.Session.create")
+def test_checkout_charges_increased_price_once_the_date_has_passed(mock_create, dynamodb_tables):
+    _put_event(price_increase_date="2000-01-01", price_increase_cents=20000)  # long past
+    mock_create.return_value = _stripe_session()
+
+    resp = _checkout(quantity="1")
+
+    assert resp.status_code == 303
+    _, kwargs = mock_create.call_args
+    line_item = kwargs["line_items"][0]
+    assert line_item["price_data"]["unit_amount"] == 20000  # not the base 15000
+
+    order = ORDERS().scan()["Items"][0]
+    assert int(order["unit_price_cents"]) == 20000
+
+
+@patch("app.routes.public.stripe.checkout.Session.create")
+def test_checkout_still_charges_base_price_before_increase_date(mock_create, dynamodb_tables):
+    _put_event(price_increase_date="2099-01-01", price_increase_cents=20000)  # far future
+    mock_create.return_value = _stripe_session()
+
+    resp = _checkout(quantity="1")
+
+    assert resp.status_code == 303
+    _, kwargs = mock_create.call_args
+    line_item = kwargs["line_items"][0]
+    assert line_item["price_data"]["unit_amount"] == 15000  # base price, increase not reached
 
 
 @patch("app.routes.public.stripe.checkout.Session.create")
@@ -340,6 +437,31 @@ def test_charity_page_is_graceful_when_not_set(dynamodb_tables):
     resp = client.get("/charity")
     assert resp.status_code == 200
     assert "hasn't been announced" in resp.text
+
+
+def test_charity_page_shows_giving_back_overview(dynamodb_tables):
+    _put_event(
+        charity_name="Habitat NOLA",
+        giving_back_description="We give back to New Orleans every year.",
+    )
+    resp = client.get("/charity")
+    assert "We give back to New Orleans every year." in resp.text
+
+
+def test_charity_page_shows_giving_back_overview_before_charity_is_chosen(dynamodb_tables):
+    # The krewe's own story can be published even before this year's specific
+    # charity has been decided -- it isn't gated on charity_name.
+    _put_event(giving_back_description="We give back to New Orleans every year.")
+    resp = client.get("/charity")
+    assert resp.status_code == 200
+    assert "We give back to New Orleans every year." in resp.text
+    assert "hasn't been announced" in resp.text
+
+
+def test_charity_page_omits_overview_section_when_unset(dynamodb_tables):
+    _put_event(charity_name="Habitat NOLA")
+    resp = client.get("/charity")
+    assert "charity-overview" not in resp.text
 
 
 def test_charity_page_renders_banner_carousel(dynamodb_tables):

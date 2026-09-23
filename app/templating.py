@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import random
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
+from app.pricing import current_ticket_price_cents, price_increase_is_upcoming
 from app.richtext import render_richtext
 
 templates = Jinja2Templates(directory="app/templates")
@@ -56,6 +58,16 @@ templates.env.filters["shuffled"] = _shuffled
 # time (stripe_mode() in a template) reads the current mode, not a snapshot
 # from whenever this module happened to be imported.
 templates.env.globals["stripe_mode"] = lambda: settings.stripe_mode
+
+# Both wrap the pure functions in pricing.py with "today", read fresh on
+# every call (not fixed at import time) so a render right at midnight on the
+# increase date sees the correct side of it.
+templates.env.globals["current_ticket_price_cents"] = lambda event: current_ticket_price_cents(
+    event, datetime.now(timezone.utc).date().isoformat()
+)
+templates.env.globals["price_increase_is_upcoming"] = lambda event: price_increase_is_upcoming(
+    event, datetime.now(timezone.utc).date().isoformat()
+)
 
 # Cache-busting token for /static/style.css. The <link> URL is otherwise
 # identical across deploys, so a browser that cached the stylesheet can serve

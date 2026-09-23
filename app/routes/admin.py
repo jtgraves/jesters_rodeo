@@ -348,6 +348,9 @@ def update_event_details(
     contact_name: str = Form(""),
     contact_email: str = Form(""),
     contact_phone: str = Form(""),
+    price_increase_date: str = Form(""),
+    price_increase_dollars: str = Form(""),
+    perks_text: str = Form(""),
 ) -> Response:
     name, date, description, location = name.strip(), date.strip(), description.strip(), location.strip()
     if not name or not date or not description or not location:
@@ -363,6 +366,31 @@ def update_event_details(
         )
     if capacity < 0:
         return _events_page(request, error="Capacity can't be negative.", status_code=400)
+
+    price_increase_date = price_increase_date.strip()
+    # Optional pair -- both set or neither. One without the other is
+    # ambiguous (a date with no new price, or a price with nothing to
+    # trigger it), so it's rejected rather than silently guessed at.
+    if bool(price_increase_date) != bool(price_increase_dollars.strip()):
+        return _events_page(
+            request,
+            error="A price increase needs both a date and an amount -- or leave both blank.",
+            status_code=400,
+        )
+    price_increase_cents = None
+    if price_increase_date:
+        try:
+            price_increase_cents = parse_dollars_to_cents(price_increase_dollars)
+        except ValueError:
+            return _events_page(
+                request, error="Price increase amount must be a valid, non-negative dollar amount.",
+                status_code=400,
+            )
+
+    # One item per line; blank lines dropped so stray extra newlines from
+    # copy-pasted text don't turn into empty bullets on the public page.
+    perks = [line.strip() for line in perks_text.splitlines() if line.strip()]
+
     EVENTS().update_item(
         Key={"event_id": event_id},
         # name, location, and capacity are all DynamoDB reserved words, hence
@@ -370,7 +398,9 @@ def update_event_details(
         UpdateExpression=(
             "SET #n = :n, #d = :date, description = :desc, #l = :l, "
             "ticket_price_cents = :price, #cap = :cap, address = :addr, "
-            "contact_name = :cn, contact_email = :ce, contact_phone = :cp"
+            "contact_name = :cn, contact_email = :ce, contact_phone = :cp, "
+            "price_increase_date = :pid, price_increase_cents = :pic, "
+            "perks = :perks"
         ),
         ExpressionAttributeNames={
             "#n": "name", "#d": "date", "#l": "location", "#cap": "capacity",
@@ -382,6 +412,9 @@ def update_event_details(
             ":cn": contact_name.strip() or None,
             ":ce": contact_email.strip() or None,
             ":cp": contact_phone.strip() or None,
+            ":pid": price_increase_date or None,
+            ":pic": price_increase_cents,
+            ":perks": perks,
         },
     )
     return RedirectResponse("/admin/events", status_code=303)
@@ -918,6 +951,7 @@ def charity_admin_page(request: Request, event_id: str = "") -> Response:
 def update_charity(
     request: Request,
     event_id: str = Form(...),
+    giving_back_description: str = Form(""),
     charity_name: str = Form(""),
     charity_description: str = Form(""),
     charity_website_url: str = Form(""),
@@ -954,6 +988,7 @@ def update_charity(
     event = EVENTS().get_item(Key={"event_id": event_id}).get("Item") or {}
 
     values = {
+        "giving_back_description": giving_back_description.strip() or None,
         "charity_name": charity_name.strip() or None,
         "charity_description": charity_description.strip() or None,
         "charity_website_url": website or None,
