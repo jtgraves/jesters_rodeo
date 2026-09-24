@@ -423,6 +423,15 @@ def _put_link(link_id, label="Roster sheet", url="https://docs.google.com/x", so
     })
 
 
+def test_resources_page_shows_the_banner_image(dynamodb_tables):
+    c, ctx = _client(admin=False)
+    try:
+        resp = c.get("/admin/clowns/resources")
+        assert 'src="/static/img/RdE%20Clowns.png"' in resp.text
+    finally:
+        ctx.stop()
+
+
 def test_resources_member_view_has_no_admin_controls(dynamodb_tables):
     _put_link("lnk_1", label="Throw budget")
     c, ctx = _client(admin=False)

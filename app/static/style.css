@@ -336,6 +336,18 @@ body.has-hero .public-nav .nav-links a {
   opacity: 0.85;
 }
 
+/* Featured artwork at the top of Clown HQ. Portrait-oriented (1254x1525) --
+   capped by max-height, not width, so it reads as a banner rather than
+   swallowing the whole viewport on a phone. */
+.clown-hq-banner {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  margin: 0 auto var(--space-2);
+}
+
 /* ---- Event page: hero, header, two-column ticket layout ---- */
 
 .event-banner {
