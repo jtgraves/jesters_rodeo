@@ -243,6 +243,15 @@ def test_parse_years_ranges_and_dedup():
     assert admin_routes._parse_years("") == []
 
 
+def test_parse_bool_accepts_spreadsheet_checkbox_style_x():
+    # "X" (any case) is at least as common a way to mark a checked
+    # spreadsheet column as typing the word "yes".
+    for truthy in ("x", "X", "1", "true", "TRUE", "yes", "y", "on"):
+        assert admin_routes._parse_bool(truthy) is True, truthy
+    for falsy in ("", "  ", "no", "n", "0", "false"):
+        assert admin_routes._parse_bool(falsy) is False, falsy
+
+
 def test_manage_sets_official_fields(dynamodb_tables):
     _put_profile("clown_m", "Mo", [])
     c, ctx = _client(admin=True)
@@ -321,6 +330,25 @@ def test_import_creates_loginless_profile_for_unknown_email(dynamodb_tables):
         assert "created 1" in resp.text.lower() or "created: 1" in resp.text.lower()
     finally:
         ctx.stop()
+
+
+def test_import_sets_lieutenant_and_active_from_x_marked_columns(dynamodb_tables):
+    fake = type("C", (), {"list_users": lambda self, **kw: {"Users": []}})()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            c.post("/admin/clowns/import", files=_csv(
+                "email,display_name,years_ridden,is_lieutenant,active\n"
+                "lt@example.com,LT,2020-2021,X,X\n"
+                "rider@example.com,Rider,2020-2021,,X\n"
+            ), data={"invite_missing": ""}, follow_redirects=False)
+    finally:
+        ctx.stop()
+    profiles = {p["email"]: p for p in CLOWN_PROFILES().scan()["Items"]}
+    assert profiles["lt@example.com"]["is_lieutenant"] is True
+    assert profiles["lt@example.com"]["active"] is True
+    assert profiles["rider@example.com"]["is_lieutenant"] is False
+    assert profiles["rider@example.com"]["active"] is True
 
 
 def test_import_updates_existing_and_leaves_blank_cells(dynamodb_tables):

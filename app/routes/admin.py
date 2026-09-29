@@ -1648,7 +1648,10 @@ def _parse_years(text: str) -> list[int]:
 
 
 def _parse_bool(value: str) -> bool:
-    return (value or "").strip().lower() in ("1", "true", "yes", "y", "on")
+    # "x" (any case) included for spreadsheet-style checkbox columns -- a
+    # blank cell means false, and marking a checked one with an X is at
+    # least as common a convention as typing the word "yes".
+    return (value or "").strip().lower() in ("1", "true", "yes", "y", "on", "x")
 
 
 def _clowns_manage_page(
