@@ -425,14 +425,15 @@ class JestersRodeoStack(Stack):
             sign_in_aliases=cognito.SignInAliases(email=True),
             sign_in_case_sensitive=False,
             password_policy=cognito.PasswordPolicy(min_length=12),
-            # Admins can refund payments, export buyer PII, and promote/demote
-            # other admins -- a password alone must not be enough. TOTP (an
-            # authenticator app), not SMS: free, and not SIM-swap-phishable.
-            # Entirely handled by the Hosted UI; no app code involved. An
-            # admin who signed in before this deploy is walked through
-            # one-time QR-code enrollment on their very next sign-in.
-            mfa=cognito.Mfa.REQUIRED,
-            mfa_second_factor=cognito.MfaSecondFactor(sms=False, otp=True),
+            # Was REQUIRED (TOTP) -- turned off at the user's request. Users
+            # who had already completed TOTP enrollment stop being
+            # challenged for it too, not just new sign-ins: MfaConfiguration
+            # OFF disables MFA pool-wide, for everyone, not per-user. A pure
+            # in-place update (CloudFormation: "Update requires: No
+            # interruption") -- no new pool, no re-invite, unlike the
+            # sign_in_case_sensitive migration above. mfa_second_factor is
+            # dropped too: it's ignored by CDK whenever mfa=OFF.
+            mfa=cognito.Mfa.OFF,
             removal_policy=RemovalPolicy.RETAIN,
         )
         # A new prefix, not the original: Cognito domain prefixes are

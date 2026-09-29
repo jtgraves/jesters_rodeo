@@ -142,12 +142,9 @@ aws cognito-idp admin-create-user \
 
 Then visit `<site_url>/admin/login`, which redirects to the Cognito Hosted UI.
 You will be prompted to set a permanent password on first sign-in. MFA is
-required for every admin: right after that, the Hosted UI shows a QR code —
-scan it with an authenticator app (Google Authenticator, Authy, 1Password,
-etc.) and enter the 6-digit code once to finish enrolling. From then on every
-sign-in asks for a fresh code after the password. Have an authenticator app
-ready before running through this. Once enrolled, you land on `/admin/events`
-with a session cookie.
+off pool-wide (`mfa=cognito.Mfa.OFF` in the stack) -- no authenticator-app
+enrollment step. Once you set the password, you land on `/admin/events` with
+a session cookie.
 
 ## Pre-event checklist (run before opening registration each year)
 
