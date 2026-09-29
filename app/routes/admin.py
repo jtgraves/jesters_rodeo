@@ -1229,6 +1229,28 @@ def _cognito():
     return boto3.client("cognito-idp", region_name=settings.aws_region)
 
 
+def _cognito_sub_is_live(sub: str) -> bool:
+    """Whether `sub` is a real, current user in THIS pool -- not a leftover
+    value from a retired pool (e.g. after the case-sensitivity migration in
+    infra/jesters_rodeo_stack.py, which points settings.cognito_user_pool_id
+    at a brand new pool and leaves every existing ClownProfile's cognito_sub
+    referring to the old one) or a deleted account. A ClownProfile carrying
+    a stale sub looks linked but isn't -- without this check, both
+    _my_profile's relink and the CSV importer's adopt-by-email path would
+    treat it as someone else's account and create a duplicate instead of
+    reclaiming it. Checked directly against Cognito rather than guessed,
+    so it can't be fooled by a pool exceeding list_users' one-page limit
+    elsewhere in this file.
+    """
+    try:
+        _cognito().admin_get_user(UserPoolId=settings.cognito_user_pool_id, Username=sub)
+        return True
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] == "UserNotFoundException":
+            return False
+        raise
+
+
 def _admin_usernames() -> set[str]:
     resp = _cognito().list_users_in_group(
         UserPoolId=settings.cognito_user_pool_id, GroupName=ADMIN_GROUP
@@ -1380,8 +1402,10 @@ def _my_profile(claims: dict) -> dict:
     """Return the calling clown's ClownProfile, creating or email-linking it.
 
     1. by cognito_sub -> return it
-    2. an unlinked profile whose email matches -> attach cognito_sub, return it
-       (a pre-seeded / returning rider connecting to their new account)
+    2. a profile whose email matches, and whose own cognito_sub is either
+       unset or stale (see _cognito_sub_is_live) -> attach cognito_sub,
+       return it (a pre-seeded / returning rider, or a rider carried over
+       from a retired user pool, connecting to their current account)
     3. otherwise create a fresh linked profile
     """
     sub = claims.get("sub", "")
@@ -1393,18 +1417,22 @@ def _my_profile(claims: dict) -> dict:
         if p.get("cognito_sub") == sub:
             return p
 
-    # Step 2 adopts a historical, login-less profile off the token's email, so
-    # only trust an address Cognito has verified.
+    # Step 2 adopts a profile off the token's email, so only trust an
+    # address Cognito has verified.
     if email_key and claims.get("email_verified"):
         for p in profiles:
-            if not p.get("cognito_sub") and (p.get("email") or "").strip().lower() == email_key:
-                CLOWN_PROFILES().update_item(
-                    Key={"clown_id": p["clown_id"]},
-                    UpdateExpression="SET cognito_sub = :s",
-                    ExpressionAttributeValues={":s": sub},
-                )
-                p["cognito_sub"] = sub
-                return p
+            if (p.get("email") or "").strip().lower() != email_key:
+                continue
+            stored_sub = p.get("cognito_sub")
+            if stored_sub and _cognito_sub_is_live(stored_sub):
+                continue  # a different, currently-real account -- not ours to adopt
+            CLOWN_PROFILES().update_item(
+                Key={"clown_id": p["clown_id"]},
+                UpdateExpression="SET cognito_sub = :s",
+                ExpressionAttributeValues={":s": sub},
+            )
+            p["cognito_sub"] = sub
+            return p
 
     item = {
         "clown_id": f"clown_{uuid.uuid4().hex}",
@@ -1844,10 +1872,20 @@ def clowns_import(
 
     profiles = paginate(CLOWN_PROFILES().scan)
     by_sub = {p["cognito_sub"]: p for p in profiles if p.get("cognito_sub")}
-    by_email = {
-        (p.get("email") or "").strip().lower(): p
-        for p in profiles if not p.get("cognito_sub") and p.get("email")
-    }
+    # A profile's stored cognito_sub can be stale -- pointing at a retired
+    # user pool (see _cognito_sub_is_live) -- in which case it's just as
+    # reclaimable by email as one with no login at all. Only profiles that
+    # already carry a sub incur the extra AdminGetUser call, and only once
+    # each, here.
+    by_email = {}
+    for p in profiles:
+        key = (p.get("email") or "").strip().lower()
+        if not key:
+            continue
+        stored_sub = p.get("cognito_sub")
+        if stored_sub and _cognito_sub_is_live(stored_sub):
+            continue  # a different, currently-real account -- not reclaimable
+        by_email[key] = p
     cognito_by_email: dict[str, str] = {}
     # NOTE: reads only the first Cognito page (~60 users); an email past that
     # page looks unknown here, so the importer would treat a returning rider as
@@ -1882,8 +1920,8 @@ def clowns_import(
                 if value.startswith("'"):
                     value = value[1:]  # undo the _csv_safe formula-injection guard
                 fields[col] = value
-        if profile and sub and not profile.get("cognito_sub"):
-            fields["cognito_sub"] = sub  # adopt the login onto the historical row
+        if profile and sub and profile.get("cognito_sub") != sub:
+            fields["cognito_sub"] = sub  # adopt/re-link the login onto this row
         if norm.get("years_ridden"):
             fields["years_ridden"] = _parse_years(norm["years_ridden"])
         if norm.get("is_lieutenant"):

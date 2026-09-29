@@ -63,6 +63,52 @@ def test_my_profile_links_an_unlinked_profile_by_email(dynamodb_tables):
     assert len(CLOWN_PROFILES().scan()["Items"]) == 1  # not duplicated
 
 
+def _cognito_fake(live_subs: set[str]):
+    """A fake Cognito client whose admin_get_user raises UserNotFoundException
+    for anything outside `live_subs` -- for exercising _cognito_sub_is_live
+    without a real pool."""
+    def admin_get_user(self, UserPoolId, Username):
+        if Username in live_subs:
+            return {"Username": Username}
+        raise ClientError(
+            {"Error": {"Code": "UserNotFoundException", "Message": "not found"}},
+            "AdminGetUser",
+        )
+    return type("C", (), {"admin_get_user": admin_get_user})()
+
+
+def test_my_profile_reclaims_a_profile_whose_sub_is_stale(dynamodb_tables):
+    # The pool-migration scenario: a profile carries a cognito_sub from a
+    # retired user pool. It LOOKS linked, but that sub no longer resolves in
+    # the current pool -- reclaimable by email, same as no login at all.
+    CLOWN_PROFILES().put_item(Item={
+        "clown_id": "clown_stale", "cognito_sub": "sub-old-pool", "email": "mover@example.com",
+        "years_ridden": [2020], "is_lieutenant": False, "active": True,
+        "created_at": "2026-01-01T00:00:00Z",
+    })
+    with patch("app.routes.admin._cognito", return_value=_cognito_fake(set())):
+        p = admin_routes._my_profile(
+            {"sub": "sub-new-pool", "email": "mover@example.com", "email_verified": True}
+        )
+    assert p["clown_id"] == "clown_stale"
+    assert p["cognito_sub"] == "sub-new-pool"
+    assert len(CLOWN_PROFILES().scan()["Items"]) == 1  # not duplicated
+
+
+def test_my_profile_does_not_reclaim_a_profile_whose_sub_is_still_live(dynamodb_tables):
+    CLOWN_PROFILES().put_item(Item={
+        "clown_id": "clown_taken", "cognito_sub": "sub-real", "email": "shared@example.com",
+        "years_ridden": [2020], "is_lieutenant": False, "active": True,
+        "created_at": "2026-01-01T00:00:00Z",
+    })
+    with patch("app.routes.admin._cognito", return_value=_cognito_fake({"sub-real"})):
+        p = admin_routes._my_profile(
+            {"sub": "sub-someone-else", "email": "shared@example.com", "email_verified": True}
+        )
+    assert p["clown_id"] != "clown_taken"  # a fresh profile, not stolen from the live one
+    assert len(CLOWN_PROFILES().scan()["Items"]) == 2
+
+
 def _client(sub="member-1", email="member@example.com", admin=False):
     groups = ["admins"] if admin else []
     ctx = patch.object(auth, "verify_cognito_token",
@@ -671,6 +717,47 @@ def test_import_adopts_unlinked_profile_when_email_has_cognito_account(dynamodb_
     assert p["cognito_sub"] == "sub-alice"
     assert p["display_name"] == "Alice Updated"
     assert [int(y) for y in p["years_ridden"]] == [2015, 2016, 2017]
+
+
+def test_import_reclaims_profile_with_a_stale_sub_instead_of_duplicating(dynamodb_tables):
+    # The pool-migration scenario, hit via CSV import instead of self-login:
+    # Bob's profile still carries his sub from the retired pool. Re-importing
+    # his row -- now that he has a real login in the CURRENT pool under a
+    # different sub -- must update his existing profile, not create a
+    # second one.
+    _put_profile("clown_bob", "Bob", [2018, 2019], cognito_sub="sub-old-pool",
+                 email="bob@example.com", is_lieutenant=True, active=True)
+
+    def admin_get_user(self, UserPoolId, Username):
+        raise ClientError(
+            {"Error": {"Code": "UserNotFoundException", "Message": "not found"}}, "AdminGetUser",
+        )
+
+    fake = type("C", (), {
+        "list_users": lambda self, **kw: {"Users": [
+            {"Username": "sub-new-pool",
+             "Attributes": [{"Name": "email", "Value": "bob@example.com"}]}
+        ]},
+        "admin_get_user": admin_get_user,
+    })()
+    c, ctx = _client(admin=True)
+    try:
+        with patch("app.routes.admin._cognito", return_value=fake):
+            resp = c.post("/admin/clowns/import", files=_csv(
+                "email,years_ridden\nbob@example.com,2018-2020\n"
+            ), data={"invite_missing": ""}, follow_redirects=False)
+        assert resp.status_code == 200
+    finally:
+        ctx.stop()
+    items = CLOWN_PROFILES().scan()["Items"]
+    assert len(items) == 1  # not duplicated
+    p = items[0]
+    assert p["clown_id"] == "clown_bob"
+    assert p["cognito_sub"] == "sub-new-pool"
+    # status carried over from the pre-existing row, untouched by this CSV
+    # (its is_lieutenant/active columns were left blank)
+    assert p["is_lieutenant"] is True
+    assert p["active"] is True
 
 
 def test_import_row_wider_than_header_is_not_a_500(dynamodb_tables):
