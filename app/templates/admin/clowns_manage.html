@@ -1,7 +1,7 @@
 {% extends "admin/_base.html" %}
 {% block content %}
 <h1>Manage Roster</h1>
-<p>Roster data for every clown — years ridden, lieutenant status,
+<p>Roster data for every clown — years ridden, Float Lieutenant status,
    active/inactive — including historical riders with no login of their own. To invite
    someone or change who's an admin, use <a href="/admin/clown_mgmt">Clown Management</a>.</p>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
@@ -27,8 +27,7 @@
     <form method="post" action="/admin/clowns/manage/{{ p.clown_id }}" class="event-images-form">
       <label>Years <input type="text" name="years_ridden"
              value="{{ (p.years_ridden or []) | map('int') | join(' ') }}" placeholder="2019 2021-2023"></label>
-      <label><input type="checkbox" name="is_lieutenant" value="1" {% if p.is_lieutenant %}checked{% endif %}> Lieutenant</label>
-      <label>Title <input type="text" name="lieutenant_title" value="{{ p.lieutenant_title or '' }}"></label>
+      <label><input type="checkbox" name="is_lieutenant" value="1" {% if p.is_lieutenant %}checked{% endif %}> Float Lieutenant</label>
       <label><input type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}> Active</label>
       <button type="submit">Save</button>
       <button type="submit" class="btn-danger"

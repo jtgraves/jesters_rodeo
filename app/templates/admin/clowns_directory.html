@@ -9,7 +9,7 @@
   <td>
     {{ p.display_name or '(no name)' }}
     {% if p.is_lieutenant %}
-    <span class="lieutenant-badge">🎖 Lieutenant{% if p.lieutenant_title %} — {{ p.lieutenant_title }}{% endif %}</span>
+    <span class="lieutenant-badge">🎖 Float Lieutenant</span>
     {% endif %}
   </td>
   <td>{% if p.phone %}<a href="tel:{{ p.phone }}">{{ p.phone | phone }}</a>{% endif %}</td>

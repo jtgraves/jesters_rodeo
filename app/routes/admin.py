@@ -1413,7 +1413,7 @@ def _my_profile(claims: dict) -> dict:
         "display_name": None, "photo_url": None, "bio": None,
         "phone": None, "address": None,
         "emergency_contact_name": None, "emergency_contact_phone": None,
-        "years_ridden": [], "is_lieutenant": False, "lieutenant_title": None,
+        "years_ridden": [], "is_lieutenant": False,
         "active": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -1679,7 +1679,7 @@ def add_historical_rider(
         "phone": None, "address": None,
         "emergency_contact_name": None, "emergency_contact_phone": None,
         "years_ridden": _parse_years(years_ridden),
-        "is_lieutenant": False, "lieutenant_title": None, "active": False,
+        "is_lieutenant": False, "active": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     return RedirectResponse("/admin/clowns/manage", status_code=303)
@@ -1689,13 +1689,12 @@ def add_historical_rider(
 def update_clown_official(
     request: Request, clown_id: str,
     years_ridden: str = Form(""), is_lieutenant: str = Form(""),
-    lieutenant_title: str = Form(""), active: str = Form(""),
+    active: str = Form(""),
 ) -> Response:
     try:
         _update_clown_fields(clown_id, {
             "years_ridden": _parse_years(years_ridden),
             "is_lieutenant": _parse_bool(is_lieutenant),
-            "lieutenant_title": lieutenant_title.strip() or None,
             "active": _parse_bool(active),
         }, require_exists=True)
     except ClientError as exc:
@@ -1770,11 +1769,11 @@ def delete_clown_profile(clown_id: str) -> RedirectResponse:
 CLOWN_CSV_COLUMNS = [
     "email", "display_name", "phone", "address", "bio",
     "emergency_contact_name", "emergency_contact_phone",
-    "years_ridden", "is_lieutenant", "lieutenant_title", "active",
+    "years_ridden", "is_lieutenant", "active",
 ]
 _CLOWN_CSV_TEXT_COLUMNS = (
     "display_name", "phone", "address", "bio",
-    "emergency_contact_name", "emergency_contact_phone", "lieutenant_title",
+    "emergency_contact_name", "emergency_contact_phone",
 )
 
 
@@ -1820,7 +1819,6 @@ def clowns_export() -> Response:
             _csv_safe(p.get("emergency_contact_phone")),
             " ".join(str(int(y)) for y in (p.get("years_ridden") or [])),
             "yes" if p.get("is_lieutenant") else "no",
-            _csv_safe(p.get("lieutenant_title")),
             "yes" if p.get("active", True) else "no",
         ])
     return Response(
@@ -1922,7 +1920,6 @@ def clowns_import(
             "emergency_contact_phone": fields.get("emergency_contact_phone"),
             "years_ridden": fields.get("years_ridden", []),
             "is_lieutenant": fields.get("is_lieutenant", False),
-            "lieutenant_title": fields.get("lieutenant_title"),
             "active": fields.get("active", True),
             "created_at": datetime.now(timezone.utc).isoformat(),
         })

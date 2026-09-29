@@ -187,8 +187,10 @@ class ClownProfile(BaseModel):
     emergency_contact_name: str | None = None
     emergency_contact_phone: str | None = None
     years_ridden: list[int] = []
+    # No per-float title/rank -- being a lieutenant is a single yes/no thing;
+    # anywhere this is shown, the label is the fixed string "Float
+    # Lieutenant", not admin-entered text.
     is_lieutenant: bool = False
-    lieutenant_title: str | None = None
     active: bool = True
     created_at: str
 
