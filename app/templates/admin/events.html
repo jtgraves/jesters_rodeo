@@ -3,59 +3,101 @@
 <h1>Events</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 <p><a href="/admin/events/new">+ New event</a></p>
-<ul>
+<ul class="admin-events-list">
 {% for e in events %}
-  <li>{{ e.year }} — {{ e.name }} ({{ e.status }}) — {{ e.tickets_sold_count }}/{{ e.capacity }}
-    <a href="/admin/orders?event_id={{ e.event_id }}">Orders</a>
-    <a href="/admin/waitlist?event_id={{ e.event_id }}">Waitlist</a>
-    <a href="/admin/checkin?event_id={{ e.event_id }}">Check-in</a>
-    <form method="post" action="/admin/events/{{ e.event_id }}/open" style="display:inline"><button>Open</button></form>
-    <form method="post" action="/admin/events/{{ e.event_id }}/close" style="display:inline"><button>Close</button></form>
-    <form method="post" action="/admin/events/{{ e.event_id }}/details" class="event-images-form">
-      <label>Name <input type="text" name="name" value="{{ e.name }}" required></label>
-      <label>Date <input type="text" name="date" value="{{ e.date }}" placeholder="YYYY-MM-DD" required></label>
-      <label>Location <input type="text" name="location" value="{{ e.location }}" required></label>
-      <label>Ticket price ($)
-        <input type="number" name="ticket_price_dollars"
-               value="{{ '%.2f'|format(e.ticket_price_cents / 100) }}" min="0" step="0.01" required>
-      </label>
-      <label>Capacity <input type="number" name="capacity" value="{{ e.capacity }}" min="0" required></label>
-      <fieldset>
-        <legend>Scheduled price increase (optional)</legend>
-        <label>Increase date <input type="date" name="price_increase_date" value="{{ e.price_increase_date or '' }}"></label>
-        <label>New price ($)
-          <input type="number" name="price_increase_dollars"
-                 value="{{ '%.2f'|format(e.get('price_increase_cents') / 100) if e.get('price_increase_cents') is not none else '' }}"
-                 min="0" step="0.01">
-        </label>
-        <p class="field-hint">Both fields together, or leave both blank to remove the increase. The ticket price shown to buyers switches over automatically on the date.</p>
+  <li class="admin-event-card">
+    <div class="admin-event-header">
+      <span class="admin-event-title">{{ e.year }} — {{ e.name }}</span>
+      <span class="admin-event-meta">{{ e.status }} · {{ e.tickets_sold_count }}/{{ e.capacity }} sold</span>
+      <div class="admin-event-links">
+        <a href="/admin/orders?event_id={{ e.event_id }}">Orders</a>
+        <a href="/admin/waitlist?event_id={{ e.event_id }}">Waitlist</a>
+        <a href="/admin/checkin?event_id={{ e.event_id }}">Check-in</a>
+        <form method="post" action="/admin/events/{{ e.event_id }}/open" style="display:inline">
+          <button type="submit" class="btn-secondary">Open</button>
+        </form>
+        <form method="post" action="/admin/events/{{ e.event_id }}/close" style="display:inline">
+          <button type="submit" class="btn-secondary">Close</button>
+        </form>
+      </div>
+    </div>
+
+    <form method="post" action="/admin/events/{{ e.event_id }}/details">
+      <fieldset class="admin-form-section">
+        <legend>Basic info</legend>
+        <div class="admin-form-grid">
+          <label>Name <input type="text" name="name" value="{{ e.name }}" required></label>
+          <label>Date <input type="text" name="date" value="{{ e.date }}" placeholder="YYYY-MM-DD" required></label>
+          <label>Location <input type="text" name="location" value="{{ e.location }}" required></label>
+          <label>Address <input type="text" name="address" value="{{ e.address or '' }}"></label>
+        </div>
       </fieldset>
-      <label>Address <input type="text" name="address" value="{{ e.address or '' }}"></label>
-      <label>Description
-        <textarea name="description" class="richtext-input" required>{{ e.description }}</textarea>
-      </label>
-      <label>What's included (one per line)
-        <textarea name="perks_text" placeholder="e.g.&#10;Brass band accompaniment with police escort&#10;Western-themed beads to wear and throw">{{ (e.perks or []) | join('\n') }}</textarea>
-      </label>
-      <p class="field-hint">Shown as a short list on the event page, near the ticket button.</p>
-      <label>Contact name <input type="text" name="contact_name" value="{{ e.contact_name or '' }}"></label>
-      <label>Contact email <input type="email" name="contact_email" value="{{ e.contact_email or '' }}"></label>
-      <label>Contact phone <input type="tel" name="contact_phone" value="{{ e.contact_phone or '' }}"></label>
+
+      <fieldset class="admin-form-section">
+        <legend>Pricing &amp; capacity</legend>
+        <div class="admin-form-grid">
+          <label>Ticket price ($)
+            <input type="number" name="ticket_price_dollars"
+                   value="{{ '%.2f'|format(e.ticket_price_cents / 100) }}" min="0" step="0.01" required>
+          </label>
+          <label>Capacity <input type="number" name="capacity" value="{{ e.capacity }}" min="0" required></label>
+          <fieldset class="admin-form-section">
+            <legend>Scheduled price increase (optional)</legend>
+            <div class="admin-form-grid">
+              <label>Increase date <input type="date" name="price_increase_date" value="{{ e.price_increase_date or '' }}"></label>
+              <label>New price ($)
+                <input type="number" name="price_increase_dollars"
+                       value="{{ '%.2f'|format(e.get('price_increase_cents') / 100) if e.get('price_increase_cents') is not none else '' }}"
+                       min="0" step="0.01">
+              </label>
+              <p class="field-hint">Both fields together, or leave both blank to remove the increase. The ticket price shown to buyers switches over automatically on the date.</p>
+            </div>
+          </fieldset>
+        </div>
+      </fieldset>
+
+      <fieldset class="admin-form-section">
+        <legend>Contact</legend>
+        <div class="admin-form-grid">
+          <label>Contact name <input type="text" name="contact_name" value="{{ e.contact_name or '' }}"></label>
+          <label>Contact email <input type="email" name="contact_email" value="{{ e.contact_email or '' }}"></label>
+          <label>Contact phone <input type="tel" name="contact_phone" value="{{ e.contact_phone or '' }}"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="admin-form-section">
+        <legend>Description &amp; what's included</legend>
+        <div class="admin-form-grid">
+          <label>Description
+            <textarea name="description" class="richtext-input" required>{{ e.description }}</textarea>
+          </label>
+          <label>What's included (one per line)
+            <textarea name="perks_text" placeholder="e.g.&#10;Brass band accompaniment with police escort&#10;Western-themed beads to wear and throw">{{ (e.perks or []) | join('\n') }}</textarea>
+          </label>
+          <p class="field-hint">Perks are shown as a short list on the event page, near the ticket button.</p>
+        </div>
+      </fieldset>
+
       <button type="submit">Save details</button>
     </form>
-    <form method="post" action="/admin/events/{{ e.event_id }}/images" enctype="multipart/form-data" class="event-images-form">
-      <label>
-        {% if e.logo_url %}<img src="{{ e.logo_url }}" alt="" class="event-image-preview"><br>{% endif %}
-        Logo <input type="file" name="logo_image" accept="image/jpeg,image/png,image/gif,image/webp">
-      </label>
-      {% if e.logo_url %}<label><input type="checkbox" name="remove_logo_image" value="1"> Remove</label>{% endif %}
-      <button type="submit">Save logo</button>
-    </form>
+
+    <fieldset class="admin-form-section">
+      <legend>Logo</legend>
+      <form method="post" action="/admin/events/{{ e.event_id }}/images" enctype="multipart/form-data" class="event-images-form">
+        <label>
+          {% if e.logo_url %}<img src="{{ e.logo_url }}" alt="" class="event-image-preview"><br>{% endif %}
+          Logo <input type="file" name="logo_image" accept="image/jpeg,image/png,image/gif,image/webp">
+        </label>
+        {% if e.logo_url %}<label><input type="checkbox" name="remove_logo_image" value="1"> Remove</label>{% endif %}
+        <button type="submit">Save logo</button>
+      </form>
+    </fieldset>
+
     {% set pool = e.banner_image_urls or [] %}
-    <fieldset class="banner-pool">
+    <fieldset class="admin-form-section banner-pool">
       <legend>Banner photo pool
-        ({{ pool | length }} image{{ '' if (pool | length) == 1 else 's' }}) —
-        the public page cross-fades through all of them, in a random order each visit.</legend>
+        ({{ pool | length }} image{{ '' if (pool | length) == 1 else 's' }})</legend>
+      <p class="field-hint">The public page cross-fades through all of them, in a random order each visit.</p>
       {% if pool %}
       <ul class="banner-pool-grid">
         {% for url in pool %}
@@ -76,6 +118,7 @@
         <button type="submit">Add to pool</button>
       </form>
     </fieldset>
+
     <form method="post" action="/admin/events/{{ e.event_id }}/timeline">
       {% set timeline_rows = e.timeline or [] %}
       {% include "admin/_timeline_fields.html" %}

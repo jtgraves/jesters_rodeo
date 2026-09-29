@@ -532,9 +532,8 @@ img.event-hero { opacity: 0.5; }
   color: var(--color-muted);
 }
 
-/* Admin: repeatable timeline entry rows */
-.timeline-fields { margin: var(--space-1) 0; border: 1px solid var(--color-border); padding: var(--space-1); }
-.timeline-fields legend { font-size: 0.85rem; padding: 0 0.4rem; }
+/* Admin: repeatable timeline entry rows. Box/legend styling comes from the
+   shared .admin-form-section class (see below) applied alongside this one. */
 .timeline-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem; }
 .timeline-row input[name="timeline_time"] { flex: 0 0 5rem; }
 .timeline-row input[name="timeline_activity"] { flex: 1 1 10rem; }
@@ -832,8 +831,97 @@ body.has-mobile-cta { padding-bottom: 4rem; }
   border: 1px solid var(--color-border);
 }
 
-.banner-pool { margin-top: var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-1) var(--space-2); }
-.banner-pool legend { font-size: 0.85rem; color: var(--color-muted); padding: 0 0.3rem; }
+/* ---- Admin: an event's whole management panel, and the titled boxes
+   within it (Details' sub-groups, Logo, Banner pool, Timeline) that make
+   those sections scannable at a glance instead of one long run-on form. ---- */
+.admin-events-list { list-style: none; padding: 0; }
+.admin-event-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  margin-bottom: var(--space-3);
+  background: var(--color-surface);
+}
+.admin-event-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.admin-event-title { font-size: 1.1rem; font-weight: 700; }
+.admin-event-meta { color: var(--color-muted); font-size: 0.9rem; }
+/* Pushes the nav links + status buttons to the row's right edge on a wide
+   screen; wraps below the title on a narrow one, same as everything else
+   in this row (flex-wrap, no fixed positioning). */
+.admin-event-links { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-left: auto; }
+.admin-event-links a { font-size: 0.85rem; }
+
+/* A titled box (a <fieldset>, so <legend> gets its native straddle-the-
+   border look for free) around one logical group of fields -- Basic Info,
+   Pricing & Capacity, Contact, Description within Details; Logo; Banner
+   pool; Timeline. Nested fieldsets (e.g. the price-increase sub-group)
+   reuse the same class at the next level in -- a border is enough to tell
+   the levels apart without needing a different shade per depth. */
+.admin-form-section {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  margin-top: var(--space-2);
+  background: var(--color-bg);
+}
+.admin-form-section > legend {
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0 0.4rem;
+  color: var(--color-text);
+}
+/* A form's Save button, after one or more sections -- e.g. Details' 4
+   fieldsets, then one submit covering all of them. General sibling (~), not
+   adjacent (+): _timeline_fields.html's own <script> tag sits between its
+   fieldset and the caller's button, which + wouldn't see past. */
+.admin-form-section ~ button[type="submit"] { display: block; margin-top: var(--space-2); }
+
+/* A responsive field grid for a section with several labeled inputs --
+   2 columns once there's room, 1 on a phone. A field with a textarea (or a
+   nested fieldset, e.g. the price-increase sub-group) always takes the
+   full row rather than squeezing into half of it. */
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-1) var(--space-2);
+}
+.admin-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+}
+.admin-form-grid label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+}
+.admin-form-grid label:has(textarea),
+.admin-form-grid > fieldset,
+.admin-form-grid > .field-hint {
+  grid-column: 1 / -1;
+}
+@media (min-width: 640px) {
+  .admin-form-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Open/Close: state-changing, but secondary to the Save actions inside
+   each section -- an outline style keeps them from reading as loud as the
+   solid purple Save/Add buttons. */
+.btn-secondary {
+  background: none;
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+.btn-secondary:hover { background: var(--color-bg); opacity: 1; }
+
 .banner-pool-grid {
   list-style: none;
   padding: 0;

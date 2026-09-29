@@ -2,7 +2,7 @@
    {time, activity, details}) before including; omit it for a blank form.
    The three inputs post as parallel arrays that _parse_timeline() zips. #}
 {% set timeline_rows = timeline_rows or [] %}
-<fieldset class="timeline-fields">
+<fieldset class="admin-form-section timeline-fields">
   <legend>Timeline</legend>
   <div class="timeline-rows">
     {% for item in timeline_rows %}
