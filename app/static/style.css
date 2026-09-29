@@ -560,7 +560,7 @@ img.event-hero { opacity: 0.5; }
   margin: var(--space-1) auto;
   object-fit: contain;
 }
-.charity-kicker { color: var(--color-muted); margin: 0; }
+.charity-kicker { color: var(--color-text); margin: 0; }
 .charity-overview { margin-bottom: var(--space-3); }
 .charity-contact { margin-top: var(--space-2); }
 .charity-contact p { margin: 0.25rem 0; }
