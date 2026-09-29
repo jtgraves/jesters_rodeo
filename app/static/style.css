@@ -475,6 +475,13 @@ img.event-hero { opacity: 0.5; }
   border-radius: var(--radius);
 }
 .event-contact p { margin: 0.25rem 0; }
+/* A formatted phone number always starts with "(" -- some browsers'
+   underline-skip-ink rendering leaves a small detached stroke right before
+   a leading open-paren on an underlined link, which reads as a stray period
+   at a glance. Not a data/content issue; just removing the underline on
+   these specific tel: links (name/email links keep theirs) sidesteps it. */
+.event-contact a[href^="tel:"],
+.charity-contact a[href^="tel:"] { text-decoration: none; }
 .event-visit-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
 
 .event-perks { text-align: center; }
