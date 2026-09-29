@@ -214,45 +214,79 @@ def test_roster_defaults_to_latest_event_year_and_filters(dynamodb_tables):
 
 
 def test_roster_year_param_and_milestone(dynamodb_tables):
-    _put_profile("clown_c", "Cyd", [2015, 2016, 2017, 2018, 2019])  # 5 years
+    _put_profile("clown_c", "Cyd", [2015, 2016, 2017, 2018, 2019])  # 5 years total
     c, ctx = _client(admin=True)
     try:
+        # Tenure is as of the SELECTED year, not a running total: on their
+        # 5th year overall, viewing an earlier year shows an earlier tenure.
         resp = c.get("/admin/clowns/roster?year=2017")
-        assert "Cyd" in resp.text and "5-year rider" in resp.text
+        assert "Cyd" in resp.text and "3rd year" in resp.text
+        assert "5-year rider" not in resp.text
+        latest = c.get("/admin/clowns/roster?year=2019")
+        assert "5-year rider" in latest.text
         empty = c.get("/admin/clowns/roster?year=1999")
         assert "Cyd" not in empty.text
     finally:
         ctx.stop()
 
 
-def test_roster_shows_lieutenants_section_regardless_of_selected_year(dynamodb_tables):
-    # No events seeded -> _current_krewe_year() falls back to today's year,
-    # so Lou (rode only in 2025) won't be in the year-filtered grid below --
-    # the lieutenant spotlight at the top is independent of that filter.
-    _put_profile("clown_lt", "Lou", [2025], is_lieutenant=True,
-                 bio="Been steering since 2009.")
+def test_roster_floats_lieutenants_to_top_with_a_badge(dynamodb_tables):
+    _put_profile("clown_reg", "Amy", [2025])
+    _put_profile("clown_lt", "Zeke", [2025], is_lieutenant=True)
     c, ctx = _client()
     try:
-        resp = c.get("/admin/clowns/roster")
-        assert "Float Lieutenants" in resp.text
-        assert "Lou" in resp.text
-        assert "Been steering since 2009." in resp.text
+        resp = c.get("/admin/clowns/roster?year=2025")
+        assert "Float Lieutenants" not in resp.text  # no separate section anymore
+        assert resp.text.index("Zeke") < resp.text.index("Amy")  # lieutenant floats first
+        assert "🎖 Float Lieutenant" in resp.text
     finally:
         ctx.stop()
 
 
-def test_roster_lieutenant_section_excludes_inactive_and_non_lieutenants(dynamodb_tables):
+def test_roster_inactive_lieutenant_is_not_badged_but_still_listed(dynamodb_tables):
     # An inactive former lieutenant still has a historical ride on record --
-    # that stays in the year grid below -- but isn't spotlighted as if still
-    # serving.
+    # that stays in the year grid -- but isn't badged as if still serving.
     _put_profile("clown_gone_lt", "Gone", [2020], is_lieutenant=True, active=False)
     _put_profile("clown_reg", "Reg", [2020])
     c, ctx = _client()
     try:
         resp = c.get("/admin/clowns/roster?year=2020")
-        assert "Float Lieutenants" not in resp.text
         assert "Gone" in resp.text  # still on the 2020 roster grid
         assert "Reg" in resp.text
+        assert "🎖 Float Lieutenant" not in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_roster_card_links_to_directory_entry_for_active_riders(dynamodb_tables):
+    _put_profile("clown_active", "Ann", [2025])
+    c, ctx = _client()
+    try:
+        resp = c.get("/admin/clowns/roster?year=2025")
+        assert 'href="/admin/clowns/directory#clown-clown_active"' in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_roster_card_is_not_a_link_for_inactive_riders(dynamodb_tables):
+    # No directory row exists for an inactive rider (the directory only
+    # lists active people) -- so their card doesn't link to a dead anchor.
+    _put_profile("clown_hist", "Hank", [2020], active=False)
+    c, ctx = _client()
+    try:
+        resp = c.get("/admin/clowns/roster?year=2020")
+        assert "Hank" in resp.text
+        assert "#clown-clown_hist" not in resp.text
+    finally:
+        ctx.stop()
+
+
+def test_directory_row_has_a_stable_anchor_id(dynamodb_tables):
+    _put_profile("clown_anchor", "Ida", [2025])
+    c, ctx = _client()
+    try:
+        resp = c.get("/admin/clowns/directory")
+        assert 'id="clown-clown_anchor"' in resp.text
     finally:
         ctx.stop()
 
@@ -854,10 +888,12 @@ def test_manage_update_on_stale_id_does_not_500_the_page(dynamodb_tables):
 
 
 def test_roster_milestone_badge_for_any_multiple_of_five(dynamodb_tables):
-    _put_profile("clown_vet", "Vet", list(range(1990, 2020)))  # tenure == 30
+    _put_profile("clown_vet", "Vet", list(range(1990, 2020)))  # 30 years, 1990-2019
     c, ctx = _client(admin=True)
     try:
-        resp = c.get("/admin/clowns/roster?year=2000")
+        # Tenure is as of the selected year -- viewing the LAST of those 30
+        # years is what reaches the 30-year milestone, not an earlier one.
+        resp = c.get("/admin/clowns/roster?year=2019")
         assert "Vet" in resp.text
         assert "30-year rider" in resp.text
     finally:

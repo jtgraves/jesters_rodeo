@@ -5,7 +5,7 @@
 <table>
 <tr><th>Name</th><th>Phone</th><th>Email</th><th>Emergency contact</th></tr>
 {% for p in people %}
-<tr>
+<tr id="clown-{{ p.clown_id }}" class="directory-row">
   <td>
     {{ p.display_name or '(no name)' }}
     {% if p.is_lieutenant %}

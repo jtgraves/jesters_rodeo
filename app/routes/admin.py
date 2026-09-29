@@ -1621,28 +1621,30 @@ def _current_krewe_year() -> int:
     return max(years) if years else date.today().year
 
 
-def _current_lieutenants(profiles: list[dict]) -> list[dict]:
-    # Lieutenant is a current-standing flag, not tracked per year, so this
-    # is deliberately independent of the roster's year filter; a departed
-    # (inactive) former lieutenant isn't shown as if still serving.
-    return [p for p in profiles if p.get("is_lieutenant") and p.get("active", True)]
-
-
 @member_router.get("/clowns/roster")
 def clowns_roster(request: Request, year: int | None = None) -> Response:
     profiles = _all_profiles()
     all_years = sorted({y for p in profiles for y in _profile_years(p)}, reverse=True)
     selected = year if year is not None else _current_krewe_year()
     riders = [
-        {**p, "tenure": len(_profile_years(p))}
+        {
+            **p,
+            # Tenure as of the year being viewed, not a running total to
+            # today -- a rider on their 7th year in 2026 shows as on their
+            # 6th when 2025 is the selected year, not their 7th.
+            "tenure": len([y for y in _profile_years(p) if y <= selected]),
+        }
         for p in profiles if selected in _profile_years(p)
     ]
+    # Lieutenant is a current-standing flag, not tracked per year -- an
+    # inactive former lieutenant isn't floated/badged as if still serving,
+    # even in a year they did ride. Stable sort: riders is already
+    # alphabetical (from _all_profiles()), so this only promotes
+    # lieutenants, same pattern as the directory page.
+    riders.sort(key=lambda r: not (r.get("is_lieutenant") and r.get("active", True)))
     return templates.TemplateResponse(
         request, "admin/clowns_roster.html",
-        {
-            "riders": riders, "year": selected, "all_years": all_years,
-            "lieutenants": _current_lieutenants(profiles),
-        },
+        {"riders": riders, "year": selected, "all_years": all_years},
     )
 
 

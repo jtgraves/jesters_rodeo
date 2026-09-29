@@ -2,19 +2,6 @@
 {% block content %}
 <h1>Roster</h1>
 
-{% if lieutenants %}
-<h2>Float Lieutenants</h2>
-{% for l in lieutenants %}
-<section class="lieutenant">
-  {% if l.photo_url %}<img class="lieutenant-photo" src="{{ l.photo_url }}" alt="{{ l.display_name or '(no name)' }}">{% endif %}
-  <div>
-    <h3>{{ l.display_name or '(no name)' }}</h3>
-    {% if l.bio %}<div class="lieutenant-bio richtext">{{ l.bio | richtext }}</div>{% endif %}
-  </div>
-</section>
-{% endfor %}
-{% endif %}
-
 <h2>{{ year }} Riders</h2>
 <form method="get" action="/admin/clowns/roster">
   <label>Year
@@ -33,17 +20,25 @@
 {% else %}
 <ul class="clown-grid">
   {% for r in riders %}
-  <li class="clown-card">
+  <li>
+    {# Only currently-active riders have a directory row to jump to (the
+       directory only lists active people) -- an inactive historical rider's
+       card stays plain rather than linking to an anchor that isn't there. #}
+    {% if r.active %}<a class="clown-card" href="/admin/clowns/directory#clown-{{ r.clown_id }}">
+    {% else %}<div class="clown-card">
+    {% endif %}
     {% if r.photo_url %}
     <img src="{{ r.photo_url }}" alt="{{ r.display_name or '(no name)' }}">
     {% else %}
     <img src="/static/img/fleur.png" alt="" class="clown-card-placeholder">
     {% endif %}
     <span class="clown-card-name">{{ r.display_name or '(no name)' }}</span>
+    {% if r.is_lieutenant and r.active %}<span class="lieutenant-badge">🎖 Float Lieutenant</span>{% endif %}
     <span class="clown-card-tenure">{{ r.tenure | ordinal }} year</span>
     {% if r.tenure and r.tenure % 5 == 0 %}
     <span class="clown-card-milestone">🏅 {{ r.tenure }}-year rider</span>
     {% endif %}
+    {% if r.active %}</a>{% else %}</div>{% endif %}
   </li>
   {% endfor %}
 </ul>

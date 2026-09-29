@@ -847,17 +847,23 @@ body.has-mobile-cta { padding-bottom: 4rem; }
 
 .clown-grid { list-style: none; padding: 0; display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); }
-.clown-card { display: flex; flex-direction: column; align-items: center; text-align: center; }
+/* A card is an <a> for an active rider (links to their directory row) or a
+   plain <div> for an inactive one (no row there to link to) -- same class,
+   same look either way, so the link/no-link split is invisible. */
+.clown-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+}
 .clown-card img { width: 120px; height: 120px; object-fit: cover; border-radius: var(--radius);
   background: var(--color-surface); }
 .clown-card-placeholder { object-fit: contain; opacity: 0.4; padding: 1rem; }
 .clown-card-name { font-weight: 600; margin-top: 0.4rem; }
 .clown-card-tenure { color: var(--color-muted); font-size: 0.85rem; }
 .clown-card-milestone { font-size: 0.85rem; }
-
-.lieutenant { margin-top: var(--space-2); display: flex; gap: var(--space-2); align-items: flex-start; }
-.lieutenant-photo { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius); flex: 0 0 auto; }
-.lieutenant h3 { margin: 0 0 0.2rem; font-size: 1rem; }
 
 /* Directory: marks a row as a lieutenant -- rows are already sorted so
    lieutenants come first, this is what says so. */
@@ -872,6 +878,14 @@ body.has-mobile-cta { padding-bottom: 4rem; }
   font-weight: 600;
   white-space: nowrap;
 }
+/* On a roster card the badge sits on its own centered line below the name,
+   not inline after text -- the directory's left-margin doesn't apply here. */
+.clown-card .lieutenant-badge { margin: 0.15rem 0 0; }
+
+/* Landing on a directory row via a roster card's link (#clown-<id>) --
+   briefly distinguishes which row it is, since a mid-table anchor jump has
+   nothing else to say "you are here". */
+.directory-row:target { background: rgba(107, 63, 160, 0.12); }
 
 .krewe-links { padding-left: 1.1rem; }
 .krewe-links > li { margin-bottom: var(--space-2); }
