@@ -27,6 +27,11 @@
     {% if c.username == current_sub %}
       <em>you</em>
     {% else %}
+      {% if c.status == "FORCE_CHANGE_PASSWORD" %}
+        <form method="post" action="/admin/clown_mgmt/{{ c.username }}/resend-invite" style="display:inline">
+          <button type="submit">Resend invite</button>
+        </form>
+      {% endif %}
       {% if c.is_admin %}
         <form method="post" action="/admin/clown_mgmt/{{ c.username }}/demote" style="display:inline"
               onsubmit="return confirm('Remove admin rights from this clown?')">

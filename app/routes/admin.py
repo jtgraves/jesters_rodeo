@@ -1291,6 +1291,20 @@ def _create_clown(email: str, make_admin: bool) -> None:
         _promote_clown(resp["User"]["Username"])
 
 
+def _resend_clown_invite(username: str) -> None:
+    # MessageAction="RESEND" only works while the account is still
+    # FORCE_CHANGE_PASSWORD (invited, never signed in) -- Cognito rejects it
+    # once someone's actually set a real password. Generates a fresh
+    # temporary password and re-sends the same invitation email template
+    # already configured on the pool; no UserAttributes needed since the
+    # account already exists.
+    _cognito().admin_create_user(
+        UserPoolId=settings.cognito_user_pool_id,
+        Username=username,
+        MessageAction="RESEND",
+    )
+
+
 def _promote_clown(username: str) -> None:
     _cognito().admin_add_user_to_group(
         UserPoolId=settings.cognito_user_pool_id,
@@ -1350,6 +1364,27 @@ def create_clown(
             msg = "There's already a clown with that email."
         elif code in ("InvalidParameterException", "InvalidEmailRoleAccessPolicyException"):
             msg = "That doesn't look like a valid email address."
+        else:
+            raise
+        return _clowns_page(request, current_admin.get("sub"), error=msg, status_code=400)
+    return RedirectResponse("/admin/clown_mgmt", status_code=303)
+
+
+@router.post("/clown_mgmt/{username}/resend-invite")
+def resend_clown_invite(
+    request: Request,
+    username: str,
+    current_admin: dict = Depends(require_admin),
+) -> Response:
+    try:
+        _resend_clown_invite(username)
+    except ClientError as exc:
+        code = exc.response["Error"]["Code"]
+        if code == "InvalidParameterException":
+            # Cognito's own guard: RESEND only works pre-confirmation.
+            msg = "This clown has already signed in and set a password -- nothing to resend."
+        elif code == "UserNotFoundException":
+            msg = "That clown no longer exists."
         else:
             raise
         return _clowns_page(request, current_admin.get("sub"), error=msg, status_code=400)

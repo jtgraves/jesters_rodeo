@@ -226,3 +226,9 @@ __marimo__/
 # AWS CDK synth output (bundled Lambda assets; large and regenerated on every synth)
 cdk.out/
 infra/cdk.out/
+
+# Scratch output from ad-hoc `aws ...` commands run while debugging production
+# (DynamoDB scans, log pulls, etc.) -- these can contain real buyer PII and
+# must never be committed.
+infra/*.txt
+infra/*.json

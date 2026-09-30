@@ -1546,6 +1546,9 @@ def test_clowns_page_lists_clowns_with_roles(admin_client):
     assert 'action="/admin/clown_mgmt/sub-2/delete"' in resp.text
     assert 'action="/admin/clown_mgmt/admin-2/delete"' in resp.text
     assert 'action="/admin/clown_mgmt/admin-1/delete"' not in resp.text
+    # resend invite only for the still-pending (FORCE_CHANGE_PASSWORD) clown
+    assert 'action="/admin/clown_mgmt/sub-2/resend-invite"' in resp.text
+    assert 'action="/admin/clown_mgmt/admin-2/resend-invite"' not in resp.text
 
 
 def test_invite_clown_calls_cognito(admin_client):
@@ -1635,6 +1638,38 @@ def test_delete_clown_blocks_self(admin_client):
     assert resp.status_code == 400
     assert "your own account" in resp.text
     mock_delete.assert_not_called()
+
+
+def test_resend_invite_calls_cognito(admin_client):
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._resend_clown_invite") as mock_resend:
+        resp = admin_client.post("/admin/clown_mgmt/sub-2/resend-invite", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/clown_mgmt"
+    mock_resend.assert_called_once_with("sub-2")
+
+
+def test_resend_invite_rejects_already_confirmed_clown(admin_client):
+    err = ClientError(
+        {"Error": {"Code": "InvalidParameterException", "Message": "already confirmed"}},
+        "AdminCreateUser",
+    )
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._resend_clown_invite", side_effect=err):
+        resp = admin_client.post("/admin/clown_mgmt/admin-1/resend-invite", follow_redirects=False)
+    assert resp.status_code == 400
+    assert "nothing to resend" in resp.text
+
+
+def test_resend_invite_handles_deleted_clown(admin_client):
+    err = ClientError(
+        {"Error": {"Code": "UserNotFoundException", "Message": "gone"}}, "AdminCreateUser",
+    )
+    with patch("app.routes.admin._list_clowns", return_value=[]), \
+         patch("app.routes.admin._resend_clown_invite", side_effect=err):
+        resp = admin_client.post("/admin/clown_mgmt/ghost/resend-invite", follow_redirects=False)
+    assert resp.status_code == 400
+    assert "no longer exists" in resp.text
 
 
 # ---- Member (clown without admin rights) access ----
