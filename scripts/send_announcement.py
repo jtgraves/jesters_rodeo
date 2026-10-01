@@ -10,13 +10,18 @@ from app.emails import send_announcement_email
 
 logger = logging.getLogger(__name__)
 
-# A real SES account has a per-second sending-rate ceiling (sandbox: ~1/s;
-# a fresh production account: often ~14/s). Firing sends in a tight loop risks
-# self-inflicted Throttling errors that land in the loop's except-and-continue
-# and get reported as "failed to send" for perfectly good addresses -- exactly
+# A free Gmail account sending over SMTP has its own limits: roughly 500
+# recipients per rolling 24-hour window (shared with every OTHER email this
+# account sends that day, ticket confirmations included), and a lower cap
+# per individual message. A tight loop risks tripping Gmail's burst-rate
+# throttling too, which lands in the loop's except-and-continue and gets
+# reported as "failed to send" for perfectly good addresses -- exactly
 # backwards on the one occasion (a cancellation notice) reliability matters
-# most. A small fixed pace keeps this well under any default limit; at this
-# app's scale (100-500 recipients) the total added delay is trivial.
+# most. A small fixed pace keeps bursts well-behaved; at this app's scale
+# (100-500 recipients) the total added delay is trivial -- but the daily
+# recipient cap itself is a hard ceiling pacing can't avoid: a single
+# announcement sent to most of a ~300-person roster, on a day that's also
+# seen a run of ticket sales, could reach it.
 SEND_PACE_SECONDS = 0.2
 
 

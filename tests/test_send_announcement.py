@@ -1,32 +1,21 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-import boto3
 import pytest
-from moto import mock_aws
-from moto.core import DEFAULT_ACCOUNT_ID
-from moto.ses.models import ses_backends
 
 from app.db import ANNOUNCEMENTS, ORDERS, WAITLIST
 from scripts.send_announcement import handler, send_announcement
 
 
 @pytest.fixture
-def ses_backend(dynamodb_tables):
-    """DynamoDB + SES mocked together: send_announcement touches both in one call.
-
-    `dynamodb_tables` already has an active `mock_aws()` context open (and
-    tears it down after this fixture is torn down), and mock_aws() mocks
-    every AWS service at once, so a plain boto3 SES client made here is
-    mocked too -- same idea as tests/test_emails.py's ses_backend fixture,
-    just also depending on dynamodb_tables for the DB side.
-    """
-    from app import emails as emails_module
-
-    emails_module.reset_clients()
-    client = boto3.client("ses", region_name="us-east-1")
-    client.verify_email_identity(EmailAddress="noreply@example.com")
-    yield ses_backends[DEFAULT_ACCOUNT_ID]["us-east-1"]
-    emails_module.reset_clients()
+def smtp_mock(dynamodb_tables):
+    """DynamoDB mocked (via dynamodb_tables) + smtplib.SMTP faked -- same
+    idea as tests/test_emails.py's fixture, just also needing dynamodb_tables
+    for send_announcement's DB side (recipients, status/count updates)."""
+    with patch("app.emails.smtplib.SMTP") as mock_smtp_cls:
+        instance = mock_smtp_cls.return_value
+        instance.__enter__ = MagicMock(return_value=instance)
+        instance.__exit__ = MagicMock(return_value=False)
+        yield instance
 
 
 def _put_order(order_id, email, status="paid", **overrides):
@@ -63,17 +52,17 @@ def _put_announcement(announcement_id="ann_1", audience=("attendees",), **overri
     return announcement_id
 
 
-def test_dedupes_attendee_and_waitlist_by_email(ses_backend):
+def test_dedupes_attendee_and_waitlist_by_email(smtp_mock):
     _put_order("ord_1", "Person@Example.com")
     _put_waitlist("wl_1", "person@example.com")
     ann_id = _put_announcement(audience=["attendees", "waitlist"])
 
     send_announcement(ann_id)
 
-    assert len(ses_backend.sent_messages) == 1
+    assert smtp_mock.sendmail.call_count == 1
 
 
-def test_only_paid_orders_count_as_attendees(ses_backend):
+def test_only_paid_orders_count_as_attendees(smtp_mock):
     _put_order("ord_1", "paid@example.com", status="paid")
     _put_order("ord_2", "pending@example.com", status="pending")
     _put_order("ord_3", "refunded@example.com", status="refunded")
@@ -81,30 +70,30 @@ def test_only_paid_orders_count_as_attendees(ses_backend):
 
     send_announcement(ann_id)
 
-    assert [m.destinations for m in ses_backend.sent_messages] == [["paid@example.com"]]
+    assert [c.args[1] for c in smtp_mock.sendmail.call_args_list] == [["paid@example.com"]]
 
 
-def test_audience_filtering_waitlist_only(ses_backend):
+def test_audience_filtering_waitlist_only(smtp_mock):
     _put_order("ord_1", "attendee@example.com")
     _put_waitlist("wl_1", "waitlisted@example.com")
     ann_id = _put_announcement(audience=["waitlist"])
 
     send_announcement(ann_id)
 
-    assert [m.destinations for m in ses_backend.sent_messages] == [["waitlisted@example.com"]]
+    assert [c.args[1] for c in smtp_mock.sendmail.call_args_list] == [["waitlisted@example.com"]]
 
 
-def test_audience_filtering_attendees_only(ses_backend):
+def test_audience_filtering_attendees_only(smtp_mock):
     _put_order("ord_1", "attendee@example.com")
     _put_waitlist("wl_1", "waitlisted@example.com")
     ann_id = _put_announcement(audience=["attendees"])
 
     send_announcement(ann_id)
 
-    assert [m.destinations for m in ses_backend.sent_messages] == [["attendee@example.com"]]
+    assert [c.args[1] for c in smtp_mock.sendmail.call_args_list] == [["attendee@example.com"]]
 
 
-def test_updates_status_and_counts_on_success(ses_backend):
+def test_updates_status_and_counts_on_success(smtp_mock):
     _put_order("ord_1", "a@example.com")
     _put_order("ord_2", "b@example.com")
     ann_id = _put_announcement(audience=["attendees"])
@@ -118,7 +107,7 @@ def test_updates_status_and_counts_on_success(ses_backend):
     assert item["error"] is None
 
 
-def test_partial_failure_still_marks_sent_with_error_summary(ses_backend):
+def test_partial_failure_still_marks_sent_with_error_summary(smtp_mock):
     _put_order("ord_1", "good@example.com")
     _put_order("ord_2", "bad@example.com")
     ann_id = _put_announcement(audience=["attendees"])
@@ -151,7 +140,7 @@ def test_handler_marks_failed_on_unexpected_crash(dynamodb_tables):
     assert item["status"] == "failed"
 
 
-def test_handler_returns_announcement_id(ses_backend):
+def test_handler_returns_announcement_id(smtp_mock):
     ann_id = _put_announcement()
     result = handler({"announcement_id": ann_id}, None)
     assert result == {"announcement_id": ann_id}

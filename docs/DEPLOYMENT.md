@@ -20,7 +20,7 @@ also be committed into `cdk.json`'s `context` block if you prefer):
 | --- | --- |
 | `site_url` | Public base URL, no trailing slash |
 | `cognito_domain_prefix` | Globally unique Hosted UI prefix, e.g. `jesters-rodeo-admin` |
-| `ses_sender_email` | The From address for confirmation emails -- must be at `domain_name` when that's configured (see SES production access below) |
+| `ses_sender_email` | The Gmail address mail sends from over SMTP (see "Email sending" below) -- name kept from an earlier SES-based setup |
 
 Two more are optional and must be supplied together to enable a custom domain:
 `domain_name` and `hosted_zone_id`.
@@ -74,6 +74,7 @@ aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_live_secret_key
 aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_live_webhook_secret"   --value "whsec_..."
 aws ssm put-parameter --type SecureString --name "$PREFIX/stripe_live_publishable_key"  --value "pk_live_..."
 aws ssm put-parameter --type SecureString --name "$PREFIX/session_secret"               --value "$(openssl rand -hex 32)"
+aws ssm put-parameter --type SecureString --name "$PREFIX/smtp_password"                --value "<the Gmail App Password -- see Email sending below>"
 ```
 
 The live-mode values can be filled in with placeholders and rotated in later,
@@ -90,29 +91,36 @@ next Stripe call fail loudly. A missing `session_secret` is the one exception
 Grep CloudWatch Logs for `is missing or unreadable` to find which parameter
 needs attention. Add `--overwrite` to rotate a value that already exists.
 
-## SES production access
+## Email sending (Gmail SMTP)
 
-New accounts start in the SES sandbox and can only send to verified addresses.
-Before go-live:
-1. Confirm the `ses_sender_email` identity.
-   - **With `domain_name`/`hosted_zone_id` configured** (the recommended
-     path): the stack verifies a *domain* identity for `domain_name`, with
-     DKIM — CDK writes the DKIM and MAIL FROM records into the Route 53
-     hosted zone itself, so there's no manual click-through step. `Verified`
-     status in the SES console can lag a few minutes behind the deploy while
-     those DNS records propagate. `ses_sender_email` must be an address at
-     that same domain (e.g. `noreply@register.example.com`) — DKIM signing
-     applies to the domain in the message's From header, so an address on a
-     different domain wouldn't actually be covered by it.
-   - **Without a custom domain**: the stack falls back to a plain email
-     identity for `ses_sender_email` itself — click the verification link
-     AWS emails to that address.
-2. In the SES console choose **Request production access**, describing the use
-   case as transactional order-confirmation email for an event registration
-   site. It is free and usually approved within a day.
+Mail (`app/emails.py`) sends over SMTP through a Gmail account, authenticated
+with an App Password — not through SES. This sidesteps the SES sandbox
+entirely (which restricts sending to individually pre-verified recipient
+addresses until AWS grants production access): a Gmail account has no such
+per-recipient restriction, so there's no approval step to wait on before
+going live.
 
-Until this is granted, only verified recipients receive tickets — which is fine
-for testing and fatal on sale day, so do it early.
+1. Sign in to the Gmail account you want mail to send from (create a
+   dedicated one for this, e.g. `jestersrodeo@gmail.com`, rather than reusing
+   a personal account).
+2. Turn on **2-Step Verification**: myaccount.google.com → **Security** →
+   **2-Step Verification**, and follow the prompts. This is required —
+   App Passwords don't exist without it.
+3. Generate an App Password at **myaccount.google.com/apppasswords**. Name it
+   something recognizable (e.g. "Jesters Reaux-de-Eaux site"). Google shows
+   the 16-character password once — copy it immediately.
+4. Store it as the `smtp_password` SSM parameter (see the secrets block
+   above) — never commit it or put it in `cdk.json`.
+5. Set `-c ses_sender_email=<that Gmail address>` on deploy (the context key
+   name is a holdover from the SES-based setup this replaced; it's just the
+   From address now).
+
+**Gmail's own sending limit** applies instead of SES's: roughly 500
+recipients per rolling 24-hour window for a free account, shared across
+*everything* this account sends that day (ticket confirmations and
+announcement blasts both draw from the same pool). Comfortable for this
+app's normal volume; worth keeping in mind before sending one announcement
+to a large roster on a day that's also seen a run of ticket sales.
 
 ## Stripe setup
 

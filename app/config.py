@@ -37,7 +37,16 @@ class Settings(BaseSettings):
     clown_profiles_table: str
     krewe_links_table: str
     event_images_bucket: str
+    # Name kept for minimal churn (CDK context key, docs, deploy muscle
+    # memory) even though mail no longer goes through SES -- it's now the
+    # Gmail address mail sends *from* and authenticates *as* over SMTP. See
+    # smtp_password below and app/emails.py.
     ses_sender_email: str
+    # The Gmail account's App Password (see docs/DEPLOYMENT.md) -- loaded
+    # from SSM like the Stripe keys/session_secret; empty locally/in tests
+    # unless a test explicitly sets it. An empty value just fails loudly at
+    # the first real send attempt, same as an unset Stripe key does.
+    smtp_password: str = ""
     cognito_user_pool_id: str
     cognito_app_client_id: str
     cognito_domain: str = ""
@@ -62,6 +71,7 @@ SECURE_FIELDS = (
     "stripe_live_webhook_secret",
     "stripe_live_publishable_key",
     "session_secret",
+    "smtp_password",
 )
 
 # How stale the cached Stripe mode/keys are allowed to get before a request
@@ -124,6 +134,9 @@ def _apply_secure_params(target: Settings) -> None:
             "session_secret is not set in SSM. Refusing to start with the "
             "public default -- set the session_secret SSM parameter and retry."
         )
+
+    if raw.get("smtp_password"):
+        target.smtp_password = raw["smtp_password"]
 
     # stripe_mode must never silently fail open into live: anything other
     # than exactly "live" (missing, misspelled, empty) is treated as "test".

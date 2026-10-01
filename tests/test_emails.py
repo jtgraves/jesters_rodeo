@@ -1,24 +1,22 @@
 import email
+from unittest.mock import MagicMock, patch
 
-import boto3
 import pytest
-from moto import mock_aws
-from moto.core import DEFAULT_ACCOUNT_ID
-from moto.ses.models import ses_backends
 
-from app import emails as emails_module
 from app.emails import send_confirmation_email
 from app.models import Order, Ticket
 
 
 @pytest.fixture
-def ses_backend():
-    emails_module.reset_clients()
-    with mock_aws():
-        client = boto3.client("ses", region_name="us-east-1")
-        client.verify_email_identity(EmailAddress="noreply@example.com")
-        yield ses_backends[DEFAULT_ACCOUNT_ID]["us-east-1"]
-    emails_module.reset_clients()
+def smtp_mock():
+    """A fake smtplib.SMTP whose `with smtplib.SMTP(...) as smtp:` binds to
+    the SAME mock instance sendmail()/login() calls land on -- MagicMock's
+    __enter__ returns a fresh mock by default, so this is set explicitly."""
+    with patch("app.emails.smtplib.SMTP") as mock_smtp_cls:
+        instance = mock_smtp_cls.return_value
+        instance.__enter__ = MagicMock(return_value=instance)
+        instance.__exit__ = MagicMock(return_value=False)
+        yield instance
 
 
 def _order(quantity: int = 2) -> Order:
@@ -35,18 +33,20 @@ def _order(quantity: int = 2) -> Order:
     )
 
 
-def test_send_confirmation_email_delivers_to_buyer(ses_backend):
+def test_send_confirmation_email_authenticates_and_delivers_to_buyer(smtp_mock):
     order = _order(quantity=1)
     tickets = [Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026", attendee_name="Jane Doe")]
 
     send_confirmation_email(order, tickets)
 
-    assert len(ses_backend.sent_messages) == 1
-    sent = ses_backend.sent_messages[0]
-    assert sent.destinations == ["jane@example.com"]
+    smtp_mock.starttls.assert_called_once()
+    smtp_mock.login.assert_called_once()
+    smtp_mock.sendmail.assert_called_once()
+    _, to_addrs, _ = smtp_mock.sendmail.call_args[0]
+    assert to_addrs == ["jane@example.com"]
 
 
-def test_send_confirmation_email_has_valid_related_alternative_structure(ses_backend):
+def test_send_confirmation_email_has_valid_related_alternative_structure(smtp_mock):
     order = _order(quantity=2)
     tickets = [
         Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026", attendee_name="Jane Doe"),
@@ -55,7 +55,7 @@ def test_send_confirmation_email_has_valid_related_alternative_structure(ses_bac
 
     send_confirmation_email(order, tickets)
 
-    raw = ses_backend.sent_messages[0].raw_data
+    _, _, raw = smtp_mock.sendmail.call_args[0]
     msg = email.message_from_string(raw)
 
     # multipart/related wrapping a multipart/alternative is the structure that

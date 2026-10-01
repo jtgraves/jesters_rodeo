@@ -18,7 +18,6 @@ from aws_cdk import (
     aws_route53 as route53,
     aws_route53_targets as route53_targets,
     aws_s3 as s3,
-    aws_ses as ses,
 )
 from constructs import Construct
 
@@ -45,34 +44,17 @@ class JestersRodeoStack(Stack):
             cognito_domain_prefix, site_url
         )
 
-        # A domain identity (with DKIM), not a plain email identity: outgoing
-        # mail sends from an address at domain_name now (e.g.
-        # noreply@jesters.rodeo), and DKIM only ever applies to the domain in
-        # the message's From header -- verifying jesters.rodeo without also
-        # sending from it would leave the DKIM setup unused. Specifically a
-        # PublicHostedZone (not route53.HostedZone's plainer IHostedZone):
-        # EmailIdentity's public_hosted_zone() helper needs that more
-        # specific interface to auto-write the DKIM/MAIL FROM CNAME records
-        # into it -- no manual DNS step, unlike Identity.domain(). The same
-        # zone reference is reused below by _create_custom_domain, since
-        # IPublicHostedZone is-a IHostedZone. Falls back to the original
-        # plain-email identity when no custom domain is configured at all
-        # (e.g. a from-scratch deploy before domain_name/hosted_zone_id are
-        # set).
+        # Mail no longer goes through SES at all (see app/emails.py -- it's
+        # Gmail SMTP now, authenticated with smtp_password, an SSM secret
+        # alongside the Stripe keys/session_secret below). This zone lookup
+        # exists purely for _create_custom_domain's ACM/Route53 setup now,
+        # not for any email identity.
         hosted_zone = None
         if domain_name and hosted_zone_id:
             hosted_zone = route53.PublicHostedZone.from_public_hosted_zone_attributes(
                 self, "HostedZone",
                 hosted_zone_id=hosted_zone_id,
                 zone_name=".".join(domain_name.split(".")[-2:]),
-            )
-            ses.EmailIdentity(
-                self, "SesSenderIdentity",
-                identity=ses.Identity.public_hosted_zone(hosted_zone),
-            )
-        else:
-            ses.EmailIdentity(
-                self, "SesSenderIdentity", identity=ses.Identity.email(sender_email)
             )
 
         common_env = {
@@ -140,11 +122,11 @@ class JestersRodeoStack(Stack):
             log_retention=logs.RetentionDays.THREE_MONTHS,
         )
 
-        # Deliberately not common_env: this function has no use for Stripe/
-        # session secrets, so SECURE_PARAM_PREFIX is omitted and app.config's
-        # _load_secure_params() short-circuits at cold start -- no SSM/KMS
-        # grant needed for it below.
-        announcement_env = {k: v for k, v in common_env.items() if k != "SECURE_PARAM_PREFIX"}
+        # Unlike before: this function now DOES need common_env as-is
+        # (including SECURE_PARAM_PREFIX), since sending mail over SMTP
+        # (app/emails.py) means it needs smtp_password from SSM -- the
+        # SSM/KMS grant loop below now includes this function too.
+        announcement_env = dict(common_env)
 
         # Built before app_lambda: app_lambda's environment needs
         # announcement_lambda.function_name inline, so the Python object must
@@ -156,9 +138,9 @@ class JestersRodeoStack(Stack):
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="scripts.send_announcement.handler",
             code=self._bundled_code(),
-            # One-by-one SES sends; ~500 recipients worst case is well inside
-            # this. No pagination/resumability at this scale -- a deliberate
-            # limit, not an oversight.
+            # One-by-one SMTP sends; ~500 recipients worst case is well
+            # inside this. No pagination/resumability at this scale -- a
+            # deliberate limit, not an oversight.
             timeout=Duration.minutes(5),
             memory_size=256,
             environment=announcement_env,
@@ -199,15 +181,6 @@ class JestersRodeoStack(Stack):
         tables["orders"].grant_read_data(announcement_lambda)
         tables["waitlist"].grant_read_data(announcement_lambda)
 
-        for function in (app_lambda, announcement_lambda):
-            function.add_to_role_policy(
-                iam.PolicyStatement(
-                    actions=["ses:SendRawEmail"],
-                    resources=["*"],
-                    conditions={"StringEquals": {"ses:FromAddress": sender_email}},
-                )
-            )
-
         announcement_lambda.grant_invoke(app_lambda)
         images_bucket.grant_write(app_lambda)
 
@@ -234,7 +207,10 @@ class JestersRodeoStack(Stack):
             )
         )
 
-        for function in (app_lambda, cleanup_lambda):
+        # announcement_lambda included now too: it sends mail over SMTP
+        # (app/emails.py) and needs smtp_password from SSM just like
+        # app_lambda/cleanup_lambda already do.
+        for function in (app_lambda, cleanup_lambda, announcement_lambda):
             function.add_to_role_policy(
                 iam.PolicyStatement(
                     actions=["ssm:GetParameters", "ssm:GetParameter"],
@@ -472,10 +448,9 @@ class JestersRodeoStack(Stack):
         return user_pool, user_pool_client, user_pool_domain
 
     def _create_custom_domain(self, http_api, domain_name: str, zone: route53.IHostedZone) -> None:
-        # zone is the same PublicHostedZone reference the SES domain identity
-        # uses (imported once in __init__) -- IPublicHostedZone is-a
-        # IHostedZone, so it works here unchanged; importing it a second time
-        # under a second logical id would just be redundant.
+        # zone is the same PublicHostedZone reference imported once in
+        # __init__ -- importing it a second time under a second logical id
+        # would just be redundant.
         certificate = acm.Certificate(
             self, "SiteCertificate",
             domain_name=domain_name,
