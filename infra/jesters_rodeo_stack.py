@@ -411,6 +411,31 @@ class JestersRodeoStack(Stack):
             # sign_in_case_sensitive migration above. mfa_second_factor is
             # dropped too: it's ignored by CDK whenever mfa=OFF.
             mfa=cognito.Mfa.OFF,
+            # Unset, this is Cognito's bare default: "Your username is
+            # {username} and temporary password is {####}." -- no branding,
+            # no context on what this is, no link. {username} is deliberately
+            # left out of the body: it's the opaque sub on this pool (see
+            # _list_clowns in app/routes/admin.py), not the clown's email, so
+            # showing it would just be a confusing UUID. {####} is Cognito's
+            # required placeholder for the generated temporary password; this
+            # same template is reused for both the initial invite and
+            # "Resend invite" (admin_create_user MessageAction="RESEND" in
+            # app/routes/admin.py). Plain text only -- Cognito's own built-in
+            # email sending doesn't render HTML/images, so there's no logo
+            # here the way the SMTP-sent ticket confirmation email has one.
+            user_invitation=cognito.UserInvitationConfig(
+                email_subject="You're invited to join Jester's Reaux-de-Eaux!",
+                email_body=(
+                    "Howdy! You've been invited to join the members-only Clowns "
+                    "section for Jester's Reaux-de-Eaux, our Mardi Gras krewe.\n\n"
+                    f"Sign in at {site_url}/admin/login using the email address "
+                    "this invitation was sent to, with this temporary password "
+                    "-- you'll be asked to set your own on first sign-in:\n\n"
+                    "{####}\n\n"
+                    "See you on the float!\n"
+                    "-- Jester's Reaux-de-Eaux"
+                ),
+            ),
             removal_policy=RemovalPolicy.RETAIN,
         )
         # A new prefix, not the original: Cognito domain prefixes are
