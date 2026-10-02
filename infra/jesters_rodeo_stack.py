@@ -198,6 +198,7 @@ class JestersRodeoStack(Stack):
                 actions=[
                     "cognito-idp:ListUsers",
                     "cognito-idp:ListUsersInGroup",
+                    "cognito-idp:AdminGetUser",
                     "cognito-idp:AdminCreateUser",
                     "cognito-idp:AdminDeleteUser",
                     "cognito-idp:AdminAddUserToGroup",
