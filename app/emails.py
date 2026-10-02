@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import smtplib
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
@@ -6,7 +8,7 @@ from email.utils import formataddr
 from html import escape
 
 from app.config import settings
-from app.models import Order, Ticket
+from app.models import Event, Order, Ticket
 from app.tickets import generate_qr_code_png
 
 # A bare address in From: ("jestersrodeo@gmail.com") reads more like an
@@ -70,11 +72,88 @@ def _send_mime_message(msg: MIMEMultipart, to_email: str) -> None:
         smtp.sendmail(settings.ses_sender_email, [to_email], msg.as_string())
 
 
-def send_confirmation_email(order: Order, tickets: list[Ticket]) -> None:
+def _dollars(cents: int) -> str:
+    return f"${cents / 100:,.2f}"
+
+
+def _event_details_sections(event: Event | None, base_url: str) -> tuple[list[str], list[str]]:
+    """Plain-text lines and HTML fragments describing the event itself --
+    what it is, when, where -- so the email makes sense on its own without
+    the reader needing to already know what this order was for. Tolerates
+    event being None (e.g. the event was deleted after the order was
+    placed) by simply omitting this section rather than failing the send.
+    """
+    if event is None:
+        return [], []
+
+    text_lines = [
+        event.name,
+        event.date,
+        event.address or event.location,
+    ]
+    html_parts = [
+        '<div style="margin:16px 0;padding:16px;background:#f7f7f7;border-radius:8px">',
+    ]
+    if event.logo_url:
+        html_parts.append(
+            f'<div style="text-align:center;margin-bottom:12px">'
+            f'<img src="{escape(event.logo_url)}" alt="" style="max-height:80px"></div>'
+        )
+    html_parts.append(f"<p><strong>{escape(event.name)}</strong></p>")
+    html_parts.append(f"<p>\U0001f5d3 {escape(event.date)}</p>")
+    html_parts.append(f"<p>\U0001f4cd {escape(event.address or event.location)}</p>")
+
+    if event.timeline:
+        text_lines.append("")
+        text_lines.append("Timeline:")
+        html_parts.append("<p><strong>Timeline:</strong></p><ul>")
+        for item in event.timeline:
+            time, activity = item.get("time"), item.get("activity", "")
+            line = f"{time} - {activity}" if time else activity
+            text_lines.append(f"- {line}")
+            html_parts.append(f"<li>{escape(time) + ' - ' if time else ''}{escape(activity)}</li>")
+        html_parts.append("</ul>")
+
+    html_parts.append("</div>")
+    text_lines.append("")
+    text_lines.append(f"Full event details: {base_url}")
+    html_parts.append(f'<p><a href="{escape(base_url)}">View event details</a></p>')
+    return text_lines, html_parts
+
+
+def _order_summary_sections(order: Order) -> tuple[list[str], list[str]]:
+    """Plain-text lines and HTML fragments for the price breakdown -- always
+    in dollars, never raw cents, matching how every other price is already
+    shown to buyers (e.g. the web order-confirmation page)."""
+    subtotal_cents = order.unit_price_cents * order.quantity
+    text_lines = [
+        f"{order.quantity} ticket(s) at {_dollars(order.unit_price_cents)} each"
+        f" = {_dollars(subtotal_cents)}",
+    ]
+    html_parts = [
+        "<div>",
+        f"<p>{order.quantity} ticket(s) at {_dollars(order.unit_price_cents)} each"
+        f" = {_dollars(subtotal_cents)}</p>",
+    ]
+    if order.processing_fee_cents:
+        text_lines.append(f"Includes a {_dollars(order.processing_fee_cents)} card processing fee.")
+        html_parts.append(f"<p>Includes a {_dollars(order.processing_fee_cents)} card processing fee.</p>")
+    if order.donation_cents:
+        text_lines.append(f"Includes a {_dollars(order.donation_cents)} donation. Thank you!")
+        html_parts.append(f"<p>Includes a {_dollars(order.donation_cents)} donation. Thank you!</p>")
+    text_lines.append(f"Total: {_dollars(order.total_cents)}")
+    html_parts.append(f"<p><strong>Total: {_dollars(order.total_cents)}</strong></p>")
+    html_parts.append("</div>")
+    return text_lines, html_parts
+
+
+def send_confirmation_email(order: Order, tickets: list[Ticket], event: Event | None = None) -> None:
     # multipart/related
     #   +-- multipart/alternative
     #   |     +-- text/plain
-    #   |     +-- text/html   (references the images below by cid:)
+    #   |     +-- text/html   (references the images below by cid:; the
+    #   |                      event logo, if any, is a normal remote <img>
+    #   |                      since it's already hosted in S3)
     #   +-- image/png (qr0), image/png (qr1), ...
     #
     # The alternative part MUST be nested inside the related part. Attaching
@@ -85,10 +164,20 @@ def send_confirmation_email(order: Order, tickets: list[Ticket]) -> None:
     msg["From"] = formataddr((FROM_DISPLAY_NAME, settings.ses_sender_email))
     msg["To"] = order.buyer_email
 
-    text_lines = [f"Thanks, {order.buyer_name}! Here are your {len(tickets)} ticket(s).", ""]
+    event_text, event_html = _event_details_sections(event, settings.base_url)
+    order_text, order_html = _order_summary_sections(order)
+
+    text_lines = [
+        f"Thanks, {order.buyer_name}! You're confirmed for {len(tickets)} ticket(s).", "",
+        *event_text, "",
+        *order_text, "",
+    ]
     html_parts = [
         f"<p>Thanks, {escape(order.buyer_name)}! "
-        f"Here are your {len(tickets)} ticket(s). Show a QR code at the door.</p>"
+        f"You're confirmed for {len(tickets)} ticket(s).</p>",
+        *event_html,
+        *order_html,
+        "<p>Show a QR code at the door for each ticket.</p>",
     ]
     for i, ticket in enumerate(tickets):
         who = ticket.attendee_name or order.buyer_name

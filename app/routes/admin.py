@@ -37,6 +37,7 @@ from app.fulfillment import fulfill_order, flag_fulfillment_error
 from app.models import (
     Announcement,
     ClownProfile,
+    Event,
     FaqEntry,
     KreweLink,
     Order,
@@ -579,7 +580,9 @@ def export_orders(request: Request, event_id: str = "") -> Response:
 def _resend_confirmation_email(order_id: str) -> dict:
     order_item = _get_order_or_404(order_id)
     tickets = [Ticket(**t) for t in _tickets_for_order(order_id)]
-    send_confirmation_email(Order(**order_item), tickets)
+    event_item = EVENTS().get_item(Key={"event_id": order_item["event_id"]}).get("Item")
+    event = Event(**event_item) if event_item else None
+    send_confirmation_email(Order(**order_item), tickets, event)
     return order_item
 
 

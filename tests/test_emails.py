@@ -1,11 +1,12 @@
 import email
+from html import escape
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.config import settings
 from app.emails import send_confirmation_email
-from app.models import Order, Ticket
+from app.models import Event, Order, Ticket
 
 
 @pytest.fixture
@@ -21,8 +22,8 @@ def smtp_mock():
         yield instance
 
 
-def _order(quantity: int = 2) -> Order:
-    return Order(
+def _order(quantity: int = 2, **overrides) -> Order:
+    fields = dict(
         order_id="ord_1",
         event_id="evt_2026",
         buyer_name="Jane Doe",
@@ -33,6 +34,26 @@ def _order(quantity: int = 2) -> Order:
         created_at="2026-01-01T00:00:00Z",
         status="paid",
     )
+    fields.update(overrides)
+    return Order(**fields)
+
+
+def _event(**overrides) -> Event:
+    fields = dict(
+        event_id="evt_2026",
+        year=2026,
+        name="Jester's Reaux-de-Eaux Parade",
+        date="Saturday, March 14, 2026",
+        location="New Orleans",
+        address="123 Canal St, New Orleans, LA",
+        description="d",
+        ticket_price_cents=15000,
+        capacity=300,
+        logo_url="https://example.com/logo.png",
+        timeline=[{"time": "6:00pm", "activity": "Lineup"}, {"time": "7:30pm", "activity": "Roll out"}],
+    )
+    fields.update(overrides)
+    return Event(**fields)
 
 
 def test_send_confirmation_email_authenticates_and_delivers_to_buyer(smtp_mock):
@@ -92,3 +113,63 @@ def test_send_confirmation_email_has_valid_related_alternative_structure(smtp_mo
     html = alternative.get_payload(1).get_payload(decode=True).decode()
     assert 'src="cid:qr0"' in html and 'src="cid:qr1"' in html
     assert "tkt_1" in html and "tkt_2" in html
+
+
+def test_send_confirmation_email_includes_event_details(smtp_mock):
+    event = _event()
+    send_confirmation_email(
+        _order(quantity=1),
+        [Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026")],
+        event,
+    )
+
+    _, _, raw = smtp_mock.sendmail.call_args[0]
+    msg = email.message_from_string(raw)
+    alternative = msg.get_payload(0)
+    text = alternative.get_payload(0).get_payload(decode=True).decode()
+    html = alternative.get_payload(1).get_payload(decode=True).decode()
+
+    assert event.name in text
+    assert escape(event.name) in html
+    for blob in (text, html):
+        assert event.date in blob
+        assert event.address in blob
+        assert "6:00pm" in blob and "Lineup" in blob
+        assert settings.base_url in blob
+    assert f'src="{event.logo_url}"' in html
+
+
+def test_send_confirmation_email_omits_event_section_when_event_is_none(smtp_mock):
+    # e.g. the event was deleted after the order was placed -- must still
+    # send the ticket, just without the now-unavailable event details.
+    send_confirmation_email(
+        _order(quantity=1),
+        [Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026")],
+        None,
+    )
+    smtp_mock.sendmail.assert_called_once()
+
+
+def test_send_confirmation_email_shows_prices_in_dollars_not_cents(smtp_mock):
+    order = _order(quantity=2, unit_price_cents=15000, donation_cents=1000,
+                    processing_fee_cents=250, total_cents=31250)
+    send_confirmation_email(order, [
+        Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026"),
+        Ticket(ticket_id="tkt_2", order_id="ord_1", event_id="evt_2026"),
+    ])
+
+    _, _, raw = smtp_mock.sendmail.call_args[0]
+    msg = email.message_from_string(raw)
+    alternative = msg.get_payload(0)
+    text = alternative.get_payload(0).get_payload(decode=True).decode()
+    html = alternative.get_payload(1).get_payload(decode=True).decode()
+
+    for blob in (text, html):
+        assert "$150.00 each" in blob
+        assert "$300.00" in blob  # subtotal: 2 x $150
+        assert "$2.50" in blob  # processing fee
+        assert "$10.00" in blob  # donation
+        assert "$312.50" in blob  # total
+        # Never the raw cents values anywhere a human would read them.
+        assert "15000" not in blob
+        assert "31250" not in blob
