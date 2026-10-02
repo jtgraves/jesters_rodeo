@@ -8,10 +8,10 @@ from scripts.send_announcement import handler, send_announcement
 
 @pytest.fixture
 def smtp_mock(dynamodb_tables):
-    """DynamoDB mocked (via dynamodb_tables) + smtplib.SMTP faked -- same
+    """DynamoDB mocked (via dynamodb_tables) + smtplib.SMTP_SSL faked -- same
     idea as tests/test_emails.py's fixture, just also needing dynamodb_tables
     for send_announcement's DB side (recipients, status/count updates)."""
-    with patch("app.emails.smtplib.SMTP") as mock_smtp_cls:
+    with patch("app.emails.smtplib.SMTP_SSL") as mock_smtp_cls:
         instance = mock_smtp_cls.return_value
         instance.__enter__ = MagicMock(return_value=instance)
         instance.__exit__ = MagicMock(return_value=False)

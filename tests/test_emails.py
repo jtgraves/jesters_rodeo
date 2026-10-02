@@ -9,10 +9,11 @@ from app.models import Order, Ticket
 
 @pytest.fixture
 def smtp_mock():
-    """A fake smtplib.SMTP whose `with smtplib.SMTP(...) as smtp:` binds to
-    the SAME mock instance sendmail()/login() calls land on -- MagicMock's
-    __enter__ returns a fresh mock by default, so this is set explicitly."""
-    with patch("app.emails.smtplib.SMTP") as mock_smtp_cls:
+    """A fake smtplib.SMTP_SSL whose `with smtplib.SMTP_SSL(...) as smtp:`
+    binds to the SAME mock instance sendmail()/login() calls land on --
+    MagicMock's __enter__ returns a fresh mock by default, so this is set
+    explicitly."""
+    with patch("app.emails.smtplib.SMTP_SSL") as mock_smtp_cls:
         instance = mock_smtp_cls.return_value
         instance.__enter__ = MagicMock(return_value=instance)
         instance.__exit__ = MagicMock(return_value=False)
@@ -39,7 +40,6 @@ def test_send_confirmation_email_authenticates_and_delivers_to_buyer(smtp_mock):
 
     send_confirmation_email(order, tickets)
 
-    smtp_mock.starttls.assert_called_once()
     smtp_mock.login.assert_called_once()
     smtp_mock.sendmail.assert_called_once()
     _, to_addrs, _ = smtp_mock.sendmail.call_args[0]

@@ -10,8 +10,17 @@ from app.tickets import generate_qr_code_png
 
 # Gmail's SMTP submission endpoint -- see docs/DEPLOYMENT.md for the account
 # setup (2-Step Verification + an App Password) this authenticates with.
+# Implicit TLS (port 465), not STARTTLS (587): in production, every login
+# attempt over 587 from this Lambda had its connection dropped mid-AUTH,
+# consistently (2 of 2 attempts, ~14.5 hours apart) -- consistent with
+# Google applying stricter abuse heuristics to cloud/datacenter source IPs
+# than residential ones, with STARTTLS drawing more of that scrutiny than a
+# connection encrypted from the first byte. Switched to 465 as the next
+# thing to try; not yet confirmed to fix it -- if sends still fail the same
+# way on 465, that points toward Gmail SMTP being unreliable from this
+# Lambda's IP range regardless of port, not just a port-specific issue.
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
+SMTP_PORT = 465
 
 
 def reset_clients() -> None:
@@ -29,16 +38,15 @@ def _send_mime_message(msg: MIMEMultipart, to_email: str) -> None:
     ticket confirmation per completed Stripe webhook; an announcement blast
     paces itself at one send per SEND_PACE_SECONDS), always from an async
     webhook/Lambda handler, never in a buyer's synchronous request path --
-    so the ~200-300ms a fresh STARTTLS handshake costs is not a latency
-    problem worth caching a connection to avoid. Caching one instead would
-    mean handling it going stale: Gmail closes idle SMTP connections after a
-    few minutes, and a warm Lambda execution environment can easily sit
-    between sends for longer than that, so a cached connection would
-    intermittently fail with SMTPServerDisconnected on otherwise-healthy
-    sends. Opening fresh each time sidesteps that whole failure mode.
+    so the ~200-300ms a fresh TLS handshake costs is not a latency problem
+    worth caching a connection to avoid. Caching one instead would mean
+    handling it going stale: Gmail closes idle SMTP connections after a few
+    minutes, and a warm Lambda execution environment can easily sit between
+    sends for longer than that, so a cached connection would intermittently
+    fail with SMTPServerDisconnected on otherwise-healthy sends. Opening
+    fresh each time sidesteps that whole failure mode.
     """
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
-        smtp.starttls()
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
         smtp.login(settings.ses_sender_email, settings.smtp_password)
         smtp.sendmail(settings.ses_sender_email, [to_email], msg.as_string())
 
