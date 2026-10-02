@@ -2,11 +2,19 @@ import smtplib
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr
 from html import escape
 
 from app.config import settings
 from app.models import Order, Ticket
 from app.tickets import generate_qr_code_png
+
+# A bare address in From: ("jestersrodeo@gmail.com") reads more like an
+# automated/anonymous sender -- to both spam filters and a human skimming
+# their inbox -- than a properly named one does. formataddr handles the
+# RFC 2822 quoting/encoding correctly (e.g. if this name ever needs a comma
+# or non-ASCII character), which naive string formatting wouldn't.
+FROM_DISPLAY_NAME = "Jester's Reaux-de-Eaux"
 
 # Gmail's SMTP submission endpoint -- see docs/DEPLOYMENT.md for the account
 # setup (2-Step Verification + an App Password) this authenticates with.
@@ -74,7 +82,7 @@ def send_confirmation_email(order: Order, tickets: list[Ticket]) -> None:
     # treat them as two separate body parts to display, not as alternatives.
     msg = MIMEMultipart("related")
     msg["Subject"] = "Your Jester's Reaux-de-Eaux tickets"
-    msg["From"] = settings.ses_sender_email
+    msg["From"] = formataddr((FROM_DISPLAY_NAME, settings.ses_sender_email))
     msg["To"] = order.buyer_email
 
     text_lines = [f"Thanks, {order.buyer_name}! Here are your {len(tickets)} ticket(s).", ""]
@@ -117,7 +125,7 @@ def send_announcement_email(to_email: str, subject: str, body: str) -> None:
     """
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = settings.ses_sender_email
+    msg["From"] = formataddr((FROM_DISPLAY_NAME, settings.ses_sender_email))
     msg["To"] = to_email
 
     html_body = escape(body).replace("\n", "<br>")
