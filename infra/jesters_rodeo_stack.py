@@ -413,16 +413,23 @@ class JestersRodeoStack(Stack):
             mfa=cognito.Mfa.OFF,
             # Unset, this is Cognito's bare default: "Your username is
             # {username} and temporary password is {####}." -- no branding,
-            # no context on what this is, no link. {username} is deliberately
-            # left out of the body: it's the opaque sub on this pool (see
-            # _list_clowns in app/routes/admin.py), not the clown's email, so
-            # showing it would just be a confusing UUID. {####} is Cognito's
-            # required placeholder for the generated temporary password; this
-            # same template is reused for both the initial invite and
-            # "Resend invite" (admin_create_user MessageAction="RESEND" in
-            # app/routes/admin.py). Plain text only -- Cognito's own built-in
-            # email sending doesn't render HTML/images, so there's no logo
-            # here the way the SMTP-sent ticket confirmation email has one.
+            # no context on what this is, no link. {####} is Cognito's
+            # required placeholder for the generated temporary password;
+            # {username} turned out to be required too -- not just optional
+            # as CDK's own doc comment on UserInvitationConfig claims --
+            # confirmed by a real deploy failure ("Invalid Email message
+            # body for Admin create user flow parameter. Email message body
+            # should have {username} which will be replaced by code").
+            # {username} on this pool is the opaque sub (see _list_clowns in
+            # app/routes/admin.py), not the clown's email, so it's included
+            # but de-emphasized as a reference code rather than the sign-in
+            # instruction -- the real instruction is to use the email this
+            # arrived at. This same template is reused for both the initial
+            # invite and "Resend invite" (admin_create_user
+            # MessageAction="RESEND" in app/routes/admin.py). Plain text
+            # only -- Cognito's own built-in email sending doesn't render
+            # HTML/images, so there's no logo here the way the SMTP-sent
+            # ticket confirmation email has one.
             user_invitation=cognito.UserInvitationConfig(
                 email_subject="You're invited to join Jester's Reaux-de-Eaux!",
                 email_body=(
@@ -432,6 +439,7 @@ class JestersRodeoStack(Stack):
                     "this invitation was sent to, with this temporary password "
                     "-- you'll be asked to set your own on first sign-in:\n\n"
                     "{####}\n\n"
+                    "(Account reference: {username})\n\n"
                     "See you on the float!\n"
                     "-- Jester's Reaux-de-Eaux"
                 ),
