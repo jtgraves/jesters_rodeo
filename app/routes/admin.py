@@ -1380,6 +1380,16 @@ def resend_clown_invite(
         _resend_clown_invite(username)
     except ClientError as exc:
         code = exc.response["Error"]["Code"]
+        # Logged regardless of which branch below applies: a prior version
+        # of this mapped InvalidParameterException straight to "already
+        # confirmed" on the assumption that's the only thing Cognito guards
+        # here, and that assumption turned out to be wrong for a still-
+        # pending clown -- logging the real message is what actually
+        # revealed that, rather than guessing again.
+        logger.warning(
+            "Resend invite failed for %s: %s - %s",
+            username, code, exc.response["Error"].get("Message"),
+        )
         if code == "InvalidParameterException":
             # Cognito's own guard: RESEND only works pre-confirmation.
             msg = "This clown has already signed in and set a password -- nothing to resend."
