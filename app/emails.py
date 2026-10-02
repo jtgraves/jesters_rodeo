@@ -10,15 +10,11 @@ from app.tickets import generate_qr_code_png
 
 # Gmail's SMTP submission endpoint -- see docs/DEPLOYMENT.md for the account
 # setup (2-Step Verification + an App Password) this authenticates with.
-# Implicit TLS (port 465), not STARTTLS (587): in production, every login
-# attempt over 587 from this Lambda had its connection dropped mid-AUTH,
-# consistently (2 of 2 attempts, ~14.5 hours apart) -- consistent with
-# Google applying stricter abuse heuristics to cloud/datacenter source IPs
-# than residential ones, with STARTTLS drawing more of that scrutiny than a
-# connection encrypted from the first byte. Switched to 465 as the next
-# thing to try; not yet confirmed to fix it -- if sends still fail the same
-# way on 465, that points toward Gmail SMTP being unreliable from this
-# Lambda's IP range regardless of port, not just a port-specific issue.
+# Implicit TLS (port 465), not STARTTLS (587) -- tried while chasing an
+# earlier production failure here that turned out to be unrelated to the
+# port at all (see _send_mime_message's password-cleaning comment below for
+# the actual root cause). Left on 465 since it works fine and there's no
+# reason to churn back to 587.
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465
 
@@ -46,8 +42,23 @@ def _send_mime_message(msg: MIMEMultipart, to_email: str) -> None:
     fail with SMTPServerDisconnected on otherwise-healthy sends. Opening
     fresh each time sidesteps that whole failure mode.
     """
+    # Google displays an App Password as four space-separated groups (e.g.
+    # "abcd efgh ijkl mnop") for readability; copying it off that page can
+    # carry a NON-BREAKING space (U+00A0), not a plain one, into wherever
+    # it's pasted -- confirmed in production as the actual root cause of an
+    # SMTPServerDisconnected failure that looked, for a while, like Gmail
+    # rejecting connections from this Lambda's IP entirely: smtplib's own
+    # base64-encoding step chokes on that character with a bare
+    # UnicodeEncodeError client-side if it's plain ASCII-unsafe, but a
+    # subtly malformed AUTH payload otherwise just gets the connection
+    # dropped by Gmail's server, with nothing in the error pointing at "your
+    # password has a stray character in it". split()+join() removes every
+    # whitespace run (not just leading/trailing, and not just plain spaces)
+    # wherever it falls, so this is safe regardless of which kind of
+    # whitespace ended up in there or where.
+    password = "".join(settings.smtp_password.split())
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
-        smtp.login(settings.ses_sender_email, settings.smtp_password)
+        smtp.login(settings.ses_sender_email, password)
         smtp.sendmail(settings.ses_sender_email, [to_email], msg.as_string())
 
 

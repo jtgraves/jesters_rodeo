@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.config import settings
 from app.emails import send_confirmation_email
 from app.models import Order, Ticket
 
@@ -44,6 +45,22 @@ def test_send_confirmation_email_authenticates_and_delivers_to_buyer(smtp_mock):
     smtp_mock.sendmail.assert_called_once()
     _, to_addrs, _ = smtp_mock.sendmail.call_args[0]
     assert to_addrs == ["jane@example.com"]
+
+
+def test_send_confirmation_email_strips_stray_whitespace_from_the_password(smtp_mock):
+    # Google displays an App Password as "abcd efgh ijkl mnop"; copying it
+    # can carry a non-breaking space (\xa0), not a plain one. Confirmed in
+    # production as the actual cause of a previously-mysterious
+    # SMTPServerDisconnected failure -- this must never regress silently.
+    dirty = "abcd\xa0efgh ijkl\tmnop"
+    with patch.object(settings, "smtp_password", dirty):
+        send_confirmation_email(
+            _order(quantity=1),
+            [Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026")],
+        )
+
+    _, used_password = smtp_mock.login.call_args[0]
+    assert used_password == "abcdefghijklmnop"
 
 
 def test_send_confirmation_email_has_valid_related_alternative_structure(smtp_mock):
