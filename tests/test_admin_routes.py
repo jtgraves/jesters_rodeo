@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import boto3
 import pytest
@@ -1670,6 +1670,35 @@ def test_resend_invite_handles_deleted_clown(admin_client):
         resp = admin_client.post("/admin/clown_mgmt/ghost/resend-invite", follow_redirects=False)
     assert resp.status_code == 400
     assert "no longer exists" in resp.text
+
+
+def test_resend_clown_invite_resolves_sub_to_email_before_resending():
+    # The pool's Username is an opaque sub (see _list_clowns), but Cognito's
+    # AdminCreateUser validates its Username argument against the pool's
+    # email-format UsernameAttributes schema regardless of MessageAction --
+    # confirmed in production: passing the sub directly failed with
+    # "Username should be an email." for a clown who hadn't signed in yet.
+    # Must resolve to the real email via admin_get_user first.
+    from app.routes.admin import _resend_clown_invite
+
+    mock_client = MagicMock()
+    mock_client.admin_get_user.return_value = {
+        "UserAttributes": [
+            {"Name": "sub", "Value": "sub-2"},
+            {"Name": "email", "Value": "pending@example.com"},
+        ],
+    }
+    with patch("app.routes.admin._cognito", return_value=mock_client):
+        _resend_clown_invite("sub-2")
+
+    mock_client.admin_get_user.assert_called_once_with(
+        UserPoolId=settings.cognito_user_pool_id, Username="sub-2",
+    )
+    mock_client.admin_create_user.assert_called_once_with(
+        UserPoolId=settings.cognito_user_pool_id,
+        Username="pending@example.com",
+        MessageAction="RESEND",
+    )
 
 
 # ---- Member (clown without admin rights) access ----

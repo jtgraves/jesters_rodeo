@@ -1298,9 +1298,20 @@ def _resend_clown_invite(username: str) -> None:
     # temporary password and re-sends the same invitation email template
     # already configured on the pool; no UserAttributes needed since the
     # account already exists.
+    #
+    # `username` here is the opaque sub (see _list_clowns), which is what
+    # Cognito actually stores as this pool's Username -- and what lookups
+    # like admin_get_user/admin_add_user_to_group accept fine. But
+    # AdminCreateUser's Username argument is validated against the pool's
+    # UsernameAttributes schema (email) regardless of MessageAction,
+    # confirmed in production: passing the sub there failed with
+    # "Username should be an email." for a clown who hadn't signed in yet,
+    # not an already-confirmed one. Resolve to the real email first.
+    user = _cognito().admin_get_user(UserPoolId=settings.cognito_user_pool_id, Username=username)
+    email = next(a["Value"] for a in user["UserAttributes"] if a["Name"] == "email")
     _cognito().admin_create_user(
         UserPoolId=settings.cognito_user_pool_id,
-        Username=username,
+        Username=email,
         MessageAction="RESEND",
     )
 
