@@ -45,6 +45,21 @@ templates.env.filters["ordinal"] = _ordinal
 templates.env.filters["richtext"] = render_richtext
 
 
+def _format_datetime(value: object) -> str:
+    """Just the date and a 12-hour time -- no seconds, no timezone offset,
+    no microseconds. Accepts either an ISO 8601 string (how created_at is
+    stored on every DynamoDB item) or a datetime object (how boto3 hands
+    back Cognito's UserCreateDate on the clown management page)."""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return value.strftime("%b %d, %Y %I:%M %p")
+
+
+templates.env.filters["datetime"] = _format_datetime
+
+
 def _shuffled(items: list) -> list:
     """A fresh, randomly-ordered copy -- doesn't mutate `items`, unlike
     random.shuffle (which also returns None, unusable as a Jinja filter)."""

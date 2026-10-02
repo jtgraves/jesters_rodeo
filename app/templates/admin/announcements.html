@@ -36,7 +36,7 @@
   <td>{{ a.audience | join(", ") }}</td>
   <td>{{ a.status }}{% if a.error %} ({{ a.error }}){% endif %}</td>
   <td>{{ a.sent_count }}{% if a.recipient_count is not none %} / {{ a.recipient_count }}{% endif %}</td>
-  <td>{{ a.created_at }}</td>
+  <td>{{ a.created_at | datetime }}</td>
 </tr>
 {% endfor %}
 </table>

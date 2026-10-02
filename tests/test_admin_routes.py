@@ -1169,6 +1169,19 @@ def test_create_announcement_rejects_empty_subject_or_body(mock_invoke, admin_cl
     mock_invoke.assert_not_called()
 
 
+def test_announcements_page_shows_simplified_created_date(admin_client):
+    # No seconds, no timezone offset, no "T" -- just a date and 12-hour time.
+    ANNOUNCEMENTS().put_item(Item={
+        "announcement_id": "ann_1", "event_id": "evt_2026",
+        "subject": "Update", "body": "Details.", "audience": ["attendees"],
+        "status": "sent", "recipient_count": 1, "sent_count": 1, "error": None,
+        "created_at": "2026-03-14T13:05:00Z",
+    })
+    resp = admin_client.get("/admin/announcements?event_id=evt_2026")
+    assert "Mar 14, 2026 01:05 PM" in resp.text
+    assert "2026-03-14T13:05:00Z" not in resp.text
+
+
 def test_list_announcements_defaults_event_id(admin_client):
     _put_event(status="open")
     resp = admin_client.get("/admin/announcements", follow_redirects=False)
@@ -1549,6 +1562,23 @@ def test_clowns_page_lists_clowns_with_roles(admin_client):
     # resend invite only for the still-pending (FORCE_CHANGE_PASSWORD) clown
     assert 'action="/admin/clown_mgmt/sub-2/resend-invite"' in resp.text
     assert 'action="/admin/clown_mgmt/admin-2/resend-invite"' not in resp.text
+
+
+def test_clown_mgmt_shows_simplified_created_date(admin_client):
+    # boto3 hands back Cognito's UserCreateDate as a datetime, with seconds
+    # and a timezone offset -- none of that finer-grained detail belongs on
+    # this page, just the date and a 12-hour time.
+    from datetime import datetime, timezone
+
+    clowns = [{
+        "username": "sub-3", "email": "new@example.com", "status": "FORCE_CHANGE_PASSWORD",
+        "created": datetime(2026, 3, 14, 13, 5, 0, tzinfo=timezone.utc), "is_admin": False,
+    }]
+    with patch("app.routes.admin._list_clowns", return_value=clowns):
+        resp = admin_client.get("/admin/clown_mgmt")
+    assert "Mar 14, 2026 01:05 PM" in resp.text
+    assert "13:05:00" not in resp.text
+    assert "+00:00" not in resp.text
 
 
 def test_invite_clown_calls_cognito(admin_client):

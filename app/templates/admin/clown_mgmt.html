@@ -22,7 +22,7 @@
   <td>{{ c.email }}</td>
   <td>{% if c.is_admin %}Admin{% else %}Clown{% endif %}</td>
   <td>{{ c.status }}</td>
-  <td>{{ c.created }}</td>
+  <td>{{ c.created | datetime }}</td>
   <td>
     {% if c.username == current_sub %}
       <em>you</em>
