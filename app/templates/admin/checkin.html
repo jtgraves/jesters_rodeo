@@ -124,10 +124,20 @@
   }
 
   // A <dialog> fires "close" however it closes -- Cancel, Confirm, or Esc --
-  // so one listener here uniformly releases the scanner's busy debounce
-  // that lookup() left pinned while the dialog was open.
+  // so one listener here releases the scanner's busy debounce that lookup()
+  // left pinned while the dialog was open. Confirm is the one case where
+  // "the dialog closed" must NOT mean "safe to scan again": closing the
+  // dialog is the very first thing the confirm-yes handler does, well
+  // before its POST has actually landed -- confirmed in production, where
+  // the camera caught the same QR code again in that gap, re-looked-up an
+  // order whose commit was still in flight, and on resolving a beat later
+  // correctly (if confusingly) reported "already checked in" right on top
+  // of the real, successful confirm. `confirming` tells this listener to
+  // stand down for that case; the confirm-yes handler's own `finally`
+  // releases `busy` once the commit request actually finishes.
+  let confirming = false;
   document.getElementById("confirm-dialog").addEventListener("close", () => {
-    busy = false;
+    if (!confirming) busy = false;
   });
 
   document.getElementById("confirm-cancel").onclick = () => {
@@ -137,9 +147,14 @@
 
   document.getElementById("confirm-yes").onclick = async () => {
     const orderId = pendingOrderId;
+    confirming = true;
     document.getElementById("confirm-dialog").close();
     pendingOrderId = null;
-    if (!orderId) return;
+    if (!orderId) {
+      confirming = false;
+      busy = false;
+      return;
+    }
     try {
       const url = "/admin/checkin/" + encodeURIComponent(orderId)
                 + "?event_id=" + encodeURIComponent(EVENT_ID);
@@ -151,6 +166,9 @@
       showResult(await resp.json());
     } catch (err) {
       document.getElementById("result").textContent = "Check-in failed — try again.";
+    } finally {
+      confirming = false;
+      busy = false;
     }
   };
 
