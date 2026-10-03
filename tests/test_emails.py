@@ -6,7 +6,7 @@ import pytest
 
 from app.config import settings
 from app.emails import send_confirmation_email
-from app.models import Event, Order, Ticket
+from app.models import Event, Order
 
 
 @pytest.fixture
@@ -57,10 +57,7 @@ def _event(**overrides) -> Event:
 
 
 def test_send_confirmation_email_authenticates_and_delivers_to_buyer(smtp_mock):
-    order = _order(quantity=1)
-    tickets = [Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026", attendee_name="Jane Doe")]
-
-    send_confirmation_email(order, tickets)
+    send_confirmation_email(_order(quantity=1))
 
     smtp_mock.login.assert_called_once()
     smtp_mock.sendmail.assert_called_once()
@@ -75,23 +72,16 @@ def test_send_confirmation_email_strips_stray_whitespace_from_the_password(smtp_
     # SMTPServerDisconnected failure -- this must never regress silently.
     dirty = "abcd\xa0efgh ijkl\tmnop"
     with patch.object(settings, "smtp_password", dirty):
-        send_confirmation_email(
-            _order(quantity=1),
-            [Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026")],
-        )
+        send_confirmation_email(_order(quantity=1))
 
     _, used_password = smtp_mock.login.call_args[0]
     assert used_password == "abcdefghijklmnop"
 
 
-def test_send_confirmation_email_has_valid_related_alternative_structure(smtp_mock):
-    order = _order(quantity=2)
-    tickets = [
-        Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026", attendee_name="Jane Doe"),
-        Ticket(ticket_id="tkt_2", order_id="ord_1", event_id="evt_2026", attendee_name=None),
-    ]
+def test_send_confirmation_email_has_one_qr_code_for_the_whole_party(smtp_mock):
+    order = _order(quantity=3)
 
-    send_confirmation_email(order, tickets)
+    send_confirmation_email(order)
 
     _, _, raw = smtp_mock.sendmail.call_args[0]
     msg = email.message_from_string(raw)
@@ -107,21 +97,21 @@ def test_send_confirmation_email_has_valid_related_alternative_structure(smtp_mo
     assert [p.get_content_type() for p in alternative.get_payload()] == ["text/plain", "text/html"]
 
     images = [p for p in msg.get_payload() if p.get_content_type() == "image/png"]
-    assert len(images) == 2, "one inline QR code per ticket"
-    assert {p["Content-ID"] for p in images} == {"<qr0>", "<qr1>"}
+    assert len(images) == 1, "one QR code for the whole party, regardless of quantity"
+    assert images[0]["Content-ID"] == "<qr>"
 
+    text = alternative.get_payload(0).get_payload(decode=True).decode()
     html = alternative.get_payload(1).get_payload(decode=True).decode()
-    assert 'src="cid:qr0"' in html and 'src="cid:qr1"' in html
-    assert "tkt_1" in html and "tkt_2" in html
+    assert "party of 3" in text.lower()
+    assert "party of 3" in html.lower()
+    assert order.order_id in text
+    assert order.order_id in html
+    assert 'src="cid:qr"' in html
 
 
 def test_send_confirmation_email_includes_event_details(smtp_mock):
     event = _event()
-    send_confirmation_email(
-        _order(quantity=1),
-        [Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026")],
-        event,
-    )
+    send_confirmation_email(_order(quantity=1), event)
 
     _, _, raw = smtp_mock.sendmail.call_args[0]
     msg = email.message_from_string(raw)
@@ -141,22 +131,15 @@ def test_send_confirmation_email_includes_event_details(smtp_mock):
 
 def test_send_confirmation_email_omits_event_section_when_event_is_none(smtp_mock):
     # e.g. the event was deleted after the order was placed -- must still
-    # send the ticket, just without the now-unavailable event details.
-    send_confirmation_email(
-        _order(quantity=1),
-        [Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026")],
-        None,
-    )
+    # send the QR code, just without the now-unavailable event details.
+    send_confirmation_email(_order(quantity=1), None)
     smtp_mock.sendmail.assert_called_once()
 
 
 def test_send_confirmation_email_shows_prices_in_dollars_not_cents(smtp_mock):
     order = _order(quantity=2, unit_price_cents=15000, donation_cents=1000,
                     processing_fee_cents=250, total_cents=31250)
-    send_confirmation_email(order, [
-        Ticket(ticket_id="tkt_1", order_id="ord_1", event_id="evt_2026"),
-        Ticket(ticket_id="tkt_2", order_id="ord_1", event_id="evt_2026"),
-    ])
+    send_confirmation_email(order)
 
     _, _, raw = smtp_mock.sendmail.call_args[0]
     msg = email.message_from_string(raw)

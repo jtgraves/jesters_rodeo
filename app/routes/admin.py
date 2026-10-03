@@ -630,10 +630,9 @@ def export_orders(request: Request, event_id: str = "") -> Response:
 
 def _resend_confirmation_email(order_id: str) -> dict:
     order_item = _get_order_or_404(order_id)
-    tickets = [Ticket(**t) for t in _tickets_for_order(order_id)]
     event_item = EVENTS().get_item(Key={"event_id": order_item["event_id"]}).get("Item")
     event = Event(**event_item) if event_item else None
-    send_confirmation_email(Order(**order_item), tickets, event)
+    send_confirmation_email(Order(**order_item), event)
     return order_item
 
 

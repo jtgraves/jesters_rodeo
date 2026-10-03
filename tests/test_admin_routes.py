@@ -960,7 +960,7 @@ def test_give_tickets_page_lists_events(admin_client):
     assert 'name="donation' not in resp.text  # no donation on the comp form
 
 
-def test_give_tickets_creates_paid_comp_order_with_tickets(admin_client):
+def test_give_tickets_creates_paid_comp_order(admin_client):
     _put_event(tickets_sold_count=5, capacity=300)
     with patch("app.fulfillment.send_confirmation_email") as mock_email:
         resp = admin_client.post(
@@ -986,8 +986,6 @@ def test_give_tickets_creates_paid_comp_order_with_tickets(admin_client):
     assert order["stripe_payment_intent_id"] is None
     assert order["checked_in"] is False
 
-    tickets = [t for t in TICKETS().scan()["Items"] if t["order_id"] == order["order_id"]]
-    assert len(tickets) == 3
     mock_email.assert_called_once()
 
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]

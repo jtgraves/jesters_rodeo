@@ -8,7 +8,7 @@ from email.utils import formataddr
 from html import escape
 
 from app.config import settings
-from app.models import Event, Order, Ticket
+from app.models import Event, Order
 from app.tickets import generate_qr_code_png
 
 # A bare address in From: ("jestersrodeo@gmail.com") reads more like an
@@ -147,17 +147,17 @@ def _order_summary_sections(order: Order) -> tuple[list[str], list[str]]:
     return text_lines, html_parts
 
 
-def send_confirmation_email(order: Order, tickets: list[Ticket], event: Event | None = None) -> None:
+def send_confirmation_email(order: Order, event: Event | None = None) -> None:
     # multipart/related
     #   +-- multipart/alternative
     #   |     +-- text/plain
-    #   |     +-- text/html   (references the images below by cid:; the
+    #   |     +-- text/html   (references the QR image below by cid:; the
     #   |                      event logo, if any, is a normal remote <img>
     #   |                      since it's already hosted in S3)
-    #   +-- image/png (qr0), image/png (qr1), ...
+    #   +-- image/png (qr)
     #
     # The alternative part MUST be nested inside the related part. Attaching
-    # text/plain and text/html as direct siblings of the images makes clients
+    # text/plain and text/html as direct siblings of the image makes clients
     # treat them as two separate body parts to display, not as alternatives.
     msg = MIMEMultipart("related")
     msg["Subject"] = "Your Jester's Reaux-de-Eaux tickets"
@@ -166,30 +166,27 @@ def send_confirmation_email(order: Order, tickets: list[Ticket], event: Event | 
 
     event_text, event_html = _event_details_sections(event, settings.base_url)
     order_text, order_html = _order_summary_sections(order)
+    party_word = "person" if order.quantity == 1 else "people"
 
     text_lines = [
-        f"Thanks, {order.buyer_name}! You're confirmed for {len(tickets)} ticket(s).", "",
+        f"Thanks, {order.buyer_name}! You're confirmed -- party of {order.quantity}.", "",
         *event_text, "",
         *order_text, "",
+        f"Show this QR code at the door ({order.quantity} {party_word}, one scan):",
+        f"Order ID: {order.order_id}",
     ]
     html_parts = [
         f"<p>Thanks, {escape(order.buyer_name)}! "
-        f"You're confirmed for {len(tickets)} ticket(s).</p>",
+        f"You're confirmed &mdash; party of {order.quantity}.</p>",
         *event_html,
         *order_html,
-        "<p>Show a QR code at the door for each ticket.</p>",
+        '<div style="text-align:center;margin-top:16px">'
+        f"<p><strong>{escape(order.buyer_name)}</strong><br>"
+        f"Party of {order.quantity}<br>"
+        f"<code>{escape(order.order_id)}</code></p>"
+        '<img src="cid:qr" alt="Check-in QR code" width="200" height="200">'
+        "</div>",
     ]
-    for i, ticket in enumerate(tickets):
-        who = ticket.attendee_name or order.buyer_name
-        text_lines.append(f"- Ticket for {who} (ID: {ticket.ticket_id})")
-        html_parts.append(
-            f'<div style="margin-bottom:24px">'
-            f"<p><strong>{escape(who)}</strong><br>"
-            f"<code>{escape(ticket.ticket_id)}</code></p>"
-            f'<img src="cid:qr{i}" alt="QR code for {escape(ticket.ticket_id)}" '
-            f'width="200" height="200">'
-            f"</div>"
-        )
 
     alternative = MIMEMultipart("alternative")
     alternative.attach(MIMEText("\n".join(text_lines), "plain", "utf-8"))
@@ -198,11 +195,10 @@ def send_confirmation_email(order: Order, tickets: list[Ticket], event: Event | 
     )
     msg.attach(alternative)
 
-    for i, ticket in enumerate(tickets):
-        image = MIMEImage(generate_qr_code_png(ticket.ticket_id), _subtype="png")
-        image.add_header("Content-ID", f"<qr{i}>")
-        image.add_header("Content-Disposition", "inline", filename=f"{ticket.ticket_id}.png")
-        msg.attach(image)
+    image = MIMEImage(generate_qr_code_png(order.order_id), _subtype="png")
+    image.add_header("Content-ID", "<qr>")
+    image.add_header("Content-Disposition", "inline", filename=f"{order.order_id}.png")
+    msg.attach(image)
 
     _send_mime_message(msg, order.buyer_email)
 
