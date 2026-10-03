@@ -210,6 +210,8 @@ def checkout(
         "stripe_payment_intent_id": None,
         "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "checked_in": False,
+        "checked_in_at": None,
     })
 
     ticket_word = "ticket" if quantity == 1 else "tickets"

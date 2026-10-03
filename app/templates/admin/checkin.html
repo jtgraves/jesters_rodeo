@@ -6,9 +6,17 @@
 <p><button id="start-camera">📷 Start camera</button></p>
 <p id="result" role="status" style="font-size:1.5rem; padding:0.5rem"></p>
 <p>
-  <input id="manual-ticket-id" placeholder="Ticket ID (manual entry)">
-  <button id="manual-submit">Check In</button>
+  <input id="manual-order-id" placeholder="Order ID (manual entry)">
+  <button id="manual-submit">Look up</button>
 </p>
+
+<dialog id="confirm-dialog">
+  <p id="confirm-name" style="font-size:1.3rem;font-weight:600"></p>
+  <p id="confirm-party"></p>
+  <p id="confirm-note" style="color:#b06000"></p>
+  <button id="confirm-yes">Confirm check-in</button>
+  <button id="confirm-cancel">Cancel</button>
+</dialog>
 
 <h2>Look up by name or email</h2>
 <form method="get" action="/admin/checkin">
@@ -19,21 +27,16 @@
 {% if q %}
 <div class="table-scroll">
 <table>
-<tr><th>Attendee</th><th>Buyer</th><th>Email</th><th>Status</th><th></th></tr>
+<tr><th>Buyer</th><th>Email</th><th>Party</th><th>Status</th><th></th></tr>
 {% for m in matches %}
 <tr>
-  <td>{{ m.attendee_name or m.buyer_name }}</td>
   <td>{{ m.buyer_name }}</td>
   <td>{{ m.buyer_email }}</td>
+  <td>{{ m.quantity }}</td>
+  <td>{% if m.checked_in %}Checked in{% else %}Not checked in{% endif %}</td>
   <td>
-    {% if m.voided %}Voided
-    {% elif m.checked_in %}Checked in
-    {% else %}Not checked in
-    {% endif %}
-  </td>
-  <td>
-    {% if not m.voided and not m.checked_in %}
-    <form method="post" action="/admin/checkin/{{ m.ticket_id }}?event_id={{ event_id }}&q={{ q | urlencode }}" style="display:inline">
+    {% if not m.checked_in %}
+    <form method="post" action="/admin/checkin/{{ m.order_id }}?event_id={{ event_id }}&q={{ q | urlencode }}" style="display:inline">
       <button type="submit">Check In</button>
     </form>
     {% endif %}
@@ -53,38 +56,106 @@
 <script>
   const EVENT_ID = {{ event_id | tojson }};
   const MESSAGES = {
-    checked_in:        (d) => ["✅ Welcome, " + (d.attendee_name || "guest"), "#137333"],
-    already_checked_in:(d) => ["⚠️ Already checked in: " + (d.attendee_name || "guest"), "#b06000"],
-    wrong_event:       ()  => ["⛔ Ticket is for a different event", "#b3261e"],
-    voided:            ()  => ["⛔ Ticket was refunded", "#b3261e"],
-    invalid:           ()  => ["⛔ Unrecognized ticket", "#b3261e"],
+    checked_in:        (d) => ["✅ Welcome, " + d.buyer_name + " (party of " + d.quantity + ")", "#137333"],
+    already_checked_in:(d) => ["⚠️ Already checked in: " + d.buyer_name, "#b06000"],
+    wrong_event:       ()  => ["⛔ Order is for a different event", "#b3261e"],
+    voided:            ()  => ["⛔ Order is not a valid paid order", "#b3261e"],
+    invalid:           ()  => ["⛔ Unrecognized order", "#b3261e"],
   };
   let busy = false;
+  let pendingOrderId = null;
 
-  async function checkin(ticketId) {
-    if (busy || !ticketId) return;
+  function showResult(data) {
+    const [text, color] = (MESSAGES[data.status] || MESSAGES.invalid)(data);
+    const el = document.getElementById("result");
+    el.textContent = text;
+    el.style.color = color;
+  }
+
+  function showConfirmDialog(orderId, data) {
+    // Clear any stale result message (e.g. a previous "✅ Welcome..." from
+    // an earlier scan) so nothing misleading is visible behind the dialog.
+    const resultEl = document.getElementById("result");
+    resultEl.textContent = "";
+    resultEl.style.color = "";
+    pendingOrderId = orderId;
+    document.getElementById("confirm-name").textContent = data.buyer_name;
+    document.getElementById("confirm-party").textContent = "Party of " + data.quantity;
+    document.getElementById("confirm-note").textContent =
+      data.status === "already_checked_in"
+        ? "⚠️ Already checked in at " + new Date(data.checked_in_at).toLocaleTimeString()
+        : "";
+    document.getElementById("confirm-yes").style.display =
+      data.status === "already_checked_in" ? "none" : "";
+    document.getElementById("confirm-dialog").showModal();
+  }
+
+  async function lookup(orderId) {
+    if (busy || !orderId) return;
     busy = true;
+    // Set when this call opens the confirm dialog, so the finally block
+    // below knows not to release `busy` on the usual timeout -- it stays
+    // true, pinned by staff reading the dialog, until the dialog's own
+    // "close" listener releases it (see below). Otherwise a second QR code
+    // drifting into frame while the dialog is open could re-run lookup()
+    // and silently swap which party is pending confirmation.
+    let dialogOpened = false;
     try {
-      const url = "/admin/checkin/" + encodeURIComponent(ticketId)
+      const url = "/admin/checkin/lookup/" + encodeURIComponent(orderId)
+                + "?event_id=" + encodeURIComponent(EVENT_ID);
+      const resp = await fetch(url, {headers: {"Accept": "application/json"}});
+      if (resp.status === 401) {
+        document.getElementById("result").textContent = "Session expired — reload and sign in.";
+        return;
+      }
+      const data = await resp.json();
+      if (data.status === "ready" || data.status === "already_checked_in") {
+        dialogOpened = true;
+        showConfirmDialog(orderId, data);
+      } else {
+        showResult(data);
+      }
+    } finally {
+      if (!dialogOpened) {
+        // Debounce so one QR code in front of the camera is not scanned 10x/sec.
+        setTimeout(() => { busy = false; }, 1500);
+      }
+    }
+  }
+
+  // A <dialog> fires "close" however it closes -- Cancel, Confirm, or Esc --
+  // so one listener here uniformly releases the scanner's busy debounce
+  // that lookup() left pinned while the dialog was open.
+  document.getElementById("confirm-dialog").addEventListener("close", () => {
+    busy = false;
+  });
+
+  document.getElementById("confirm-cancel").onclick = () => {
+    document.getElementById("confirm-dialog").close();
+    pendingOrderId = null;
+  };
+
+  document.getElementById("confirm-yes").onclick = async () => {
+    const orderId = pendingOrderId;
+    document.getElementById("confirm-dialog").close();
+    pendingOrderId = null;
+    if (!orderId) return;
+    try {
+      const url = "/admin/checkin/" + encodeURIComponent(orderId)
                 + "?event_id=" + encodeURIComponent(EVENT_ID);
       const resp = await fetch(url, {method: "POST", headers: {"Accept": "application/json"}});
       if (resp.status === 401) {
         document.getElementById("result").textContent = "Session expired — reload and sign in.";
         return;
       }
-      const data = await resp.json();
-      const [text, color] = (MESSAGES[data.status] || MESSAGES.invalid)(data);
-      const el = document.getElementById("result");
-      el.textContent = text;
-      el.style.color = color;
-    } finally {
-      // Debounce so one QR code in front of the camera is not scanned 10x/sec.
-      setTimeout(() => { busy = false; }, 1500);
+      showResult(await resp.json());
+    } catch (err) {
+      document.getElementById("result").textContent = "Check-in failed — try again.";
     }
-  }
+  };
 
   document.getElementById("manual-submit").onclick = () =>
-    checkin(document.getElementById("manual-ticket-id").value.trim());
+    lookup(document.getElementById("manual-order-id").value.trim());
 
   // iOS WebKit (Safari, and Chrome-on-iOS, which is WebKit underneath) will
   // silently refuse getUserMedia -- no permission prompt, no error dialog --
@@ -97,7 +168,7 @@
   startButton.onclick = async () => {
     startButton.disabled = true;
     try {
-      await scanner.start({facingMode: "environment"}, {fps: 10, qrbox: 250}, checkin);
+      await scanner.start({facingMode: "environment"}, {fps: 10, qrbox: 250}, lookup);
       startButton.style.display = "none";
     } catch (err) {
       console.error("Camera start failed:", err);

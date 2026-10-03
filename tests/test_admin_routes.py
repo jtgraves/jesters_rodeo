@@ -13,7 +13,6 @@ from app.db import (
     FAQ_ENTRIES,
     ORDERS,
     PAST_BENEFICIARIES,
-    TICKETS,
     WAITLIST,
 )
 from app.main import app
@@ -58,16 +57,6 @@ def _put_event(event_id="evt_2026", **overrides):
     EVENTS().put_item(Item=item)
 
 
-def _put_ticket(ticket_id, event_id="evt_2026", **overrides):
-    item = {
-        "ticket_id": ticket_id, "order_id": "ord_1", "event_id": event_id,
-        "attendee_name": "Jane", "checked_in": False, "checked_in_at": None,
-        "voided": False, "voided_at": None,
-    }
-    item.update(overrides)
-    TICKETS().put_item(Item=item)
-
-
 def _put_order(order_id="ord_1", **overrides):
     item = {
         "order_id": order_id, "event_id": "evt_2026", "buyer_name": "Jane",
@@ -75,6 +64,7 @@ def _put_order(order_id="ord_1", **overrides):
         "quantity": 2, "unit_price_cents": 15000, "total_cents": 30000,
         "status": "paid", "created_at": "2026-01-01T00:00:00Z",
         "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
+        "checked_in": False, "checked_in_at": None,
     }
     item.update(overrides)
     ORDERS().put_item(Item=item)
@@ -90,7 +80,7 @@ def test_admin_redirects_unauthenticated_browsers_to_login(dynamodb_tables):
 def test_admin_401s_unauthenticated_api_clients(dynamodb_tables):
     client = TestClient(app)
     resp = client.post(
-        "/admin/checkin/tkt_x?event_id=evt_2026", headers={"accept": "application/json"}
+        "/admin/checkin/ord_x?event_id=evt_2026", headers={"accept": "application/json"}
     )
     assert resp.status_code == 401
 
@@ -804,39 +794,102 @@ def test_opening_an_event_closes_any_other_open_event(admin_client):
     assert EVENTS().get_item(Key={"event_id": "evt_2027"})["Item"]["status"] == "open"
 
 
-def test_checkin_marks_ticket_checked_in(admin_client):
-    _put_ticket("tkt_abc")
-    resp = admin_client.post("/admin/checkin/tkt_abc?event_id=evt_2026")
+def test_checkin_lookup_returns_ready_without_mutating_state(admin_client):
+    _put_order("ord_abc", buyer_name="Jane Doe", quantity=2)
+    resp = admin_client.get("/admin/checkin/lookup/ord_abc?event_id=evt_2026")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "checked_in"
-    assert TICKETS().get_item(Key={"ticket_id": "tkt_abc"})["Item"]["checked_in"] is True
+    assert resp.json() == {"status": "ready", "buyer_name": "Jane Doe", "quantity": 2}
+    # A second lookup is still "ready" -- a lookup never commits anything.
+    resp2 = admin_client.get("/admin/checkin/lookup/ord_abc?event_id=evt_2026")
+    assert resp2.json()["status"] == "ready"
 
 
-def test_checkin_rejects_unknown_ticket(admin_client):
-    resp = admin_client.post("/admin/checkin/tkt_nonexistent?event_id=evt_2026")
+def test_checkin_lookup_rejects_unknown_order(admin_client):
+    resp = admin_client.get("/admin/checkin/lookup/ord_nonexistent?event_id=evt_2026")
+    assert resp.json() == {"status": "invalid"}
+
+
+def test_checkin_lookup_on_already_checked_in_order_shows_party_size(admin_client):
+    _put_order("ord_dup", buyer_name="Jane Doe", quantity=4,
+               checked_in=True, checked_in_at="2026-03-14T20:00:00Z")
+    resp = admin_client.get("/admin/checkin/lookup/ord_dup?event_id=evt_2026")
+    assert resp.json() == {
+        "status": "already_checked_in", "buyer_name": "Jane Doe", "quantity": 4,
+        "checked_in_at": "2026-03-14T20:00:00Z",
+    }
+
+
+def test_checkin_lookup_rejects_order_from_a_different_event(admin_client):
+    """Past years stay queryable, so last year's QR code is a live object."""
+    _put_order("ord_lastyear", event_id="evt_2025")
+    resp = admin_client.get("/admin/checkin/lookup/ord_lastyear?event_id=evt_2026")
+    assert resp.json()["status"] == "wrong_event"
+
+
+def test_checkin_lookup_rejects_non_paid_order(admin_client):
+    _put_order("ord_refunded", status="refunded")
+    resp = admin_client.get("/admin/checkin/lookup/ord_refunded?event_id=evt_2026")
+    assert resp.json()["status"] == "voided"
+
+
+def test_checkin_order_commits_and_is_idempotent(admin_client):
+    _put_order("ord_abc", buyer_name="Jane Doe", quantity=2)
+
+    first = admin_client.post("/admin/checkin/ord_abc?event_id=evt_2026")
+    assert first.status_code == 200
+    assert first.json() == {"status": "checked_in", "buyer_name": "Jane Doe", "quantity": 2}
+    stored = ORDERS().get_item(Key={"order_id": "ord_abc"})["Item"]
+    assert stored["checked_in"] is True
+    checked_in_at = stored["checked_in_at"]
+
+    second = admin_client.post("/admin/checkin/ord_abc?event_id=evt_2026")
+    assert second.json()["status"] == "already_checked_in"
+    assert second.json()["checked_in_at"] == checked_in_at
+    assert ORDERS().get_item(Key={"order_id": "ord_abc"})["Item"]["checked_in_at"] == checked_in_at
+
+
+def test_checkin_order_handles_concurrent_commit_race(admin_client):
+    """Two near-simultaneous commits for the same order (two doors, two
+    phones): the conditional write's loser must get 'already_checked_in',
+    not an unhandled exception."""
+    _put_order("ord_race", buyer_name="Jane Doe", quantity=2)
+    race_error = ClientError(
+        {"Error": {"Code": "ConditionalCheckFailedException", "Message": "conditional check failed"}},
+        "UpdateItem",
+    )
+    with patch("app.routes.admin.ORDERS") as mock_orders:
+        mock_orders.return_value.get_item.return_value = {
+            "Item": {"order_id": "ord_race", "event_id": "evt_2026", "status": "paid",
+                      "buyer_name": "Jane Doe", "quantity": 2, "checked_in": False, "checked_in_at": None},
+        }
+        mock_orders.return_value.update_item.side_effect = race_error
+        resp = admin_client.post("/admin/checkin/ord_race?event_id=evt_2026")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "already_checked_in"
+    assert data["buyer_name"] == "Jane Doe"
+    assert data["quantity"] == 2
+    mock_orders.return_value.update_item.assert_called_once()
+
+
+def test_checkin_order_rejects_unknown_order(admin_client):
+    resp = admin_client.post("/admin/checkin/ord_nonexistent?event_id=evt_2026")
     assert resp.status_code == 200
     assert resp.json()["status"] == "invalid"
 
 
-def test_checkin_flags_duplicate(admin_client):
-    _put_ticket("tkt_dup", checked_in=True, checked_in_at="2026-03-14T20:00:00Z")
-    resp = admin_client.post("/admin/checkin/tkt_dup?event_id=evt_2026")
-    assert resp.json()["status"] == "already_checked_in"
-
-
-def test_checkin_rejects_ticket_from_a_different_event(admin_client):
-    """Past years stay queryable, so last year's QR code is a live object."""
-    _put_ticket("tkt_lastyear", event_id="evt_2025")
-    resp = admin_client.post("/admin/checkin/tkt_lastyear?event_id=evt_2026")
+def test_checkin_order_rejects_order_from_a_different_event(admin_client):
+    _put_order("ord_lastyear", event_id="evt_2025")
+    resp = admin_client.post("/admin/checkin/ord_lastyear?event_id=evt_2026")
     assert resp.json()["status"] == "wrong_event"
-    assert TICKETS().get_item(Key={"ticket_id": "tkt_lastyear"})["Item"]["checked_in"] is False
+    assert ORDERS().get_item(Key={"order_id": "ord_lastyear"})["Item"]["checked_in"] is False
 
 
-def test_checkin_rejects_voided_ticket(admin_client):
-    _put_ticket("tkt_refunded", voided=True, voided_at="2026-02-01T00:00:00Z")
-    resp = admin_client.post("/admin/checkin/tkt_refunded?event_id=evt_2026")
+def test_checkin_order_rejects_refunded_order(admin_client):
+    _put_order("ord_refunded", status="refunded")
+    resp = admin_client.post("/admin/checkin/ord_refunded?event_id=evt_2026")
     assert resp.json()["status"] == "voided"
-    assert TICKETS().get_item(Key={"ticket_id": "tkt_refunded"})["Item"]["checked_in"] is False
+    assert ORDERS().get_item(Key={"order_id": "ord_refunded"})["Item"]["checked_in"] is False
 
 
 def test_checkin_from_a_browser_form_redirects_instead_of_returning_json(admin_client):
@@ -844,9 +897,9 @@ def test_checkin_from_a_browser_form_redirects_instead_of_returning_json(admin_c
     submit, not the JS scanner's fetch -- it should behave like every other
     admin form (redirect back to the page), not hand back a raw JSON body.
     """
-    _put_ticket("tkt_abc")
+    _put_order("ord_abc")
     resp = admin_client.post(
-        "/admin/checkin/tkt_abc?event_id=evt_2026&q=jane",
+        "/admin/checkin/ord_abc?event_id=evt_2026&q=jane",
         headers={"accept": "text/html"},
         follow_redirects=False,
     )
@@ -856,7 +909,6 @@ def test_checkin_from_a_browser_form_redirects_instead_of_returning_json(admin_c
 
 def test_checkin_search_finds_by_buyer_name_and_email(admin_client):
     _put_order("ord_1", buyer_name="Jane Doe", buyer_email="jane@example.com")
-    _put_ticket("tkt_1", order_id="ord_1", attendee_name="Jane Doe")
 
     by_name = admin_client.get("/admin/checkin?event_id=evt_2026&q=jane doe")
     assert "Jane Doe" in by_name.text
@@ -865,17 +917,15 @@ def test_checkin_search_finds_by_buyer_name_and_email(admin_client):
     assert "Jane Doe" in by_email.text
 
 
-def test_checkin_search_finds_by_attendee_name_even_when_buyer_differs(admin_client):
-    _put_order("ord_1", buyer_name="Jane Doe", buyer_email="jane@example.com")
-    _put_ticket("tkt_1", order_id="ord_1", attendee_name="Someone Else")
-
-    resp = admin_client.get("/admin/checkin?event_id=evt_2026&q=someone else")
-    assert "Someone Else" in resp.text
-
-
 def test_checkin_search_excludes_other_events(admin_client):
     _put_order("ord_1", event_id="evt_2025", buyer_name="Jane Doe")
-    _put_ticket("tkt_1", event_id="evt_2025", order_id="ord_1")
+
+    resp = admin_client.get("/admin/checkin?event_id=evt_2026&q=jane")
+    assert "Jane Doe" not in resp.text
+
+
+def test_checkin_search_excludes_unpaid_orders(admin_client):
+    _put_order("ord_1", status="pending", buyer_name="Jane Doe")
 
     resp = admin_client.get("/admin/checkin?event_id=evt_2026&q=jane")
     assert "Jane Doe" not in resp.text
@@ -889,7 +939,6 @@ def test_checkin_search_shows_no_matches_message(admin_client):
 @patch("app.routes.admin.send_confirmation_email")
 def test_resend_email_from_checkin_redirects_back_to_search(mock_send, admin_client):
     _put_order("ord_1")
-    _put_ticket("tkt_1", order_id="ord_1")
 
     resp = admin_client.post(
         "/admin/checkin/ord_1/resend-email?q=jane", follow_redirects=False
@@ -900,11 +949,9 @@ def test_resend_email_from_checkin_redirects_back_to_search(mock_send, admin_cli
 
 
 @patch("app.routes.admin.stripe.Refund.create")
-def test_refund_marks_refunded_voids_tickets_and_frees_capacity(mock_refund, admin_client):
+def test_refund_marks_refunded_and_frees_capacity(mock_refund, admin_client):
     _put_event(tickets_sold_count=5)
     _put_order("ord_refund")
-    _put_ticket("tkt_r1", order_id="ord_refund")
-    _put_ticket("tkt_r2", order_id="ord_refund")
 
     resp = admin_client.post("/admin/orders/ord_refund/refund", follow_redirects=False)
 
@@ -912,10 +959,6 @@ def test_refund_marks_refunded_voids_tickets_and_frees_capacity(mock_refund, adm
     mock_refund.assert_called_once_with(payment_intent="pi_1")
     assert ORDERS().get_item(Key={"order_id": "ord_refund"})["Item"]["status"] == "refunded"
     assert int(EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["tickets_sold_count"]) == 3
-
-    for tid in ("tkt_r1", "tkt_r2"):
-        ticket = TICKETS().get_item(Key={"ticket_id": tid})["Item"]
-        assert ticket["voided"] is True, "a refunded ticket must not scan at the door"
 
 
 @patch("app.routes.admin.stripe.Refund.create")
@@ -959,7 +1002,7 @@ def test_give_tickets_page_lists_events(admin_client):
     assert 'name="donation' not in resp.text  # no donation on the comp form
 
 
-def test_give_tickets_creates_paid_comp_order_with_tickets(admin_client):
+def test_give_tickets_creates_paid_comp_order(admin_client):
     _put_event(tickets_sold_count=5, capacity=300)
     with patch("app.fulfillment.send_confirmation_email") as mock_email:
         resp = admin_client.post(
@@ -983,9 +1026,8 @@ def test_give_tickets_creates_paid_comp_order_with_tickets(admin_client):
     assert order["buyer_name"] == "Guest of Honor"
     assert order["buyer_email"] == "vip@example.com"
     assert order["stripe_payment_intent_id"] is None
+    assert order["checked_in"] is False
 
-    tickets = [t for t in TICKETS().scan()["Items"] if t["order_id"] == order["order_id"]]
-    assert len(tickets) == 3
     mock_email.assert_called_once()
 
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
@@ -1024,18 +1066,16 @@ def test_give_tickets_flags_order_when_fulfilment_fails(admin_client):
 
 
 @patch("app.routes.admin.stripe.Refund.create")
-def test_refunding_a_comp_skips_stripe_but_voids_tickets(mock_refund, admin_client):
+def test_refunding_a_comp_skips_stripe(mock_refund, admin_client):
     _put_event(tickets_sold_count=5)
     _put_order("ord_comp", comp=True, total_cents=0, unit_price_cents=0,
                stripe_payment_intent_id=None)
-    _put_ticket("tkt_c1", order_id="ord_comp")
 
     resp = admin_client.post("/admin/orders/ord_comp/refund", follow_redirects=False)
 
     assert resp.status_code == 303
     mock_refund.assert_not_called()
     assert ORDERS().get_item(Key={"order_id": "ord_comp"})["Item"]["status"] == "refunded"
-    assert TICKETS().get_item(Key={"ticket_id": "tkt_c1"})["Item"]["voided"] is True
     assert int(EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]["tickets_sold_count"]) == 3
 
 
@@ -1052,37 +1092,28 @@ def test_orders_page_shows_order_date(admin_client):
     assert "Mar 14, 2026 01:05 PM" in resp.text
 
 
-def test_orders_page_shows_checkin_progress(admin_client):
-    _put_order("ord_none", quantity=2)
-    _put_ticket("tkt_a", order_id="ord_none", checked_in=False)
-    _put_ticket("tkt_b", order_id="ord_none", checked_in=False)
-
-    _put_order("ord_partial", quantity=2)
-    _put_ticket("tkt_c", order_id="ord_partial", checked_in=True)
-    _put_ticket("tkt_d", order_id="ord_partial", checked_in=False)
-
-    _put_order("ord_all", quantity=1)
-    _put_ticket("tkt_e", order_id="ord_all", checked_in=True)
-
-    _put_order("ord_pending", status="pending", quantity=1)  # no tickets yet
+def test_orders_page_shows_checkin_status(admin_client):
+    # Non-overlapping buyer names -- "Checked In" is a substring of "Not
+    # Checked In", which would make a plain resp.text.index() comparison
+    # pass regardless of which row actually carries the checkmark.
+    _put_order("ord_not_in", buyer_name="Walkin Guest")
+    _put_order("ord_in", buyer_name="Arrived Guest",
+               checked_in=True, checked_in_at="2026-03-14T20:00:00Z")
 
     resp = admin_client.get("/admin/orders?event_id=evt_2026")
-    assert "0/2" in resp.text
-    assert "1/2" in resp.text
-    assert "1/1" in resp.text
-    assert "—" in resp.text  # ord_pending: no tickets at all
+    assert "Mar 14, 2026 08:00 PM" in resp.text  # ord_in's checked_in_at, via the datetime filter
 
+    def row_containing(name: str) -> str:
+        pos = resp.text.index(name)
+        row_start = resp.text.rindex("<tr>", 0, pos)
+        row_end = resp.text.index("</tr>", pos)
+        return resp.text[row_start:row_end]
 
-def test_orders_checkin_progress_excludes_voided_tickets(admin_client):
-    # A refunded order's tickets are voided -- nobody's expected to show up,
-    # so they shouldn't count toward the denominator at all.
-    _put_order("ord_refunded", status="refunded", quantity=2)
-    _put_ticket("tkt_v1", order_id="ord_refunded", voided=True)
-    _put_ticket("tkt_v2", order_id="ord_refunded", voided=True)
-
-    resp = admin_client.get("/admin/orders?event_id=evt_2026")
-    assert "—" in resp.text
-    assert "0/2" not in resp.text
+    arrived_row = row_containing("Arrived Guest")
+    walkin_row = row_containing("Walkin Guest")
+    assert "✅" in arrived_row, "the checked-in order's own row must carry the checkmark"
+    assert "✅" not in walkin_row, "the checkmark must not leak onto the not-checked-in row"
+    assert "—" in walkin_row
 
 
 def test_orders_default_sort_is_newest_first(admin_client):

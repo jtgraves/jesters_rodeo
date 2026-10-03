@@ -9,7 +9,6 @@ os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_dummy")
 os.environ.setdefault("STRIPE_PUBLISHABLE_KEY", "pk_test_dummy")
 os.environ.setdefault("EVENTS_TABLE", "Events")
 os.environ.setdefault("ORDERS_TABLE", "Orders")
-os.environ.setdefault("TICKETS_TABLE", "Tickets")
 os.environ.setdefault("WAITLIST_TABLE", "Waitlist")
 os.environ.setdefault("ANNOUNCEMENTS_TABLE", "Announcements")
 os.environ.setdefault("ANNOUNCEMENT_LAMBDA_NAME", "test-announcement-lambda")
@@ -54,20 +53,6 @@ def dynamodb_tables():
             GlobalSecondaryIndexes=[{
                 "IndexName": "event_id-index",
                 "KeySchema": [{"AttributeName": "event_id", "KeyType": "HASH"}],
-                "Projection": {"ProjectionType": "ALL"},
-            }],
-            BillingMode="PAY_PER_REQUEST",
-        )
-        client.create_table(
-            TableName="Tickets",
-            KeySchema=[{"AttributeName": "ticket_id", "KeyType": "HASH"}],
-            AttributeDefinitions=[
-                {"AttributeName": "ticket_id", "AttributeType": "S"},
-                {"AttributeName": "order_id", "AttributeType": "S"},
-            ],
-            GlobalSecondaryIndexes=[{
-                "IndexName": "order_id-index",
-                "KeySchema": [{"AttributeName": "order_id", "KeyType": "HASH"}],
                 "Projection": {"ProjectionType": "ALL"},
             }],
             BillingMode="PAY_PER_REQUEST",

@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.db import EVENTS, ORDERS, TICKETS
+from app.db import EVENTS, ORDERS
 from app.main import app
 
 client = TestClient(app)
@@ -27,6 +27,7 @@ def _put_order(order_id: str, **overrides) -> None:
         "status": "pending", "created_at": "2026-01-01T00:00:00Z",
         "stripe_checkout_session_id": "cs_test_123",
         "stripe_payment_intent_id": None,
+        "checked_in": False, "checked_in_at": None,
     }
     item.update(overrides)
     ORDERS().put_item(Item=item)
@@ -46,7 +47,7 @@ def _post_webhook():
 
 
 @patch("app.routes.webhooks.stripe.Webhook.construct_event")
-def test_webhook_marks_order_paid_and_creates_tickets(mock_construct, dynamodb_tables):
+def test_webhook_marks_order_paid(mock_construct, dynamodb_tables):
     _put_event()
     _put_order("ord_1")
     mock_construct.return_value = _stripe_event("ord_1")
@@ -59,10 +60,6 @@ def test_webhook_marks_order_paid_and_creates_tickets(mock_construct, dynamodb_t
     assert order["status"] == "paid"
     assert order["stripe_payment_intent_id"] == "pi_test_456"
 
-    tickets = TICKETS().scan()["Items"]
-    assert len(tickets) == 2  # one per ticket in quantity
-    assert all(t["attendee_name"] is None for t in tickets)
-    assert all(t["voided"] is False for t in tickets)
     mock_email.assert_called_once()
 
 
@@ -76,7 +73,6 @@ def test_webhook_ignores_replay_of_an_already_paid_order(mock_construct, dynamod
         resp = _post_webhook()
 
     assert resp.status_code == 200
-    assert TICKETS().scan()["Items"] == []
     mock_email.assert_not_called()
 
 
@@ -97,7 +93,6 @@ def test_webhook_delivered_twice_fulfils_exactly_once(mock_construct, dynamodb_t
         second = _post_webhook()
 
     assert first.status_code == 200 and second.status_code == 200
-    assert len(TICKETS().scan()["Items"]) == 2, "quantity of 2, not doubled by the retry"
     assert mock_email.call_count == 1
 
 
@@ -146,7 +141,6 @@ def test_late_payment_on_an_expired_order_still_fulfils_and_reclaims_capacity(
 
     assert resp.status_code == 200
     assert ORDERS().get_item(Key={"order_id": "ord_late"})["Item"]["status"] == "paid"
-    assert len(TICKETS().scan()["Items"]) == 2
     mock_email.assert_called_once()
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
     assert int(event["tickets_sold_count"]) == 10, "seats re-claimed for a paid order"

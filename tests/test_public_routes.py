@@ -321,6 +321,7 @@ def test_checkout_creates_pending_order_and_redirects(mock_create, dynamodb_tabl
     assert int(orders[0]["processing_fee_cents"]) == 927
     assert int(orders[0]["total_cents"]) == 30927
     assert orders[0]["stripe_checkout_session_id"] == "cs_test_123"
+    assert orders[0]["checked_in"] is False
 
     event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
     assert int(event["tickets_sold_count"]) == 2, "capacity is reserved at checkout"
