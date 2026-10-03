@@ -1,8 +1,20 @@
 {% extends "admin/_base.html" %}
+
+{#
+  Clicking an inactive column sorts by it ascending; clicking the already-
+  active column flips its direction. event_id/q/status are carried through
+  so sorting never drops the admin's current filter.
+#}
+{% macro sort_th(label, key) -%}
+<th><a href="/admin/orders?event_id={{ event_id | urlencode }}&amp;q={{ q | urlencode }}&amp;status={{ status | urlencode }}&amp;sort={{ key }}&amp;dir={{ 'asc' if (sort == key and dir == 'desc') else ('desc' if sort == key else 'asc') }}">{{ label }}{% if sort == key %}{{ ' ▲' if dir == 'asc' else ' ▼' }}{% endif %}</a></th>
+{%- endmacro %}
+
 {% block content %}
 <h1>Orders</h1>
 <form method="get" action="/admin/orders">
   <input type="hidden" name="event_id" value="{{ event_id }}">
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ dir }}">
   <input name="q" value="{{ q }}" placeholder="Search name or email">
   <select name="status">
     <option value="">any status</option>
@@ -15,9 +27,18 @@
 <p><a href="/admin/orders/export?event_id={{ event_id }}">Export CSV</a></p>
 <div class="table-scroll">
 <table>
-<tr><th>Buyer</th><th>Email</th><th>Qty</th><th>Total</th><th>Status</th><th>Actions</th></tr>
+<tr>
+  {{ sort_th("Date", "created_at") }}
+  {{ sort_th("Buyer", "buyer_name") }}
+  {{ sort_th("Email", "buyer_email") }}
+  {{ sort_th("Qty", "quantity") }}
+  {{ sort_th("Total", "total_cents") }}
+  {{ sort_th("Status", "status") }}
+  <th>Actions</th>
+</tr>
 {% for o in orders %}
 <tr>
+  <td>{{ o.created_at | datetime }}</td>
   <td>{{ o.buyer_name }}</td><td>{{ o.buyer_email }}</td><td>{{ o.quantity }}</td>
   <td>${{ "%.2f"|format(o.total_cents / 100) }}</td>
   <td>{{ o.status }}{% if o.comp %} (comp){% endif %}</td>

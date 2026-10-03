@@ -7,7 +7,7 @@ import logging
 import re
 import uuid
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote
 
 import boto3
@@ -503,7 +503,25 @@ def _resolve_event_id(request: Request, event_id: str, path: str) -> Response | 
     return RedirectResponse(f"{path}?event_id={default}", status_code=303)
 
 
-def _orders_for_event(event_id: str, q: str = "", status: str = "") -> list[dict]:
+# Keyed by the querystring value the "sort" param carries, so a column
+# header link can name the field directly (see admin/orders.html's sort_th
+# macro). Each extractor returns a plain comparable (lower-cased strings so
+# sorting is case-insensitive, ints for the numeric columns since DynamoDB
+# hands back Decimal) -- never a raw DynamoDB value, which sort() can't
+# reliably compare across rows (e.g. mixed int/Decimal).
+ORDER_SORT_KEYS: dict[str, Callable[[dict], object]] = {
+    "created_at": lambda o: o["created_at"],
+    "buyer_name": lambda o: o["buyer_name"].lower(),
+    "buyer_email": lambda o: o["buyer_email"].lower(),
+    "quantity": lambda o: int(o["quantity"]),
+    "total_cents": lambda o: int(o["total_cents"]),
+    "status": lambda o: o["status"],
+}
+
+
+def _orders_for_event(
+    event_id: str, q: str = "", status: str = "", sort: str = "created_at", dir: str = "desc",
+) -> list[dict]:
     orders = paginate(
         ORDERS().query,
         IndexName="event_id-index",
@@ -518,6 +536,8 @@ def _orders_for_event(event_id: str, q: str = "", status: str = "") -> list[dict
         ]
     if status:
         orders = [o for o in orders if o["status"] == status]
+    key_fn = ORDER_SORT_KEYS.get(sort, ORDER_SORT_KEYS["created_at"])
+    orders.sort(key=key_fn, reverse=(dir != "asc"))
     return orders
 
 
@@ -538,14 +558,24 @@ def _get_order_or_404(order_id: str) -> dict:
 
 
 @member_router.get("/orders")
-def list_orders(request: Request, event_id: str = "", q: str = "", status: str = "") -> Response:
+def list_orders(
+    request: Request, event_id: str = "", q: str = "", status: str = "",
+    sort: str = "created_at", dir: str = "desc",
+) -> Response:
     redirect = _resolve_event_id(request, event_id, "/admin/orders")
     if redirect is not None:
         return redirect
-    orders = _orders_for_event(event_id, q, status)
+    # A malformed/forged querystring falls back to the default rather than
+    # raising or silently no-op sorting -- same defensive pattern as
+    # banner_style elsewhere in this file.
+    if sort not in ORDER_SORT_KEYS:
+        sort = "created_at"
+    if dir not in ("asc", "desc"):
+        dir = "desc"
+    orders = _orders_for_event(event_id, q, status, sort, dir)
     return templates.TemplateResponse(
         request, "admin/orders.html",
-        {"orders": orders, "event_id": event_id, "q": q, "status": status},
+        {"orders": orders, "event_id": event_id, "q": q, "status": status, "sort": sort, "dir": dir},
     )
 
 

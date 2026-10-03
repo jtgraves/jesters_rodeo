@@ -1046,6 +1046,46 @@ def test_orders_list_badges_comp_orders(admin_client):
     assert "(comp)" in resp.text
 
 
+def test_orders_page_shows_order_date(admin_client):
+    _put_order("ord_dated", created_at="2026-03-14T13:05:00Z")
+    resp = admin_client.get("/admin/orders?event_id=evt_2026")
+    assert "Mar 14, 2026 01:05 PM" in resp.text
+
+
+def test_orders_default_sort_is_newest_first(admin_client):
+    _put_order("ord_old", buyer_name="Old Order", created_at="2026-01-01T00:00:00Z")
+    _put_order("ord_new", buyer_name="New Order", created_at="2026-06-01T00:00:00Z")
+    resp = admin_client.get("/admin/orders?event_id=evt_2026")
+    assert resp.text.index("New Order") < resp.text.index("Old Order")
+
+
+def test_orders_can_be_sorted_by_total_ascending(admin_client):
+    _put_order("ord_big", buyer_name="Big Spender", total_cents=50000)
+    _put_order("ord_small", buyer_name="Small Spender", total_cents=10000)
+    resp = admin_client.get("/admin/orders?event_id=evt_2026&sort=total_cents&dir=asc")
+    assert resp.text.index("Small Spender") < resp.text.index("Big Spender")
+
+
+def test_orders_can_be_sorted_by_buyer_name(admin_client):
+    _put_order("ord_z", buyer_name="Zeb")
+    _put_order("ord_a", buyer_name="Ann")
+    resp = admin_client.get("/admin/orders?event_id=evt_2026&sort=buyer_name&dir=asc")
+    assert resp.text.index("Ann") < resp.text.index("Zeb")
+
+
+def test_orders_sort_column_header_link_toggles_direction(admin_client):
+    _put_order("ord_1")
+    resp = admin_client.get("/admin/orders?event_id=evt_2026&sort=buyer_name&dir=asc")
+    assert "sort=buyer_name&amp;dir=desc" in resp.text  # clicking again flips it
+    assert "sort=buyer_email&amp;dir=asc" in resp.text  # a new column starts ascending
+
+
+def test_orders_invalid_sort_params_fall_back_to_defaults(admin_client):
+    _put_order("ord_1")
+    resp = admin_client.get("/admin/orders?event_id=evt_2026&sort=nope&dir=sideways")
+    assert resp.status_code == 200  # no 500, no KeyError
+
+
 def test_orders_page_never_puts_a_buyer_name_in_a_js_string(admin_client):
     """buyer_name is public input rendered into an admin's authenticated page.
 
