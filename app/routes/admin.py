@@ -28,7 +28,6 @@ from app.db import (
     KREWE_LINKS,
     ORDERS,
     PAST_BENEFICIARIES,
-    TICKETS,
     WAITLIST,
     paginate,
 )
@@ -42,7 +41,6 @@ from app.models import (
     KreweLink,
     Order,
     PastBeneficiary,
-    Ticket,
 )
 from app.pricing import MAX_TICKETS_PER_ORDER, parse_dollars_to_cents
 from app.templating import templates
@@ -541,38 +539,11 @@ def _orders_for_event(
     return orders
 
 
-def _tickets_for_order(order_id: str) -> list[dict]:
-    return paginate(
-        TICKETS().query,
-        IndexName="order_id-index",
-        KeyConditionExpression="order_id = :o",
-        ExpressionAttributeValues={":o": order_id},
-    )
-
-
 def _get_order_or_404(order_id: str) -> dict:
     order = ORDERS().get_item(Key={"order_id": order_id}).get("Item")
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
     return order
-
-
-def _checkin_counts_for_event(event_id: str) -> dict[str, tuple[int, int]]:
-    """order_id -> (checked_in_count, ticket_count), for the orders page's
-    Check-in column. One scan of every ticket for the event, same pattern as
-    _search_checkin, rather than a per-order query (which would be an N+1
-    DynamoDB round trip per page view). A voided (refunded) ticket is
-    excluded from both counts -- nobody's expected to show up for it."""
-    tickets = paginate(TICKETS().scan, FilterExpression=Attr("event_id").eq(event_id))
-    counts: dict[str, list[int]] = {}
-    for t in tickets:
-        if t.get("voided"):
-            continue
-        entry = counts.setdefault(t["order_id"], [0, 0])
-        entry[1] += 1
-        if t.get("checked_in"):
-            entry[0] += 1
-    return {order_id: (checked, total) for order_id, (checked, total) in counts.items()}
 
 
 @member_router.get("/orders")
@@ -591,9 +562,6 @@ def list_orders(
     if dir not in ("asc", "desc"):
         dir = "desc"
     orders = _orders_for_event(event_id, q, status, sort, dir)
-    checkin_counts = _checkin_counts_for_event(event_id)
-    for o in orders:
-        o["checked_in_count"], o["ticket_count"] = checkin_counts.get(o["order_id"], (0, 0))
     return templates.TemplateResponse(
         request, "admin/orders.html",
         {"orders": orders, "event_id": event_id, "q": q, "status": status, "sort": sort, "dir": dir},
@@ -684,14 +652,6 @@ def refund_order(order_id: str) -> Response:
             raise HTTPException(
                 status_code=502, detail="Stripe refund failed. Nothing was changed."
             )
-
-    now = datetime.now(timezone.utc).isoformat()
-    for ticket in _tickets_for_order(order_id):
-        TICKETS().update_item(
-            Key={"ticket_id": ticket["ticket_id"]},
-            UpdateExpression="SET voided = :t, voided_at = :now",
-            ExpressionAttributeValues={":t": True, ":now": now},
-        )
 
     EVENTS().update_item(
         Key={"event_id": order_item["event_id"]},
@@ -800,40 +760,22 @@ def notify_waitlist_entry(waitlist_id: str, event_id: str = Form(...)) -> Redire
 
 
 def _search_checkin(event_id: str, q: str) -> list[dict]:
-    """Every ticket for this event whose attendee name, or whose order's
-    buyer name/email, matches -- for door staff working from a name or email
-    instead of a scannable QR code or a written-down ticket ID.
-    """
+    """Every paid order for this event whose buyer name or email matches --
+    for door staff working from a name instead of a scannable QR code."""
     needle = q.strip().lower()
     if not needle:
         return []
-
-    orders_by_id = {
-        o["order_id"]: o
-        for o in paginate(
-            ORDERS().query,
-            IndexName="event_id-index",
-            KeyConditionExpression="event_id = :e",
-            ExpressionAttributeValues={":e": event_id},
-        )
-    }
-    tickets = paginate(TICKETS().scan, FilterExpression=Attr("event_id").eq(event_id))
-
-    matches = []
-    for ticket in tickets:
-        order = orders_by_id.get(ticket["order_id"])
-        if not order:
-            continue
-        haystack = " ".join(filter(None, [
-            order.get("buyer_name"), order.get("buyer_email"), ticket.get("attendee_name"),
-        ])).lower()
-        if needle in haystack:
-            matches.append({
-                **ticket,
-                "buyer_name": order["buyer_name"],
-                "buyer_email": order["buyer_email"],
-            })
-    return matches
+    orders = paginate(
+        ORDERS().query,
+        IndexName="event_id-index",
+        KeyConditionExpression="event_id = :e",
+        ExpressionAttributeValues={":e": event_id},
+    )
+    return [
+        o for o in orders
+        if o["status"] == "paid"
+        and (needle in o["buyer_name"].lower() or needle in o["buyer_email"].lower())
+    ]
 
 
 @member_router.get("/checkin")
@@ -860,49 +802,75 @@ def _checkin_response(request: Request, result: dict, event_id: str, q: str) -> 
     return JSONResponse(result)
 
 
-@member_router.post("/checkin/{ticket_id}")
-def checkin_ticket(request: Request, ticket_id: str, event_id: str, q: str = "") -> Response:
-    ticket = TICKETS().get_item(Key={"ticket_id": ticket_id}).get("Item")
-    if not ticket:
-        return _checkin_response(request, {"status": "invalid"}, event_id, q)
+def _checkin_status_payload(order: dict) -> dict:
+    """The shape every ready/already-checked-in check-in response shares."""
+    return {"buyer_name": order["buyer_name"], "quantity": int(order["quantity"])}
 
-    # Tickets from previous years are still live rows in this table.
-    if ticket["event_id"] != event_id:
-        return _checkin_response(
-            request, {"status": "wrong_event", "attendee_name": ticket["attendee_name"]}, event_id, q
-        )
 
-    if ticket.get("voided"):
-        return _checkin_response(
-            request, {"status": "voided", "attendee_name": ticket["attendee_name"]}, event_id, q
-        )
+def _resolve_checkin_order(order_id: str, event_id: str) -> tuple[dict | None, str | None]:
+    """Shared validation for both the lookup and commit endpoints. Returns
+    (order, None) if the order is scannable (whether or not already checked
+    in), or (None, status) for a short-circuit status with nothing to
+    confirm: not found, from a different event, or not a valid paid order
+    (pending/refunded/canceled/expired -- "voided" covers all of these, same
+    status name the old per-ticket check used for a refunded ticket)."""
+    order = ORDERS().get_item(Key={"order_id": order_id}).get("Item")
+    if not order:
+        return None, "invalid"
+    if order["event_id"] != event_id:
+        return None, "wrong_event"
+    if order["status"] != "paid":
+        return None, "voided"
+    return order, None
 
-    if ticket["checked_in"]:
+
+@member_router.get("/checkin/lookup/{order_id}")
+def checkin_lookup(order_id: str, event_id: str) -> Response:
+    order, status = _resolve_checkin_order(order_id, event_id)
+    if status:
+        return JSONResponse({"status": status})
+    if order["checked_in"]:
+        return JSONResponse({
+            "status": "already_checked_in",
+            "checked_in_at": order["checked_in_at"],
+            **_checkin_status_payload(order),
+        })
+    return JSONResponse({"status": "ready", **_checkin_status_payload(order)})
+
+
+@member_router.post("/checkin/{order_id}")
+def checkin_order(request: Request, order_id: str, event_id: str, q: str = "") -> Response:
+    order, status = _resolve_checkin_order(order_id, event_id)
+    if status:
+        return _checkin_response(request, {"status": status}, event_id, q)
+
+    if order["checked_in"]:
         return _checkin_response(request, {
             "status": "already_checked_in",
-            "attendee_name": ticket["attendee_name"],
-            "checked_in_at": ticket["checked_in_at"],
+            "checked_in_at": order["checked_in_at"],
+            **_checkin_status_payload(order),
         }, event_id, q)
 
     now = datetime.now(timezone.utc).isoformat()
     try:
-        TICKETS().update_item(
-            Key={"ticket_id": ticket_id},
+        ORDERS().update_item(
+            Key={"order_id": order_id},
             UpdateExpression="SET checked_in = :t, checked_in_at = :now",
-            # Two doors, two phones, one guest: only one scan may win.
+            # Two doors, two phones, one party: only one confirm may win.
             ConditionExpression="checked_in = :f",
             ExpressionAttributeValues={":t": True, ":now": now, ":f": False},
         )
     except ClientError as exc:
         if _is_conditional_failure(exc):
-            return _checkin_response(
-                request, {"status": "already_checked_in", "attendee_name": ticket["attendee_name"]},
-                event_id, q,
-            )
+            return _checkin_response(request, {
+                "status": "already_checked_in",
+                "checked_in_at": now,  # close enough: the other request just won
+                **_checkin_status_payload(order),
+            }, event_id, q)
         raise
 
     return _checkin_response(
-        request, {"status": "checked_in", "attendee_name": ticket["attendee_name"]}, event_id, q
+        request, {"status": "checked_in", **_checkin_status_payload(order)}, event_id, q
     )
 
 
