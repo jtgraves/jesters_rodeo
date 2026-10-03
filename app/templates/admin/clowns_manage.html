@@ -8,8 +8,17 @@
 
 <div class="table-scroll">
 <table>
-<tr><th>Name / email</th><th>Account</th><th>Years ridden</th><th>Lieutenant</th><th>Active</th><th></th></tr>
+<tr><th>Name / email</th><th>Account</th><th>Years ridden</th><th>Lieutenant</th><th>Active</th><th>Actions</th></tr>
 {% for p in profiles %}
+{#
+  One logical form per row (years + both checkboxes + Save/Delete all need
+  to submit together), but spread across separate <td>s so each lines up
+  under its own header column instead of flex-wrapping into one ragged
+  blob. The <form> itself lives here, nested normally around the years
+  input; every other field in this row joins it via the HTML5 form="..."
+  attribute rather than nesting (a <form> can't wrap multiple <td>s --
+  table rows only allow td/th children).
+#}
 <tr>
   <td>{{ p.display_name or "(no name)" }}<br><small>{{ p.email or "no login" }}</small></td>
   <td>
@@ -23,17 +32,22 @@
         <button type="submit">link</button></form>
     {% endif %}
   </td>
-  <td colspan="4">
-    <form method="post" action="/admin/clowns/manage/{{ p.clown_id }}" class="event-images-form">
-      <label>Years <input type="text" name="years_ridden"
-             value="{{ (p.years_ridden or []) | map('int') | join(' ') }}" placeholder="2019 2021-2023"></label>
-      <label><input type="checkbox" name="is_lieutenant" value="1" {% if p.is_lieutenant %}checked{% endif %}> Float Lieutenant</label>
-      <label><input type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}> Active</label>
-      <button type="submit">Save</button>
-      <button type="submit" class="btn-danger"
-              formaction="/admin/clowns/manage/{{ p.clown_id }}/delete" formnovalidate
-              onclick="return confirm('Delete this profile? This cannot be undone.')">Delete</button>
+  <td>
+    <form id="roster-{{ p.clown_id }}" method="post" action="/admin/clowns/manage/{{ p.clown_id }}">
+      <input type="text" name="years_ridden" class="roster-years-input"
+             value="{{ (p.years_ridden or []) | map('int') | join(' ') }}"
+             placeholder="2019 2021-2023" aria-label="Years ridden">
     </form>
+  </td>
+  <td><label><input type="checkbox" name="is_lieutenant" value="1" form="roster-{{ p.clown_id }}"
+         {% if p.is_lieutenant %}checked{% endif %}> Float Lieutenant</label></td>
+  <td><label><input type="checkbox" name="active" value="1" form="roster-{{ p.clown_id }}"
+         {% if p.active %}checked{% endif %}> Active</label></td>
+  <td>
+    <button type="submit" form="roster-{{ p.clown_id }}">Save</button>
+    <button type="submit" class="btn-danger" form="roster-{{ p.clown_id }}"
+            formaction="/admin/clowns/manage/{{ p.clown_id }}/delete" formnovalidate
+            onclick="return confirm('Delete this profile? This cannot be undone.')">Delete</button>
   </td>
 </tr>
 {% endfor %}

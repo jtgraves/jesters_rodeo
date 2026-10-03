@@ -348,6 +348,24 @@ def test_manage_sets_official_fields(dynamodb_tables):
     assert p["active"] is True
 
 
+def test_manage_roster_page_lays_out_each_field_in_its_own_column(dynamodb_tables):
+    # Regression guard: years/lieutenant/active/actions used to be crammed
+    # into one flex-wrapping colspan=4 cell that didn't line up with the
+    # header row at all. Each now gets its own <td>, joined to one logical
+    # form via the HTML5 form="..." attribute rather than nesting.
+    _put_profile("clown_m", "Mo", [2019, 2020, 2021])
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.get("/admin/clowns/manage")
+    finally:
+        ctx.stop()
+    body = resp.text
+    assert 'id="roster-clown_m"' in body
+    assert 'class="roster-years-input"' in body
+    assert body.count('form="roster-clown_m"') == 4  # lieutenant, active, Save, Delete
+    assert "colspan=" not in body
+
+
 def test_manage_add_historical_rider(dynamodb_tables):
     c, ctx = _client(admin=True)
     try:

@@ -83,6 +83,13 @@ th, td {
   white-space: nowrap;
 }
 
+/* The Manage Roster page's years-ridden field -- unstyled, it defaulted to
+   a browser text input's native ~20-character width, truncating a veteran
+   rider's full year list. .table-scroll already lets the table itself
+   scroll horizontally on a narrow screen, so there's no need to cap this
+   at viewport width. */
+.roster-years-input { width: 18rem; }
+
 /* Wrap a <table> in <div class="table-scroll"> so it scrolls horizontally
    on a phone instead of forcing the whole page wider than the viewport. */
 .table-scroll {
