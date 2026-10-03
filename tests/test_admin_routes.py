@@ -848,6 +848,30 @@ def test_checkin_order_commits_and_is_idempotent(admin_client):
     assert ORDERS().get_item(Key={"order_id": "ord_abc"})["Item"]["checked_in_at"] == checked_in_at
 
 
+def test_checkin_order_handles_concurrent_commit_race(admin_client):
+    """Two near-simultaneous commits for the same order (two doors, two
+    phones): the conditional write's loser must get 'already_checked_in',
+    not an unhandled exception."""
+    _put_order("ord_race", buyer_name="Jane Doe", quantity=2)
+    race_error = ClientError(
+        {"Error": {"Code": "ConditionalCheckFailedException", "Message": "conditional check failed"}},
+        "UpdateItem",
+    )
+    with patch("app.routes.admin.ORDERS") as mock_orders:
+        mock_orders.return_value.get_item.return_value = {
+            "Item": {"order_id": "ord_race", "event_id": "evt_2026", "status": "paid",
+                      "buyer_name": "Jane Doe", "quantity": 2, "checked_in": False, "checked_in_at": None},
+        }
+        mock_orders.return_value.update_item.side_effect = race_error
+        resp = admin_client.post("/admin/checkin/ord_race?event_id=evt_2026")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "already_checked_in"
+    assert data["buyer_name"] == "Jane Doe"
+    assert data["quantity"] == 2
+    mock_orders.return_value.update_item.assert_called_once()
+
+
 def test_checkin_order_rejects_unknown_order(admin_client):
     resp = admin_client.post("/admin/checkin/ord_nonexistent?event_id=evt_2026")
     assert resp.status_code == 200
@@ -1069,15 +1093,27 @@ def test_orders_page_shows_order_date(admin_client):
 
 
 def test_orders_page_shows_checkin_status(admin_client):
-    _put_order("ord_not_in", buyer_name="Not Checked In")
-    _put_order("ord_in", buyer_name="Checked In",
+    # Non-overlapping buyer names -- "Checked In" is a substring of "Not
+    # Checked In", which would make a plain resp.text.index() comparison
+    # pass regardless of which row actually carries the checkmark.
+    _put_order("ord_not_in", buyer_name="Walkin Guest")
+    _put_order("ord_in", buyer_name="Arrived Guest",
                checked_in=True, checked_in_at="2026-03-14T20:00:00Z")
 
     resp = admin_client.get("/admin/orders?event_id=evt_2026")
     assert "Mar 14, 2026 08:00 PM" in resp.text  # ord_in's checked_in_at, via the datetime filter
-    before_in = resp.text.index("Checked In")
-    before_mark = resp.text.index("✅")
-    assert before_mark > before_in, "the checkmark belongs to the checked-in order's row"
+
+    def row_containing(name: str) -> str:
+        pos = resp.text.index(name)
+        row_start = resp.text.rindex("<tr>", 0, pos)
+        row_end = resp.text.index("</tr>", pos)
+        return resp.text[row_start:row_end]
+
+    arrived_row = row_containing("Arrived Guest")
+    walkin_row = row_containing("Walkin Guest")
+    assert "✅" in arrived_row, "the checked-in order's own row must carry the checkmark"
+    assert "✅" not in walkin_row, "the checkmark must not leak onto the not-checked-in row"
+    assert "—" in walkin_row
 
 
 def test_orders_default_sort_is_newest_first(admin_client):
