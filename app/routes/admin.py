@@ -761,6 +761,7 @@ def give_tickets(
         "stripe_checkout_session_id": None, "stripe_payment_intent_id": None,
         "status": "paid", "comp": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "checked_in": False, "checked_in_at": None,
     }
     ORDERS().put_item(Item=order_item)
 

@@ -27,6 +27,7 @@ def _put_order(order_id: str, **overrides) -> None:
         "status": "pending", "created_at": "2026-01-01T00:00:00Z",
         "stripe_checkout_session_id": "cs_test_123",
         "stripe_payment_intent_id": None,
+        "checked_in": False, "checked_in_at": None,
     }
     item.update(overrides)
     ORDERS().put_item(Item=item)

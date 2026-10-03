@@ -75,6 +75,7 @@ def _put_order(order_id="ord_1", **overrides):
         "quantity": 2, "unit_price_cents": 15000, "total_cents": 30000,
         "status": "paid", "created_at": "2026-01-01T00:00:00Z",
         "stripe_checkout_session_id": "cs_1", "stripe_payment_intent_id": "pi_1",
+        "checked_in": False, "checked_in_at": None,
     }
     item.update(overrides)
     ORDERS().put_item(Item=item)
@@ -983,6 +984,7 @@ def test_give_tickets_creates_paid_comp_order_with_tickets(admin_client):
     assert order["buyer_name"] == "Guest of Honor"
     assert order["buyer_email"] == "vip@example.com"
     assert order["stripe_payment_intent_id"] is None
+    assert order["checked_in"] is False
 
     tickets = [t for t in TICKETS().scan()["Items"] if t["order_id"] == order["order_id"]]
     assert len(tickets) == 3

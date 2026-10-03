@@ -112,6 +112,12 @@ class Order(BaseModel):
     # An order created by an admin from the "give tickets" page: paid, $0, no
     # Stripe payment behind it.
     comp: bool = False
+    # Check-in moves here from the (removed) Ticket model -- one scan admits
+    # the whole party at once. Every write path that creates an Order MUST
+    # set checked_in explicitly (not rely on this default) -- see Global
+    # Constraints.
+    checked_in: bool = False
+    checked_in_at: str | None = None
 
 
 class Ticket(BaseModel):
