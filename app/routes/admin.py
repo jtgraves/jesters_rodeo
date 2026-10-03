@@ -857,7 +857,7 @@ def checkin_order(request: Request, order_id: str, event_id: str, q: str = "") -
             Key={"order_id": order_id},
             UpdateExpression="SET checked_in = :t, checked_in_at = :now",
             # Two doors, two phones, one party: only one confirm may win.
-            ConditionExpression="checked_in = :f",
+            ConditionExpression="attribute_not_exists(checked_in) OR checked_in = :f",
             ExpressionAttributeValues={":t": True, ":now": now, ":f": False},
         )
     except ClientError as exc:

@@ -73,6 +73,11 @@
   }
 
   function showConfirmDialog(orderId, data) {
+    // Clear any stale result message (e.g. a previous "✅ Welcome..." from
+    // an earlier scan) so nothing misleading is visible behind the dialog.
+    const resultEl = document.getElementById("result");
+    resultEl.textContent = "";
+    resultEl.style.color = "";
     pendingOrderId = orderId;
     document.getElementById("confirm-name").textContent = data.buyer_name;
     document.getElementById("confirm-party").textContent = "Party of " + data.quantity;
@@ -88,6 +93,13 @@
   async function lookup(orderId) {
     if (busy || !orderId) return;
     busy = true;
+    // Set when this call opens the confirm dialog, so the finally block
+    // below knows not to release `busy` on the usual timeout -- it stays
+    // true, pinned by staff reading the dialog, until the dialog's own
+    // "close" listener releases it (see below). Otherwise a second QR code
+    // drifting into frame while the dialog is open could re-run lookup()
+    // and silently swap which party is pending confirmation.
+    let dialogOpened = false;
     try {
       const url = "/admin/checkin/lookup/" + encodeURIComponent(orderId)
                 + "?event_id=" + encodeURIComponent(EVENT_ID);
@@ -98,15 +110,25 @@
       }
       const data = await resp.json();
       if (data.status === "ready" || data.status === "already_checked_in") {
+        dialogOpened = true;
         showConfirmDialog(orderId, data);
       } else {
         showResult(data);
       }
     } finally {
-      // Debounce so one QR code in front of the camera is not scanned 10x/sec.
-      setTimeout(() => { busy = false; }, 1500);
+      if (!dialogOpened) {
+        // Debounce so one QR code in front of the camera is not scanned 10x/sec.
+        setTimeout(() => { busy = false; }, 1500);
+      }
     }
   }
+
+  // A <dialog> fires "close" however it closes -- Cancel, Confirm, or Esc --
+  // so one listener here uniformly releases the scanner's busy debounce
+  // that lookup() left pinned while the dialog was open.
+  document.getElementById("confirm-dialog").addEventListener("close", () => {
+    busy = false;
+  });
 
   document.getElementById("confirm-cancel").onclick = () => {
     document.getElementById("confirm-dialog").close();
@@ -118,10 +140,18 @@
     document.getElementById("confirm-dialog").close();
     pendingOrderId = null;
     if (!orderId) return;
-    const url = "/admin/checkin/" + encodeURIComponent(orderId)
-              + "?event_id=" + encodeURIComponent(EVENT_ID);
-    const resp = await fetch(url, {method: "POST", headers: {"Accept": "application/json"}});
-    showResult(await resp.json());
+    try {
+      const url = "/admin/checkin/" + encodeURIComponent(orderId)
+                + "?event_id=" + encodeURIComponent(EVENT_ID);
+      const resp = await fetch(url, {method: "POST", headers: {"Accept": "application/json"}});
+      if (resp.status === 401) {
+        document.getElementById("result").textContent = "Session expired — reload and sign in.";
+        return;
+      }
+      showResult(await resp.json());
+    } catch (err) {
+      document.getElementById("result").textContent = "Check-in failed — try again.";
+    }
   };
 
   document.getElementById("manual-submit").onclick = () =>
