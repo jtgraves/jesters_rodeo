@@ -60,10 +60,6 @@ def ORDERS() -> Any:
     return get_table(settings.orders_table)
 
 
-def TICKETS() -> Any:
-    return get_table(settings.tickets_table)
-
-
 def WAITLIST() -> Any:
     return get_table(settings.waitlist_table)
 

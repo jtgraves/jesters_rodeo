@@ -1,4 +1,4 @@
-from app.models import Event, Order, Ticket, WaitlistEntry
+from app.models import Event, Order, WaitlistEntry
 
 
 def test_event_defaults():

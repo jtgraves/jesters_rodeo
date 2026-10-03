@@ -60,7 +60,6 @@ class JestersRodeoStack(Stack):
         common_env = {
             "EVENTS_TABLE": tables["events"].table_name,
             "ORDERS_TABLE": tables["orders"].table_name,
-            "TICKETS_TABLE": tables["tickets"].table_name,
             "WAITLIST_TABLE": tables["waitlist"].table_name,
             "ANNOUNCEMENTS_TABLE": tables["announcements"].table_name,
             "PAST_BENEFICIARIES_TABLE": tables["past_beneficiaries"].table_name,
@@ -321,17 +320,6 @@ class JestersRodeoStack(Stack):
             index_name="event_id-index",
             partition_key=dynamodb.Attribute(name="event_id", type=dynamodb.AttributeType.STRING),
         )
-        tickets_table = dynamodb.Table(
-            self, "TicketsTable",
-            partition_key=dynamodb.Attribute(name="ticket_id", type=dynamodb.AttributeType.STRING),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            point_in_time_recovery=True,
-            removal_policy=RemovalPolicy.RETAIN,
-        )
-        tickets_table.add_global_secondary_index(
-            index_name="order_id-index",
-            partition_key=dynamodb.Attribute(name="order_id", type=dynamodb.AttributeType.STRING),
-        )
         waitlist_table = dynamodb.Table(
             self, "WaitlistTable",
             partition_key=dynamodb.Attribute(name="waitlist_id", type=dynamodb.AttributeType.STRING),
@@ -373,7 +361,6 @@ class JestersRodeoStack(Stack):
         return {
             "events": events_table,
             "orders": orders_table,
-            "tickets": tickets_table,
             "waitlist": waitlist_table,
             "announcements": announcements_table,
             "past_beneficiaries": past_beneficiaries_table,

@@ -120,17 +120,6 @@ class Order(BaseModel):
     checked_in_at: str | None = None
 
 
-class Ticket(BaseModel):
-    ticket_id: str
-    order_id: str
-    event_id: str
-    attendee_name: str | None = None
-    checked_in: bool = False
-    checked_in_at: str | None = None
-    voided: bool = False
-    voided_at: str | None = None
-
-
 class WaitlistEntry(BaseModel):
     waitlist_id: str
     event_id: str
