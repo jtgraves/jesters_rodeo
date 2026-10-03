@@ -165,18 +165,32 @@ def test_my_profile_edit_updates_only_my_row(dynamodb_tables):
     assert other["display_name"] == "Other"  # untouched
 
 
-def test_my_profile_edit_cannot_set_official_fields(dynamodb_tables):
+def test_my_profile_edit_can_set_years_ridden(dynamodb_tables):
+    c, ctx = _client(sub="sub-me", email="me@example.com")
+    try:
+        c.post("/admin/clowns/profile", data={
+            "display_name": "Me", "years_ridden": "2019 2021-2023", "bio": "", "phone": "",
+            "address": "", "emergency_contact_name": "", "emergency_contact_phone": "",
+        }, follow_redirects=False)
+    finally:
+        ctx.stop()
+    mine = next(p for p in CLOWN_PROFILES().scan()["Items"] if p["cognito_sub"] == "sub-me")
+    assert [int(y) for y in mine["years_ridden"]] == [2019, 2021, 2022, 2023]
+
+
+def test_my_profile_edit_cannot_set_lieutenant_or_active(dynamodb_tables):
+    # years_ridden is now self-service (see above); lieutenant status and
+    # active/inactive remain admin-only.
     c, ctx = _client(sub="sub-me", email="me@example.com")
     try:
         c.post("/admin/clowns/profile", data={
             "display_name": "Me", "bio": "", "phone": "", "address": "",
             "emergency_contact_name": "", "emergency_contact_phone": "",
-            "years_ridden": "2019 2020", "is_lieutenant": "1", "active": "",
+            "is_lieutenant": "1", "active": "",
         }, follow_redirects=False)
     finally:
         ctx.stop()
     mine = next(p for p in CLOWN_PROFILES().scan()["Items"] if p["cognito_sub"] == "sub-me")
-    assert mine["years_ridden"] == []
     assert mine["is_lieutenant"] is False
     assert mine["active"] is True
 
@@ -192,6 +206,30 @@ def _put_profile(clown_id, name, years, **extra):
     }
     item.update(extra)
     CLOWN_PROFILES().put_item(Item=item)
+
+
+def test_roster_defaults_to_latest_roster_year_even_without_a_matching_event(dynamodb_tables):
+    # Roster data for a new year (e.g. bulk-imported ahead of time) can
+    # exist before that year's Event record does -- the roster link must
+    # reflect the roster's own highest year, not lag behind on the Events
+    # table's. If the page defaulted to 2026 (the Events table's year),
+    # 2026-only-rider would show and 2027-only-rider would not -- the
+    # opposite of what's asserted here.
+    from app.db import EVENTS
+    EVENTS().put_item(Item={"event_id": "evt_2026", "year": 2026, "name": "x", "date": "d",
+                            "location": "l", "description": "d", "ticket_price_cents": 1,
+                            "capacity": 1, "tickets_sold_count": 0, "registration_open": False,
+                            "status": "open"})
+    _put_profile("clown_a", "Twenty Six Only", [2026])
+    _put_profile("clown_b", "Twenty Seven Only", [2027])  # no Event record for 2027 yet
+    c, ctx = _client(admin=True)
+    try:
+        resp = c.get("/admin/clowns/roster", follow_redirects=False)
+        assert resp.status_code == 200
+        assert "Twenty Seven Only" in resp.text
+        assert "Twenty Six Only" not in resp.text
+    finally:
+        ctx.stop()
 
 
 def test_roster_defaults_to_latest_event_year_and_filters(dynamodb_tables):

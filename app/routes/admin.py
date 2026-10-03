@@ -1655,6 +1655,7 @@ def update_my_profile(
     request: Request,
     claims: dict = Depends(require_member),
     display_name: str = Form(""),
+    years_ridden: str = Form(""),
     bio: str = Form(""),
     phone: str = Form(""),
     address: str = Form(""),
@@ -1665,6 +1666,9 @@ def update_my_profile(
     profile = _my_profile(claims)
     fields = {
         "display_name": display_name.strip() or None,
+        # Self-service, same as the admin roster-manage form: a clown owns
+        # their own ride history now too, not just admins.
+        "years_ridden": _parse_years(years_ridden),
         "bio": bio.strip() or None,
         "phone": phone.strip() or None,
         "address": address.strip() or None,
@@ -1703,7 +1707,13 @@ def _current_krewe_year() -> int:
 def clowns_roster(request: Request, year: int | None = None) -> Response:
     profiles = _all_profiles()
     all_years = sorted({y for p in profiles for y in _profile_years(p)}, reverse=True)
-    selected = year if year is not None else _current_krewe_year()
+    # Default to the roster's own highest year, not the Events table's --
+    # roster data for a new year (e.g. bulk-imported ahead of time) can
+    # legitimately exist before that year's Event record does, and the
+    # roster link should reflect the roster, not lag behind it. Only when
+    # no profile has any years_ridden at all is there nothing in `all_years`
+    # to default to, so fall back to the current krewe year then.
+    selected = year if year is not None else (all_years[0] if all_years else _current_krewe_year())
     riders = [
         {
             **p,
