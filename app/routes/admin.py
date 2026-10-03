@@ -557,6 +557,24 @@ def _get_order_or_404(order_id: str) -> dict:
     return order
 
 
+def _checkin_counts_for_event(event_id: str) -> dict[str, tuple[int, int]]:
+    """order_id -> (checked_in_count, ticket_count), for the orders page's
+    Check-in column. One scan of every ticket for the event, same pattern as
+    _search_checkin, rather than a per-order query (which would be an N+1
+    DynamoDB round trip per page view). A voided (refunded) ticket is
+    excluded from both counts -- nobody's expected to show up for it."""
+    tickets = paginate(TICKETS().scan, FilterExpression=Attr("event_id").eq(event_id))
+    counts: dict[str, list[int]] = {}
+    for t in tickets:
+        if t.get("voided"):
+            continue
+        entry = counts.setdefault(t["order_id"], [0, 0])
+        entry[1] += 1
+        if t.get("checked_in"):
+            entry[0] += 1
+    return {order_id: (checked, total) for order_id, (checked, total) in counts.items()}
+
+
 @member_router.get("/orders")
 def list_orders(
     request: Request, event_id: str = "", q: str = "", status: str = "",
@@ -573,6 +591,9 @@ def list_orders(
     if dir not in ("asc", "desc"):
         dir = "desc"
     orders = _orders_for_event(event_id, q, status, sort, dir)
+    checkin_counts = _checkin_counts_for_event(event_id)
+    for o in orders:
+        o["checked_in_count"], o["ticket_count"] = checkin_counts.get(o["order_id"], (0, 0))
     return templates.TemplateResponse(
         request, "admin/orders.html",
         {"orders": orders, "event_id": event_id, "q": q, "status": status, "sort": sort, "dir": dir},

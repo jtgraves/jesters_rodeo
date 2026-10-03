@@ -1052,6 +1052,39 @@ def test_orders_page_shows_order_date(admin_client):
     assert "Mar 14, 2026 01:05 PM" in resp.text
 
 
+def test_orders_page_shows_checkin_progress(admin_client):
+    _put_order("ord_none", quantity=2)
+    _put_ticket("tkt_a", order_id="ord_none", checked_in=False)
+    _put_ticket("tkt_b", order_id="ord_none", checked_in=False)
+
+    _put_order("ord_partial", quantity=2)
+    _put_ticket("tkt_c", order_id="ord_partial", checked_in=True)
+    _put_ticket("tkt_d", order_id="ord_partial", checked_in=False)
+
+    _put_order("ord_all", quantity=1)
+    _put_ticket("tkt_e", order_id="ord_all", checked_in=True)
+
+    _put_order("ord_pending", status="pending", quantity=1)  # no tickets yet
+
+    resp = admin_client.get("/admin/orders?event_id=evt_2026")
+    assert "0/2" in resp.text
+    assert "1/2" in resp.text
+    assert "1/1" in resp.text
+    assert "—" in resp.text  # ord_pending: no tickets at all
+
+
+def test_orders_checkin_progress_excludes_voided_tickets(admin_client):
+    # A refunded order's tickets are voided -- nobody's expected to show up,
+    # so they shouldn't count toward the denominator at all.
+    _put_order("ord_refunded", status="refunded", quantity=2)
+    _put_ticket("tkt_v1", order_id="ord_refunded", voided=True)
+    _put_ticket("tkt_v2", order_id="ord_refunded", voided=True)
+
+    resp = admin_client.get("/admin/orders?event_id=evt_2026")
+    assert "—" in resp.text
+    assert "0/2" not in resp.text
+
+
 def test_orders_default_sort_is_newest_first(admin_client):
     _put_order("ord_old", buyer_name="Old Order", created_at="2026-01-01T00:00:00Z")
     _put_order("ord_new", buyer_name="New Order", created_at="2026-06-01T00:00:00Z")
