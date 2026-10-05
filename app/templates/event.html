@@ -47,7 +47,7 @@
 <section class="event-charity">
   <h2>This year's event will be benefitting</h2>
   {% if event.charity_logo_url %}
-  <img class="event-charity-logo" src="{{ event.charity_logo_url }}" alt="{{ event.charity_name }}">
+  <a href="/charity"><img class="event-charity-logo" src="{{ event.charity_logo_url }}" alt="{{ event.charity_name }}"></a>
   {% endif %}
   <p><a href="/charity">Click here for more information about {{ event.charity_name }}</a></p>
 </section>

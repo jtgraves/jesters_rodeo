@@ -527,6 +527,9 @@ def test_event_page_links_to_charity_when_set(dynamodb_tables):
     assert 'href="/charity"' in resp.text
     assert "more information about Habitat NOLA" in resp.text
     assert 'src="https://example.com/charity.png"' in resp.text
+    # The logo image itself is clickable through to /charity, not just the
+    # "more information" text link below it.
+    assert '<a href="/charity"><img class="event-charity-logo"' in resp.text
 
 
 def test_public_pages_have_a_nav_between_event_and_charity(dynamodb_tables):
