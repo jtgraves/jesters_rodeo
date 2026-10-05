@@ -95,9 +95,19 @@ def _event_details_sections(event: Event | None, base_url: str) -> tuple[list[st
         '<div style="margin:16px 0;padding:16px;background:#f7f7f7;border-radius:8px">',
     ]
     if event.logo_url:
+        # Only max-height was constrained here before -- fine in a browser,
+        # but confirmed stretched/warped in iOS Mail: several mail-client
+        # rendering engines don't reliably infer the other axis from the
+        # image's own aspect ratio when just one dimension is constrained,
+        # and can default to stretching to the container's full width while
+        # still honoring the height clamp. Constraining both axes (plus the
+        # auto pair, belt-and-suspenders for engines that only honor one
+        # form) is the standard email-HTML fix.
         html_parts.append(
             f'<div style="text-align:center;margin-bottom:12px">'
-            f'<img src="{escape(event.logo_url)}" alt="" style="max-height:80px"></div>'
+            f'<img src="{escape(event.logo_url)}" alt="" '
+            f'style="max-height:80px;max-width:300px;width:auto;height:auto" '
+            f'height="80"></div>'
         )
     html_parts.append(f"<p><strong>{escape(event.name)}</strong></p>")
     html_parts.append(f"<p>\U0001f5d3 {escape(event.date)}</p>")
