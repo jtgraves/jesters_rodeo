@@ -525,6 +525,49 @@ img.event-hero { opacity: 0.5; }
   object-fit: cover;
   border-radius: var(--radius);
 }
+.event-gallery-thumb {
+  cursor: pointer;
+}
+.event-gallery-thumb:hover, .event-gallery-thumb:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: -3px;
+}
+
+/* Click-to-expand lightbox for the event photo gallery -- a native <dialog>
+   (same pattern as the check-in page's confirm dialog), styled here since
+   the browser default is a small left-aligned box with no backdrop dimming
+   worth keeping for a photo viewer. */
+#gallery-lightbox {
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+#gallery-lightbox::backdrop {
+  background: rgba(0, 0, 0, 0.8);
+}
+#gallery-lightbox img {
+  display: block;
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: var(--radius);
+}
+#gallery-lightbox-close {
+  position: fixed;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
 
 .event-timeline { margin-top: var(--space-3); }
 .timeline-list { list-style: none; padding-left: 0; margin: 0; }

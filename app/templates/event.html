@@ -75,10 +75,44 @@
 <section class="event-gallery">
   <div class="event-gallery-grid">
     {% for src in gallery_images %}
-    <img src="{{ src }}" alt="">
+    <img src="{{ src }}" alt="" class="event-gallery-thumb" tabindex="0" role="button"
+         aria-label="View larger photo">
     {% endfor %}
   </div>
 </section>
+<dialog id="gallery-lightbox">
+  <button type="button" id="gallery-lightbox-close" aria-label="Close">&times;</button>
+  <img id="gallery-lightbox-img" src="" alt="">
+</dialog>
+<script>
+  (function () {
+    var dialog = document.getElementById("gallery-lightbox");
+    var lightboxImg = document.getElementById("gallery-lightbox-img");
+    function open(src) {
+      lightboxImg.src = src;
+      dialog.showModal();
+    }
+    document.querySelectorAll(".event-gallery-thumb").forEach(function (thumb) {
+      thumb.addEventListener("click", function () { open(thumb.src); });
+      // Thumbnails are <img>, not naturally keyboard-activatable even with
+      // tabindex -- Enter/Space must be wired up by hand to match the
+      // role="button" this element claims.
+      thumb.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(thumb.src); }
+      });
+    });
+    document.getElementById("gallery-lightbox-close").addEventListener("click", function () {
+      dialog.close();
+    });
+    // Clicking the backdrop (outside the image/close button) closes too --
+    // a click anywhere on the <dialog> element itself that isn't one of its
+    // children is the backdrop, since the dialog's own box shrink-wraps its
+    // content.
+    dialog.addEventListener("click", function (e) {
+      if (e.target === dialog) dialog.close();
+    });
+  })();
+</script>
 {% endif %}
 
 {% set map_query = event.address or event.location %}

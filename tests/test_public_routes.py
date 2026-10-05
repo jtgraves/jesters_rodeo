@@ -171,6 +171,14 @@ def test_event_page_shows_gallery_with_multiple_pool_images(dynamodb_tables):
         assert f'src="{url}"' in resp.text
 
 
+def test_event_page_gallery_photos_are_clickable_to_expand(dynamodb_tables):
+    urls = ["https://example.com/g1.jpg", "https://example.com/g2.jpg"]
+    _put_event(banner_image_urls=urls)
+    resp = client.get("/")
+    assert resp.text.count('class="event-gallery-thumb"') == 2
+    assert 'id="gallery-lightbox"' in resp.text
+
+
 def test_event_page_no_gallery_with_a_single_pool_image(dynamodb_tables):
     # The hero already shows the one image statically -- a gallery below it
     # showing the same single photo again would be pure duplication.
