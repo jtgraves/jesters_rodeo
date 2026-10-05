@@ -153,6 +153,23 @@ def test_send_confirmation_email_renders_markdown_in_timeline_activity(smtp_mock
     assert "[the veranda]" not in text
 
 
+def test_send_confirmation_email_includes_timeline_details_sub_bullet(smtp_mock):
+    event = _event(timeline=[
+        {"time": "7:30pm", "activity": "Dinner", "details": "**Vegetarian** option available"},
+    ])
+    send_confirmation_email(_order(quantity=1), event)
+
+    _, _, raw = smtp_mock.sendmail.call_args[0]
+    msg = email.message_from_string(raw)
+    alternative = msg.get_payload(0)
+    text = alternative.get_payload(0).get_payload(decode=True).decode()
+    html = alternative.get_payload(1).get_payload(decode=True).decode()
+
+    assert "<li>7:30pm - Dinner<ul><li><strong>Vegetarian</strong> option available</li></ul></li>" in html
+    assert "- 7:30pm - Dinner" in text
+    assert "  - Vegetarian option available" in text
+
+
 def test_send_confirmation_email_omits_event_section_when_event_is_none(smtp_mock):
     # e.g. the event was deleted after the order was placed -- must still
     # send the QR code, just without the now-unavailable event details.

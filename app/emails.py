@@ -120,16 +120,22 @@ def _event_details_sections(event: Event | None, base_url: str) -> tuple[list[st
         html_parts.append("<p><strong>Timeline:</strong></p><ul>")
         for item in event.timeline:
             time, activity = item.get("time"), item.get("activity", "")
+            details = item.get("details", "")
             # Same inline markdown subset the public event page renders
-            # (app/richtext.py) -- a link in an activity must survive here
-            # too, not just on the web page, since this is often the only
-            # copy a buyer actually reads before the event.
+            # (app/richtext.py) -- a link in an activity/detail must survive
+            # here too, not just on the web page, since this is often the
+            # only copy a buyer actually reads before the event.
             plain_activity = plain_text_inline(activity)
             line = f"{time} - {plain_activity}" if time else plain_activity
             text_lines.append(f"- {line}")
-            html_parts.append(
-                f"<li>{escape(time) + ' - ' if time else ''}{render_richtext_inline(activity)}</li>"
-            )
+            li_html = f"{escape(time) + ' - ' if time else ''}{render_richtext_inline(activity)}"
+            if details:
+                # Same nested-sub-bullet structure as the public event page's
+                # timeline (event.html) -- was missing from the email
+                # entirely before, not just unformatted.
+                text_lines.append(f"  - {plain_text_inline(details)}")
+                li_html += f"<ul><li>{render_richtext_inline(details)}</li></ul>"
+            html_parts.append(f"<li>{li_html}</li>")
         html_parts.append("</ul>")
 
     html_parts.append("</div>")
