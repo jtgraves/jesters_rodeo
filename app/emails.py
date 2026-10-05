@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import smtplib
+from datetime import datetime
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -77,6 +78,23 @@ def _dollars(cents: int) -> str:
     return f"${cents / 100:,.2f}"
 
 
+def _format_event_date(value: str) -> str:
+    """Month-day-year for display (e.g. 'Feb 05, 2027') -- same formatting
+    as app/templating.py's "eventdate" Jinja filter, which the public event
+    page uses for the same event.date field; kept as its own small copy
+    here rather than importing the templates module from the email module,
+    matching how _dollars above already has its own copy rather than
+    sharing one with app/pricing.py. event.date is stored as a plain
+    YYYY-MM-DD string (see the admin form's "YYYY-MM-DD" placeholder) --
+    falls back to showing whatever was typed if it doesn't parse as that.
+    """
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return value
+    return parsed.strftime("%b %d, %Y")
+
+
 def _event_details_sections(event: Event | None, base_url: str) -> tuple[list[str], list[str]]:
     """Plain-text lines and HTML fragments describing the event itself --
     what it is, when, where -- so the email makes sense on its own without
@@ -89,7 +107,7 @@ def _event_details_sections(event: Event | None, base_url: str) -> tuple[list[st
 
     text_lines = [
         event.name,
-        event.date,
+        _format_event_date(event.date),
         event.address or event.location,
     ]
     html_parts = [
@@ -111,7 +129,7 @@ def _event_details_sections(event: Event | None, base_url: str) -> tuple[list[st
             f'height="80"></div>'
         )
     html_parts.append(f"<p><strong>{escape(event.name)}</strong></p>")
-    html_parts.append(f"<p>\U0001f5d3 {escape(event.date)}</p>")
+    html_parts.append(f"<p>\U0001f5d3 {escape(_format_event_date(event.date))}</p>")
     html_parts.append(f"<p>\U0001f4cd {escape(event.address or event.location)}</p>")
 
     if event.timeline:

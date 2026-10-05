@@ -6,7 +6,7 @@
      embed form used for the iframe there, which isn't meant to be a
      standalone clickable link. #}
   <p class="event-meta">
-    <span>🗓 {{ event.date }}</span>
+    <span>🗓 {{ event.date | eventdate }}</span>
     <span>📍 <a href="https://www.google.com/maps/search/?api=1&query={{ (event.address or event.location) | urlencode }}" target="_blank" rel="noopener">{{ event.location }}</a></span>
   </p>
 </div>

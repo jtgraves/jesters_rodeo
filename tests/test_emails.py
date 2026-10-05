@@ -129,6 +129,24 @@ def test_send_confirmation_email_includes_event_details(smtp_mock):
     assert f'src="{event.logo_url}"' in html
 
 
+def test_send_confirmation_email_shows_date_as_month_day_year(smtp_mock):
+    # event.date is stored as plain YYYY-MM-DD (see the admin form's
+    # placeholder) -- shown in month-day-year order instead, same as the
+    # public event page.
+    event = _event(date="2027-02-05")
+    send_confirmation_email(_order(quantity=1), event)
+
+    _, _, raw = smtp_mock.sendmail.call_args[0]
+    msg = email.message_from_string(raw)
+    alternative = msg.get_payload(0)
+    text = alternative.get_payload(0).get_payload(decode=True).decode()
+    html = alternative.get_payload(1).get_payload(decode=True).decode()
+
+    for blob in (text, html):
+        assert "Feb 05, 2027" in blob
+        assert "2027-02-05" not in blob
+
+
 def test_send_confirmation_email_renders_markdown_in_timeline_activity(smtp_mock):
     event = _event(timeline=[
         {"time": "7:30pm", "activity": "**Cocktails** at [the veranda](https://example.com/map)"},

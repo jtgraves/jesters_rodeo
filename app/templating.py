@@ -61,6 +61,26 @@ def _format_datetime(value: object) -> str:
 templates.env.filters["datetime"] = _format_datetime
 
 
+def _format_event_date(value: str | None) -> str:
+    """Month-day-year for display (e.g. 'Feb 05, 2027') -- event.date is
+    stored as a plain YYYY-MM-DD string (see the admin form's "YYYY-MM-DD"
+    placeholder, chosen for unambiguous data entry, not display -- the
+    stored format is untouched, only how it's shown). Falls back to
+    whatever was typed if it doesn't parse as that, same defensive pattern
+    as the phone filter, rather than erroring the page over a stray value.
+    """
+    if not value:
+        return ""
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return value
+    return parsed.strftime("%b %d, %Y")
+
+
+templates.env.filters["eventdate"] = _format_event_date
+
+
 def _shuffled(items: list) -> list:
     """A fresh, randomly-ordered copy -- doesn't mutate `items`, unlike
     random.shuffle (which also returns None, unusable as a Jinja filter)."""

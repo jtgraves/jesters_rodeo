@@ -139,6 +139,21 @@ def test_event_page_links_to_register_and_has_no_inline_form(dynamodb_tables):
     assert 'action="/checkout"' not in resp.text  # the form moved to its own page
 
 
+def test_event_page_shows_date_as_month_day_year(dynamodb_tables):
+    # event.date is stored as plain YYYY-MM-DD (see the admin form's
+    # placeholder) -- displayed in month-day-year order instead.
+    _put_event(date="2027-02-05")
+    resp = client.get("/")
+    assert "Feb 05, 2027" in resp.text
+    assert "2027-02-05" not in resp.text
+
+
+def test_event_page_shows_unparseable_date_as_typed(dynamodb_tables):
+    _put_event(date="TBD")
+    resp = client.get("/")
+    assert "TBD" in resp.text
+
+
 def test_event_page_shows_perks_list(dynamodb_tables):
     _put_event(perks=["Brass band accompaniment", "Western beads to wear and throw"])
     resp = client.get("/")
