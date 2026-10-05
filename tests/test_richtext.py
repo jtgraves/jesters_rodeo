@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from markupsafe import Markup
 
-from app.richtext import render_richtext
+from app.richtext import render_richtext, render_richtext_inline
 
 
 def test_empty_and_none_render_empty():
@@ -93,3 +93,41 @@ def test_result_is_markup_and_not_double_escaped_by_jinja():
 
 def test_returns_a_markup_instance():
     assert isinstance(render_richtext("hi"), Markup)
+
+
+def test_inline_empty_and_none_render_empty():
+    assert render_richtext_inline(None) == Markup("")
+    assert render_richtext_inline("") == Markup("")
+
+
+def test_inline_plain_text_is_not_wrapped_in_a_block_element():
+    # Unlike render_richtext, there's no caller-visible block wrapper to
+    # strip off -- this must stay inline with whatever markup surrounds it.
+    assert render_richtext_inline("Just some text.") == Markup("Just some text.")
+
+
+def test_inline_bold_italic_and_link():
+    out = render_richtext_inline("**bold**, *italic*, and [a link](https://example.com)")
+    assert out == Markup(
+        '<strong>bold</strong>, <em>italic</em>, and '
+        '<a href="https://example.com" target="_blank" rel="noopener">a link</a>'
+    )
+
+
+def test_inline_ignores_heading_and_list_syntax_entirely():
+    # These are block-level constructs render_richtext_inline deliberately
+    # doesn't support -- the leading "# "/"- " is just literal text here.
+    assert render_richtext_inline("# Not a heading") == Markup("# Not a heading")
+    assert render_richtext_inline("- Not a list item") == Markup("- Not a list item")
+
+
+def test_inline_raw_html_is_neutralized():
+    out = render_richtext_inline('<script>alert(1)</script>')
+    assert "<script>" not in out
+    assert "&lt;script&gt;" in out
+
+
+def test_inline_result_is_markup_and_not_double_escaped_by_jinja():
+    from app.templating import templates  # registers the "richtext_inline" filter on import
+    rendered = templates.env.from_string("{{ value | richtext_inline }}").render(value="**bold**")
+    assert rendered == "<strong>bold</strong>"

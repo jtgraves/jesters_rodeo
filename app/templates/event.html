@@ -59,8 +59,8 @@
   <ul class="timeline-list">
     {% for item in event.timeline %}
     <li>
-      {% if item.time %}<strong class="timeline-time">{{ item.time }}</strong> - {% endif %}{{ item.activity }}
-      {% if item.details %}<ul><li>{{ item.details }}</li></ul>{% endif %}
+      {% if item.time %}<strong class="timeline-time">{{ item.time }}</strong> - {% endif %}{{ item.activity | richtext_inline }}
+      {% if item.details %}<ul><li>{{ item.details | richtext_inline }}</li></ul>{% endif %}
     </li>
     {% endfor %}
   </ul>

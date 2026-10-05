@@ -50,6 +50,19 @@ def _inline(text: str) -> str:
     return text
 
 
+def render_richtext_inline(value: str | None) -> Markup:
+    """Bold/italic/link formatting only -- never headings, lists, or the
+    paragraph wrapping render_richtext always adds. For short text that
+    must stay inline with surrounding markup it doesn't control (e.g. the
+    event timeline's "<strong>time</strong> - activity" line, where
+    activity sharing a <li> with that prefix would break onto its own line
+    the moment it got wrapped in a block element like <p>).
+    """
+    if not value:
+        return Markup("")
+    return Markup(_inline(str(escape(value))))
+
+
 def render_richtext(value: str | None) -> Markup:
     """Render the formatting subset described above to safe HTML."""
     if not value:

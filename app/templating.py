@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.pricing import current_ticket_price_cents, price_increase_is_upcoming
-from app.richtext import render_richtext
+from app.richtext import render_richtext, render_richtext_inline
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -43,6 +43,7 @@ def _ordinal(value: object) -> str:
 
 templates.env.filters["ordinal"] = _ordinal
 templates.env.filters["richtext"] = render_richtext
+templates.env.filters["richtext_inline"] = render_richtext_inline
 
 
 def _format_datetime(value: object) -> str:

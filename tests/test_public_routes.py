@@ -673,6 +673,22 @@ def test_event_page_renders_timeline_section(dynamodb_tables):
     assert "8:00pm" in body and "Dinner" in body
 
 
+def test_event_page_timeline_supports_inline_markdown_and_links(dynamodb_tables):
+    _put_event(timeline=[
+        {"time": "7:30pm", "activity": "**Cocktails** at [the veranda](https://example.com/map)",
+         "details": "*Dress code*: casual"},
+    ])
+    resp = client.get("/")
+    assert "<strong>Cocktails</strong>" in resp.text
+    assert '<a href="https://example.com/map" target="_blank" rel="noopener">the veranda</a>' in resp.text
+    assert "<em>Dress code</em>" in resp.text
+    # The raw markdown syntax itself must never reach the page unrendered.
+    assert "**Cocktails**" not in resp.text
+    # Inline only -- never wrapped in a block element, which would push the
+    # activity onto its own line away from the "<strong>time</strong> -" prefix.
+    assert "<p>" not in resp.text.split('class="timeline-list"')[1].split("</ul>")[0]
+
+
 def test_event_page_has_no_timeline_section_when_empty(dynamodb_tables):
     _put_event()
     resp = client.get("/")
