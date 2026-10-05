@@ -153,6 +153,15 @@ def test_event_page_has_no_perks_section_when_empty(dynamodb_tables):
     assert "event-perks" not in resp.text
 
 
+def test_event_page_perks_support_markdown_formatting(dynamodb_tables):
+    _put_event(perks=["**Brass band** accompaniment", "*Optional* throws"])
+    resp = client.get("/")
+    assert "<strong>Brass band</strong>" in resp.text
+    assert "<em>Optional</em>" in resp.text
+    # The raw markdown syntax itself must never reach the page unrendered.
+    assert "**Brass band**" not in resp.text
+
+
 def test_event_page_shows_gallery_with_multiple_pool_images(dynamodb_tables):
     urls = ["https://example.com/g1.jpg", "https://example.com/g2.jpg"]
     _put_event(banner_image_urls=urls)

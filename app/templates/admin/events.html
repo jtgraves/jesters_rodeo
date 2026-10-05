@@ -72,7 +72,7 @@
             <textarea name="description" class="richtext-input" required>{{ e.description }}</textarea>
           </label>
           <label>What's included (one per line)
-            <textarea name="perks_text" placeholder="e.g.&#10;Brass band accompaniment with police escort&#10;Western-themed beads to wear and throw">{{ (e.perks or []) | join('\n') }}</textarea>
+            <textarea name="perks_text" class="richtext-input" placeholder="e.g.&#10;Brass band accompaniment with police escort&#10;Western-themed beads to wear and throw">{{ (e.perks or []) | join('\n') }}</textarea>
           </label>
           <p class="field-hint">Perks are shown as a short list on the event page, near the ticket button.</p>
         </div>
