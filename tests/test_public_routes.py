@@ -172,11 +172,20 @@ def test_event_page_shows_gallery_with_multiple_pool_images(dynamodb_tables):
 
 
 def test_event_page_gallery_photos_are_clickable_to_expand(dynamodb_tables):
-    urls = ["https://example.com/g1.jpg", "https://example.com/g2.jpg"]
+    urls = ["https://example.com/g1.jpg", "https://example.com/g2.jpg", "https://example.com/g3.jpg"]
     _put_event(banner_image_urls=urls)
     resp = client.get("/")
-    assert resp.text.count('class="event-gallery-thumb"') == 2
+    assert resp.text.count('class="event-gallery-thumb"') == 3
     assert 'id="gallery-lightbox"' in resp.text
+    # Every photo lives in the lightbox's own scrollable track -- not just
+    # the one most recently clicked -- so paging through doesn't require
+    # closing and reopening.
+    assert 'id="gallery-lightbox-track"' in resp.text
+    track = resp.text.split('id="gallery-lightbox-track"', 1)[1].split("</dialog>", 1)[0]
+    for url in urls:
+        assert f'src="{url}"' in track
+    assert 'id="gallery-lightbox-prev"' in resp.text
+    assert 'id="gallery-lightbox-next"' in resp.text
 
 
 def test_event_page_no_gallery_with_a_single_pool_image(dynamodb_tables):

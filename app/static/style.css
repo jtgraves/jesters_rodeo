@@ -534,32 +534,45 @@ img.event-hero { opacity: 0.5; }
 }
 
 /* Click-to-expand lightbox for the event photo gallery -- a native <dialog>
-   (same pattern as the check-in page's confirm dialog), styled here since
-   the browser default is a small left-aligned box with no backdrop dimming
-   worth keeping for a photo viewer. */
+   (same pattern as the check-in page's confirm dialog). Full-screen and
+   holds every gallery photo in one horizontally scroll-snapping track, so
+   browsing the set is a swipe/scroll away instead of a close-then-reopen
+   per photo. Prev/Next buttons and arrow keys drive the same scroll for
+   mouse/keyboard users. */
 #gallery-lightbox {
   padding: 0;
   border: none;
-  border-radius: var(--radius);
+  border-radius: 0;
   background: transparent;
-  max-width: 90vw;
-  max-height: 90vh;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
 }
 #gallery-lightbox::backdrop {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.9);
 }
-#gallery-lightbox img {
-  display: block;
-  max-width: 90vw;
-  max-height: 90vh;
-  border-radius: var(--radius);
+#gallery-lightbox-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
-#gallery-lightbox-close {
+#gallery-lightbox-track img {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  scroll-snap-align: center;
+}
+#gallery-lightbox-close,
+#gallery-lightbox-prev,
+#gallery-lightbox-next {
   position: fixed;
-  top: var(--space-2);
-  right: var(--space-2);
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
   border: none;
   background: rgba(0, 0, 0, 0.6);
@@ -568,6 +581,16 @@ img.event-hero { opacity: 0.5; }
   line-height: 1;
   cursor: pointer;
 }
+#gallery-lightbox-close {
+  top: var(--space-2);
+  right: var(--space-2);
+}
+#gallery-lightbox-prev, #gallery-lightbox-next {
+  top: 50%;
+  transform: translateY(-50%);
+}
+#gallery-lightbox-prev { left: var(--space-2); }
+#gallery-lightbox-next { right: var(--space-2); }
 
 .event-timeline { margin-top: var(--space-3); }
 .timeline-list { list-style: none; padding-left: 0; margin: 0; }
