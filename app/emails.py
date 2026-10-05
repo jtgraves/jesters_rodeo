@@ -7,6 +7,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 from html import escape
+from urllib.parse import quote
 
 from app.config import settings
 from app.models import Event, Order
@@ -19,6 +20,16 @@ from app.tickets import generate_qr_code_png
 # RFC 2822 quoting/encoding correctly (e.g. if this name ever needs a comma
 # or non-ASCII character), which naive string formatting wouldn't.
 FROM_DISPLAY_NAME = "Jester's Reaux-de-Eaux"
+
+# A fixed app asset (app/static/img/), not the event's own admin-configurable
+# logo_url -- that one is typically a transparent-background image, which
+# several mail clients' automatic dark-mode handling paints a dark
+# background behind, making black logo text vanish. This version has its
+# own baked-in photo background, so it stays legible however dark mode
+# repaints everything around it. Shown on every confirmation email
+# unconditionally -- krewe branding, not something tied to a particular
+# event record having a logo configured.
+EMAIL_LOGO_PATH = "/static/img/" + quote("RdE logo - email.png")
 
 # Gmail's SMTP submission endpoint -- see docs/DEPLOYMENT.md for the account
 # setup (2-Step Verification + an App Password) this authenticates with.
@@ -113,21 +124,6 @@ def _event_details_sections(event: Event | None, base_url: str) -> tuple[list[st
     html_parts = [
         '<div style="margin:16px 0;padding:16px;background:#f7f7f7;border-radius:8px">',
     ]
-    if event.logo_url:
-        # Only max-height was constrained here before -- fine in a browser,
-        # but confirmed stretched/warped in iOS Mail: several mail-client
-        # rendering engines don't reliably infer the other axis from the
-        # image's own aspect ratio when just one dimension is constrained,
-        # and can default to stretching to the container's full width while
-        # still honoring the height clamp. Constraining both axes (plus the
-        # auto pair, belt-and-suspenders for engines that only honor one
-        # form) is the standard email-HTML fix.
-        html_parts.append(
-            f'<div style="text-align:center;margin-bottom:12px">'
-            f'<img src="{escape(event.logo_url)}" alt="" '
-            f'style="max-height:80px;max-width:300px;width:auto;height:auto" '
-            f'height="80"></div>'
-        )
     html_parts.append(f"<p><strong>{escape(event.name)}</strong></p>")
     html_parts.append(f"<p>\U0001f5d3 {escape(_format_event_date(event.date))}</p>")
     html_parts.append(f"<p>\U0001f4cd {escape(event.address or event.location)}</p>")
@@ -194,8 +190,8 @@ def send_confirmation_email(order: Order, event: Event | None = None) -> None:
     #   +-- multipart/alternative
     #   |     +-- text/plain
     #   |     +-- text/html   (references the QR image below by cid:; the
-    #   |                      event logo, if any, is a normal remote <img>
-    #   |                      since it's already hosted in S3)
+    #   |                      krewe logo is a normal remote <img> pointing
+    #   |                      at this app's own static assets, not S3)
     #   +-- image/png (qr)
     #
     # The alternative part MUST be nested inside the related part. Attaching
@@ -210,6 +206,22 @@ def send_confirmation_email(order: Order, event: Event | None = None) -> None:
     order_text, order_html = _order_summary_sections(order)
     party_word = "person" if order.quantity == 1 else "people"
 
+    # Only width was constrained here, deliberately -- confirmed stretched
+    # in iOS Mail when a similar logo image had only ONE axis constrained
+    # (see the eventdate/git history for that incident); the fix is
+    # constraining both axes (plus the auto pair) rather than letting the
+    # renderer guess the other one. Shown unconditionally, independent of
+    # event/event.logo_url -- krewe branding, not tied to whether a
+    # particular event record has its own logo configured, and still shown
+    # even if the event was since deleted (unlike the event-details section
+    # below, which has nothing left to say in that case).
+    logo_html = (
+        '<div style="text-align:center;margin-bottom:12px">'
+        f'<img src="{escape(settings.base_url + EMAIL_LOGO_PATH)}" '
+        f'alt="Jester\'s Reaux-de-Eaux" '
+        f'style="max-width:100%;width:500px;height:auto" width="500"></div>'
+    )
+
     text_lines = [
         f"Thanks, {order.buyer_name}! You're confirmed -- party of {order.quantity}.", "",
         *event_text, "",
@@ -218,6 +230,7 @@ def send_confirmation_email(order: Order, event: Event | None = None) -> None:
         f"Order ID: {order.order_id}",
     ]
     html_parts = [
+        logo_html,
         f"<p>Thanks, {escape(order.buyer_name)}! "
         f"You're confirmed &mdash; party of {order.quantity}.</p>",
         *event_html,

@@ -126,7 +126,19 @@ def test_send_confirmation_email_includes_event_details(smtp_mock):
         assert event.address in blob
         assert "6:00pm" in blob and "Lineup" in blob
         assert settings.base_url in blob
-    assert f'src="{event.logo_url}"' in html
+
+
+def test_send_confirmation_email_always_shows_the_krewe_logo(smtp_mock):
+    # A fixed app asset, not event.logo_url -- shown regardless of what (if
+    # anything) a particular event record has configured, and even when
+    # there's no event at all (e.g. deleted after the order was placed).
+    send_confirmation_email(_order(quantity=1), None)
+
+    _, _, raw = smtp_mock.sendmail.call_args[0]
+    msg = email.message_from_string(raw)
+    html = msg.get_payload(0).get_payload(1).get_payload(decode=True).decode()
+    assert f'src="{settings.base_url}/static/img/RdE%20logo%20-%20email.png"' in html
+    assert "https://example.com/logo.png" not in html  # event.logo_url, unused here now
 
 
 def test_send_confirmation_email_shows_date_as_month_day_year(smtp_mock):
