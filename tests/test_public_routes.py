@@ -186,6 +186,11 @@ def test_event_page_gallery_photos_are_clickable_to_expand(dynamodb_tables):
         assert f'src="{url}"' in track
     assert 'id="gallery-lightbox-prev"' in resp.text
     assert 'id="gallery-lightbox-next"' in resp.text
+    # Each photo is wrapped in its own slide div, not bare in the track --
+    # the click-outside-closes behavior relies on the <img> only filling
+    # its rendered content (not the full slide), so a click can land on the
+    # slide wrapper itself when it's genuinely outside the photo.
+    assert resp.text.count('class="gallery-lightbox-slide"') == 3
 
 
 def test_event_page_no_gallery_with_a_single_pool_image(dynamodb_tables):

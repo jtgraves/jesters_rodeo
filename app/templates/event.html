@@ -86,7 +86,7 @@
   <button type="button" id="gallery-lightbox-next" aria-label="Next photo">&rsaquo;</button>
   <div id="gallery-lightbox-track">
     {% for src in gallery_images %}
-    <img src="{{ src }}" alt="">
+    <div class="gallery-lightbox-slide"><img src="{{ src }}" alt=""></div>
     {% endfor %}
   </div>
 </dialog>
@@ -94,7 +94,7 @@
   (function () {
     var dialog = document.getElementById("gallery-lightbox");
     var track = document.getElementById("gallery-lightbox-track");
-    var slides = track.querySelectorAll("img");
+    var slides = track.querySelectorAll(".gallery-lightbox-slide");
 
     function scrollToIndex(i, instant) {
       if (i < 0 || i >= slides.length) return;
@@ -117,6 +117,19 @@
       });
       return closest;
     }
+
+    // Each slide is a full-size flex box that only CENTERS its photo
+    // (max-width/max-height, not stretched to fill) -- so the photo's own
+    // element box matches what's actually visible, with no letterboxed
+    // "dead" area still counting as part of the <img>. A click lands on
+    // the slide itself (not the <img>) only when it's genuinely outside
+    // the rendered photo, which is what "click outside the image" means
+    // once the layout is full-bleed and there's no separate backdrop.
+    slides.forEach(function (slide) {
+      slide.addEventListener("click", function (e) {
+        if (e.target === slide) dialog.close();
+      });
+    });
 
     document.querySelectorAll(".event-gallery-thumb").forEach(function (thumb) {
       function open() {
