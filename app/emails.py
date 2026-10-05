@@ -9,6 +9,7 @@ from html import escape
 
 from app.config import settings
 from app.models import Event, Order
+from app.richtext import plain_text_inline, render_richtext_inline
 from app.tickets import generate_qr_code_png
 
 # A bare address in From: ("jestersrodeo@gmail.com") reads more like an
@@ -119,9 +120,16 @@ def _event_details_sections(event: Event | None, base_url: str) -> tuple[list[st
         html_parts.append("<p><strong>Timeline:</strong></p><ul>")
         for item in event.timeline:
             time, activity = item.get("time"), item.get("activity", "")
-            line = f"{time} - {activity}" if time else activity
+            # Same inline markdown subset the public event page renders
+            # (app/richtext.py) -- a link in an activity must survive here
+            # too, not just on the web page, since this is often the only
+            # copy a buyer actually reads before the event.
+            plain_activity = plain_text_inline(activity)
+            line = f"{time} - {plain_activity}" if time else plain_activity
             text_lines.append(f"- {line}")
-            html_parts.append(f"<li>{escape(time) + ' - ' if time else ''}{escape(activity)}</li>")
+            html_parts.append(
+                f"<li>{escape(time) + ' - ' if time else ''}{render_richtext_inline(activity)}</li>"
+            )
         html_parts.append("</ul>")
 
     html_parts.append("</div>")

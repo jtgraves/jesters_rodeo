@@ -50,6 +50,23 @@ def _inline(text: str) -> str:
     return text
 
 
+def plain_text_inline(value: str | None) -> str:
+    """The same inline subset render_richtext_inline renders to HTML
+    (bold/italic/links), reduced to plain text instead -- for a text/plain
+    email body, where there's no markup to render into: bold/italic markers
+    are simply dropped, and a link becomes "label (url)" so the destination
+    survives somewhere still usable, rather than vanishing or leaking the
+    raw [label](url) syntax verbatim. Operates on raw, unescaped text --
+    plain text has no entities to escape.
+    """
+    if not value:
+        return ""
+    text = _LINK_RE.sub(lambda m: f"{m.group(1)} ({m.group(2)})", value)
+    text = _BOLD_RE.sub(r"\1", text)
+    text = _ITALIC_RE.sub(r"\1", text)
+    return text
+
+
 def render_richtext_inline(value: str | None) -> Markup:
     """Bold/italic/link formatting only -- never headings, lists, or the
     paragraph wrapping render_richtext always adds. For short text that

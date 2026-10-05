@@ -129,6 +129,30 @@ def test_send_confirmation_email_includes_event_details(smtp_mock):
     assert f'src="{event.logo_url}"' in html
 
 
+def test_send_confirmation_email_renders_markdown_in_timeline_activity(smtp_mock):
+    event = _event(timeline=[
+        {"time": "7:30pm", "activity": "**Cocktails** at [the veranda](https://example.com/map)"},
+    ])
+    send_confirmation_email(_order(quantity=1), event)
+
+    _, _, raw = smtp_mock.sendmail.call_args[0]
+    msg = email.message_from_string(raw)
+    alternative = msg.get_payload(0)
+    text = alternative.get_payload(0).get_payload(decode=True).decode()
+    html = alternative.get_payload(1).get_payload(decode=True).decode()
+
+    # HTML part: a real, clickable link and bold text.
+    assert '<a href="https://example.com/map" target="_blank" rel="noopener">the veranda</a>' in html
+    assert "<strong>Cocktails</strong>" in html
+    assert "**Cocktails**" not in html
+
+    # Plain-text part: no markup to render into, so the destination is kept
+    # visible as "label (url)" rather than dropped or left as raw syntax.
+    assert "Cocktails at the veranda (https://example.com/map)" in text
+    assert "**Cocktails**" not in text
+    assert "[the veranda]" not in text
+
+
 def test_send_confirmation_email_omits_event_section_when_event_is_none(smtp_mock):
     # e.g. the event was deleted after the order was placed -- must still
     # send the QR code, just without the now-unavailable event details.

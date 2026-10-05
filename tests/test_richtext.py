@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from markupsafe import Markup
 
-from app.richtext import render_richtext, render_richtext_inline
+from app.richtext import plain_text_inline, render_richtext, render_richtext_inline
 
 
 def test_empty_and_none_render_empty():
@@ -131,3 +131,23 @@ def test_inline_result_is_markup_and_not_double_escaped_by_jinja():
     from app.templating import templates  # registers the "richtext_inline" filter on import
     rendered = templates.env.from_string("{{ value | richtext_inline }}").render(value="**bold**")
     assert rendered == "<strong>bold</strong>"
+
+
+def test_plain_text_inline_empty_and_none():
+    assert plain_text_inline(None) == ""
+    assert plain_text_inline("") == ""
+
+
+def test_plain_text_inline_drops_bold_and_italic_markers():
+    assert plain_text_inline("**bold** and *italic*") == "bold and italic"
+
+
+def test_plain_text_inline_renders_a_link_as_label_and_url():
+    out = plain_text_inline("Meet at [the veranda](https://example.com/map)")
+    assert out == "Meet at the veranda (https://example.com/map)"
+
+
+def test_plain_text_inline_does_not_html_escape():
+    # Plain text has no entities to escape -- unlike the HTML-rendering
+    # functions, this must return the text exactly as typed.
+    assert plain_text_inline("Tom & Jerry's \"great\" day") == "Tom & Jerry's \"great\" day"
