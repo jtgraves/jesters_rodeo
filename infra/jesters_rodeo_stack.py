@@ -152,7 +152,15 @@ class JestersRodeoStack(Stack):
             handler="app.main.handler",
             code=self._bundled_code(),
             timeout=Duration.seconds(15),
-            memory_size=512,
+            # Lambda's CPU scales with memory (up to ~1,769MB for a full
+            # vCPU) -- 512MB left cold starts importing FastAPI/Pydantic/
+            # boto3/Pillow (via qrcode[pil])/cryptography (via python-jose)
+            # on a fraction of one. Bumped alongside the warming rule below;
+            # see docs/superpowers (or chat history) for the cost estimate
+            # that justified both -- at this app's realistic traffic, both
+            # stay well inside Lambda's permanent free tier (400,000
+            # GB-seconds + 1M requests/month).
+            memory_size=1024,
             environment={
                 **common_env,
                 "ANNOUNCEMENT_LAMBDA_NAME": announcement_lambda.function_name,
@@ -246,6 +254,22 @@ class JestersRodeoStack(Stack):
             schedule=events.Schedule.rate(Duration.minutes(15)),
         )
         rule.add_target(targets.LambdaFunction(cleanup_lambda))
+
+        # Keeps an AppFunction execution environment warm so the common case
+        # doesn't pay a full cold start -- invoked directly (bypasses API
+        # Gateway entirely, same as the cleanup rule above), carrying
+        # {"warmer": true} so app.main.handler can short-circuit before
+        # Mangum/FastAPI ever run (see app/main.py). At this app's realistic
+        # traffic, ~8,640 invocations/month of a trivial no-op path stays
+        # well inside Lambda's permanent free tier.
+        warming_rule = events.Rule(
+            self, "AppWarmingScheduleRule",
+            schedule=events.Schedule.rate(Duration.minutes(5)),
+        )
+        warming_rule.add_target(targets.LambdaFunction(
+            app_lambda,
+            event=events.RuleTargetInput.from_object({"warmer": True}),
+        ))
 
         if hosted_zone is not None:
             self._create_custom_domain(http_api, domain_name, hosted_zone)
