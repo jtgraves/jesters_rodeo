@@ -195,7 +195,11 @@ def test_update_event_timeline_replaces_and_can_clear(admin_client):
 def test_events_list_page_has_no_create_form_but_links_to_it(admin_client):
     _put_event()
     resp = admin_client.get("/admin/events")
-    assert 'name="year"' not in resp.text  # the create form lives on its own page now
+    # The full create-event form (year/name/date/.../logo upload) lives on
+    # its own page -- only the per-event edit form appears here (which now
+    # also includes a year field, so that alone is no longer a reliable
+    # signal; the create form's own bare POST target is).
+    assert 'action="/admin/events"' not in resp.text
     assert 'href="/admin/events/new"' in resp.text
 
 
@@ -441,7 +445,7 @@ def test_admin_can_edit_event_details(admin_client):
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
         data={
-            "name": "New Name", "date": "2026-04-01",
+            "year": "2026", "name": "New Name", "date": "2026-04-01",
             "description": "New description.", "location": "Baton Rouge",
             "ticket_price_dollars": "200.00", "capacity": "300",
             "address": "1 Main St", "contact_name": "Jo", "contact_email": "jo@x.test",
@@ -466,7 +470,7 @@ def test_admin_can_edit_event_capacity(admin_client):
     _put_event()  # capacity=300
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "150.00", "capacity": "450"},
         follow_redirects=False,
     )
@@ -479,7 +483,7 @@ def test_admin_edit_event_details_rejects_negative_capacity(admin_client):
     _put_event()  # capacity=300
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "150.00", "capacity": "-1"},
         follow_redirects=False,
     )
@@ -492,7 +496,7 @@ def test_admin_edit_event_details_rejects_blank_date(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "  ", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "  ", "description": "D", "location": "L",
               "ticket_price_dollars": "150.00", "capacity": "300"},
         follow_redirects=False,
     )
@@ -505,7 +509,7 @@ def test_admin_edit_event_details_rejects_negative_price(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "-1", "capacity": "300"},
         follow_redirects=False,
     )
@@ -518,7 +522,7 @@ def test_admin_edit_event_details_rejects_garbage_price(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "abc", "capacity": "300"},
         follow_redirects=False,
     )
@@ -531,7 +535,7 @@ def test_admin_edit_event_details_accepts_fractional_dollars(admin_client):
     _put_event()
     admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "37.50", "capacity": "300"},
         follow_redirects=False,
     )
@@ -543,7 +547,7 @@ def test_admin_can_set_price_increase(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "85.00", "capacity": "300",
               "price_increase_date": "2026-03-01", "price_increase_dollars": "95.00"},
         follow_redirects=False,
@@ -558,7 +562,7 @@ def test_admin_can_clear_price_increase(admin_client):
     _put_event(price_increase_date="2026-03-01", price_increase_cents=9500)
     admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "85.00", "capacity": "300",
               "price_increase_date": "", "price_increase_dollars": ""},
         follow_redirects=False,
@@ -572,7 +576,7 @@ def test_admin_edit_event_details_rejects_price_increase_date_without_amount(adm
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "85.00", "capacity": "300",
               "price_increase_date": "2026-03-01"},
         follow_redirects=False,
@@ -586,7 +590,7 @@ def test_admin_edit_event_details_rejects_price_increase_amount_without_date(adm
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "85.00", "capacity": "300",
               "price_increase_dollars": "95.00"},
         follow_redirects=False,
@@ -600,7 +604,7 @@ def test_admin_edit_event_details_rejects_garbage_price_increase_amount(admin_cl
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "85.00", "capacity": "300",
               "price_increase_date": "2026-03-01", "price_increase_dollars": "abc"},
         follow_redirects=False,
@@ -614,7 +618,7 @@ def test_admin_can_set_perks(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "85.00", "capacity": "300",
               "perks_text": "Brass band\nWestern beads\n\n  \nCommemorative gift  "},
         follow_redirects=False,
@@ -629,7 +633,7 @@ def test_admin_can_clear_perks(admin_client):
     _put_event(perks=["Old perk"])
     admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "85.00", "capacity": "300", "perks_text": ""},
         follow_redirects=False,
     )
@@ -641,7 +645,7 @@ def test_admin_edit_event_details_clears_blank_contact_fields(admin_client):
     _put_event(address="old addr", contact_name="Old Contact")
     admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+        data={"year": "2026", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
               "ticket_price_dollars": "150.00", "capacity": "300"},
         follow_redirects=False,
     )
@@ -690,7 +694,7 @@ def test_admin_edit_event_details_rejects_blank_fields(admin_client):
     _put_event()
     resp = admin_client.post(
         "/admin/events/evt_2026/details",
-        data={"name": "  ", "date": "2026-03-14",
+        data={"year": "2026", "name": "  ", "date": "2026-03-14",
               "description": "New description.", "location": "Baton Rouge",
               "ticket_price_dollars": "150.00", "capacity": "300"},
         follow_redirects=False,
@@ -708,6 +712,37 @@ def test_admin_events_page_prefills_details_form(admin_client):
     assert 'value="2026-03-14"' in resp.text  # date, from _put_event's default
     assert 'value="150.00"' in resp.text  # ticket price in dollars, from ticket_price_cents=15000
     assert 'value="300"' in resp.text  # capacity, from _put_event's default
+    assert 'value="2026"' in resp.text  # year, from _put_event's default
+
+
+def test_admin_can_edit_event_year(admin_client):
+    _put_event()  # year=2026
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"year": "2027", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "150.00", "capacity": "300"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert int(event["year"]) == 2027
+    # The event_id stays fixed -- it's the DynamoDB key, not re-derived from
+    # year after creation, so every existing order/waitlist/etc. reference
+    # to this event still resolves correctly.
+    assert event["event_id"] == "evt_2026"
+
+
+def test_admin_edit_event_details_rejects_non_positive_year(admin_client):
+    _put_event()
+    resp = admin_client.post(
+        "/admin/events/evt_2026/details",
+        data={"year": "0", "name": "N", "date": "2026-03-14", "description": "D", "location": "L",
+              "ticket_price_dollars": "150.00", "capacity": "300"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    event = EVENTS().get_item(Key={"event_id": "evt_2026"})["Item"]
+    assert int(event["year"]) == 2026  # unchanged
 
 
 def test_admin_can_set_event_banner(admin_client):

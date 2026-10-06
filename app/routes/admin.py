@@ -337,6 +337,7 @@ def remove_banner_pool_image(event_id: str, url: str = Form(...)) -> RedirectRes
 def update_event_details(
     request: Request,
     event_id: str,
+    year: int = Form(...),
     name: str = Form(...),
     date: str = Form(...),
     description: str = Form(...),
@@ -365,6 +366,8 @@ def update_event_details(
         )
     if capacity < 0:
         return _events_page(request, error="Capacity can't be negative.", status_code=400)
+    if year <= 0:
+        return _events_page(request, error="Year must be a positive number.", status_code=400)
 
     price_increase_date = price_increase_date.strip()
     # Optional pair -- both set or neither. One without the other is
@@ -395,17 +398,17 @@ def update_event_details(
         # name, location, and capacity are all DynamoDB reserved words, hence
         # the aliases.
         UpdateExpression=(
-            "SET #n = :n, #d = :date, description = :desc, #l = :l, "
+            "SET #y = :year, #n = :n, #d = :date, description = :desc, #l = :l, "
             "ticket_price_cents = :price, #cap = :cap, address = :addr, "
             "contact_name = :cn, contact_email = :ce, contact_phone = :cp, "
             "price_increase_date = :pid, price_increase_cents = :pic, "
             "perks = :perks"
         ),
         ExpressionAttributeNames={
-            "#n": "name", "#d": "date", "#l": "location", "#cap": "capacity",
+            "#y": "year", "#n": "name", "#d": "date", "#l": "location", "#cap": "capacity",
         },
         ExpressionAttributeValues={
-            ":n": name, ":date": date, ":desc": description, ":l": location,
+            ":year": year, ":n": name, ":date": date, ":desc": description, ":l": location,
             ":price": ticket_price_cents, ":cap": capacity,
             ":addr": address.strip() or None,
             ":cn": contact_name.strip() or None,

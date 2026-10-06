@@ -26,6 +26,7 @@
       <fieldset class="admin-form-section">
         <legend>Basic info</legend>
         <div class="admin-form-grid">
+          <label>Year <input type="number" name="year" value="{{ e.year }}" min="1" required></label>
           <label>Name <input type="text" name="name" value="{{ e.name }}" required></label>
           <label>Date <input type="text" name="date" value="{{ e.date }}" placeholder="YYYY-MM-DD" required></label>
           <label>Location <input type="text" name="location" value="{{ e.location }}" required></label>
