@@ -1519,7 +1519,7 @@ def _my_profile(claims: dict) -> dict:
         "clown_id": f"clown_{uuid.uuid4().hex}",
         "cognito_sub": sub,
         "email": email or None,
-        "display_name": None, "photo_url": None, "bio": None,
+        "display_name": None, "swag_name": None, "photo_url": None, "bio": None,
         "phone": None, "address": None,
         "emergency_contact_name": None, "emergency_contact_phone": None,
         "years_ridden": [], "is_lieutenant": False,
@@ -1658,6 +1658,7 @@ def update_my_profile(
     request: Request,
     claims: dict = Depends(require_member),
     display_name: str = Form(""),
+    swag_name: str = Form(""),
     years_ridden: str = Form(""),
     bio: str = Form(""),
     phone: str = Form(""),
@@ -1669,6 +1670,7 @@ def update_my_profile(
     profile = _my_profile(claims)
     fields = {
         "display_name": display_name.strip() or None,
+        "swag_name": swag_name.strip() or None,
         # Self-service, same as the admin roster-manage form: a clown owns
         # their own ride history now too, not just admins.
         "years_ridden": _parse_years(years_ridden),
@@ -1891,12 +1893,12 @@ def delete_clown_profile(clown_id: str) -> RedirectResponse:
 # ---- CSV import + export (admin) ----
 
 CLOWN_CSV_COLUMNS = [
-    "email", "display_name", "phone", "address", "bio",
+    "email", "display_name", "swag_name", "phone", "address", "bio",
     "emergency_contact_name", "emergency_contact_phone",
     "years_ridden", "is_lieutenant", "active",
 ]
 _CLOWN_CSV_TEXT_COLUMNS = (
-    "display_name", "phone", "address", "bio",
+    "display_name", "swag_name", "phone", "address", "bio",
     "emergency_contact_name", "emergency_contact_phone",
 )
 
@@ -1936,6 +1938,7 @@ def clowns_export() -> Response:
         writer.writerow([
             _csv_safe(p.get("email")),
             _csv_safe(p.get("display_name")),
+            _csv_safe(p.get("swag_name")),
             _csv_safe(p.get("phone")),
             _csv_safe(p.get("address")),
             _csv_safe(p.get("bio")),
@@ -2046,6 +2049,7 @@ def clowns_import(
             "clown_id": f"clown_{uuid.uuid4().hex}",
             "cognito_sub": sub, "email": email,
             "display_name": fields.get("display_name"),
+            "swag_name": fields.get("swag_name"),
             "photo_url": None,
             "bio": fields.get("bio"),
             "phone": fields.get("phone"),

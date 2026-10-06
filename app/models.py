@@ -175,6 +175,11 @@ class ClownProfile(BaseModel):
     cognito_sub: str | None = None
     email: str | None = None
     display_name: str | None = None
+    # What this clown wants printed on swag (a shirt, a cup, a name tag) --
+    # distinct from display_name, which is used for roster/directory
+    # listings and may be a full legal-ish name rather than what someone
+    # actually wants on a t-shirt.
+    swag_name: str | None = None
     photo_url: str | None = None
     bio: str | None = None
     phone: str | None = None

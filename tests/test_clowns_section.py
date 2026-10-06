@@ -178,6 +178,19 @@ def test_my_profile_edit_can_set_years_ridden(dynamodb_tables):
     assert [int(y) for y in mine["years_ridden"]] == [2019, 2021, 2022, 2023]
 
 
+def test_my_profile_edit_can_set_swag_name(dynamodb_tables):
+    c, ctx = _client(sub="sub-me", email="me@example.com")
+    try:
+        c.post("/admin/clowns/profile", data={
+            "display_name": "Jonathan Smith", "swag_name": "Jonny", "bio": "", "phone": "",
+            "address": "", "emergency_contact_name": "", "emergency_contact_phone": "",
+        }, follow_redirects=False)
+    finally:
+        ctx.stop()
+    mine = next(p for p in CLOWN_PROFILES().scan()["Items"] if p["cognito_sub"] == "sub-me")
+    assert mine["swag_name"] == "Jonny"
+
+
 def test_my_profile_edit_cannot_set_lieutenant_or_active(dynamodb_tables):
     # years_ridden is now self-service (see above); lieutenant status and
     # active/inactive remain admin-only.
@@ -552,7 +565,8 @@ def test_import_rejects_csv_without_email_column(dynamodb_tables):
 
 def test_export_round_trips(dynamodb_tables):
     _put_profile("clown_x", "Xtra", [2021, 2022], is_lieutenant=True,
-                 email="x@example.com", phone="+15045551212", cognito_sub=None)
+                 email="x@example.com", phone="+15045551212", cognito_sub=None,
+                 swag_name="Lil X")
     fake = type("C", (), {"list_users": lambda self, **kw: {"Users": []}})()
     c, ctx = _client(admin=True)
     try:
@@ -569,6 +583,7 @@ def test_export_round_trips(dynamodb_tables):
         ctx.stop()
     p = CLOWN_PROFILES().scan()["Items"][0]
     assert p["display_name"] == "Xtra"
+    assert p["swag_name"] == "Lil X"
     assert p["is_lieutenant"] is True
     assert [int(y) for y in p["years_ridden"]] == [2021, 2022]
     assert p["phone"] == "+15045551212"  # M2: no permanent leading apostrophe
