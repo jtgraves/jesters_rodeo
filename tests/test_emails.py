@@ -42,7 +42,7 @@ def _event(**overrides) -> Event:
     fields = dict(
         event_id="evt_2026",
         year=2026,
-        name="Jester's Reaux-de-Eaux Parade",
+        name="Jesters' Reaux-de-Eaux Parade",
         date="Saturday, March 14, 2026",
         location="New Orleans",
         address="123 Canal St, New Orleans, LA",

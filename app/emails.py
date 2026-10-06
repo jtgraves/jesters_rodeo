@@ -19,7 +19,7 @@ from app.tickets import generate_qr_code_png
 # their inbox -- than a properly named one does. formataddr handles the
 # RFC 2822 quoting/encoding correctly (e.g. if this name ever needs a comma
 # or non-ASCII character), which naive string formatting wouldn't.
-FROM_DISPLAY_NAME = "Jester's Reaux-de-Eaux"
+FROM_DISPLAY_NAME = "Jesters' Reaux-de-Eaux"
 
 # A fixed app asset (app/static/img/), not the event's own admin-configurable
 # logo_url -- that one is typically a transparent-background image, which
@@ -198,7 +198,7 @@ def send_confirmation_email(order: Order, event: Event | None = None) -> None:
     # text/plain and text/html as direct siblings of the image makes clients
     # treat them as two separate body parts to display, not as alternatives.
     msg = MIMEMultipart("related")
-    msg["Subject"] = "Your Jester's Reaux-de-Eaux tickets"
+    msg["Subject"] = "Your Jesters' Reaux-de-Eaux tickets"
     msg["From"] = formataddr((FROM_DISPLAY_NAME, settings.ses_sender_email))
     msg["To"] = order.buyer_email
 

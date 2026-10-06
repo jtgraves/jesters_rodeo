@@ -107,7 +107,7 @@ going live.
    **2-Step Verification**, and follow the prompts. This is required —
    App Passwords don't exist without it.
 3. Generate an App Password at **myaccount.google.com/apppasswords**. Name it
-   something recognizable (e.g. "Jesters Reaux-de-Eaux site"). Google shows
+   something recognizable (e.g. "Jesters' Reaux-de-Eaux site"). Google shows
    the 16-character password once — copy it immediately.
 4. Store it as the `smtp_password` SSM parameter (see the secrets block
    above) — never commit it or put it in `cdk.json`.

@@ -1,4 +1,4 @@
-# Jester's Reaux-de-Eaux
+# Jesters' Reaux-de-Eaux
 
 Annual krewe parade registration site. Serverless Python (FastAPI on Lambda),
 DynamoDB, Stripe Checkout, Gmail SMTP email, Cognito admin auth. Deployed via AWS CDK.
