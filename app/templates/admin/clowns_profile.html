@@ -5,7 +5,7 @@
 <form method="post" action="/admin/clowns/profile" enctype="multipart/form-data" class="event-images-form">
   <label>Name <input type="text" name="display_name" value="{{ profile.display_name or '' }}"></label>
   <label>Preferred Name/Nickname for Swag
-    <input type="text" name="swag_name" value="{{ profile.swag_name or '' }}" placeholder="What should go on a t-shirt?">
+    <input type="text" name="swag_name" value="{{ profile.swag_name or '' }}" placeholder="What should go on a Yeti koozie?">
   </label>
   <label>Years ridden <input type="text" name="years_ridden" class="roster-years-input"
          value="{{ (profile.years_ridden or []) | map('int') | join(' ') }}" placeholder="2019 2021-2023"></label>
