@@ -565,9 +565,13 @@ def list_orders(
     if dir not in ("asc", "desc"):
         dir = "desc"
     orders = _orders_for_event(event_id, q, status, sort, dir)
+    event = EVENTS().get_item(Key={"event_id": event_id}).get("Item")
     return templates.TemplateResponse(
         request, "admin/orders.html",
-        {"orders": orders, "event_id": event_id, "q": q, "status": status, "sort": sort, "dir": dir},
+        {
+            "orders": orders, "event_id": event_id, "q": q, "status": status,
+            "sort": sort, "dir": dir, "event": event,
+        },
     )
 
 

@@ -1121,6 +1121,21 @@ def test_orders_list_badges_comp_orders(admin_client):
     assert "(comp)" in resp.text
 
 
+def test_orders_page_shows_tickets_sold_vs_capacity(admin_client):
+    _put_event(tickets_sold_count=18, capacity=500)
+    resp = admin_client.get("/admin/orders?event_id=evt_2026")
+    assert "18/500 sold" in resp.text
+
+
+def test_orders_page_omits_sold_count_for_an_unknown_event(admin_client):
+    # event_id in the URL doesn't correspond to a real event (stale
+    # bookmark, deleted event, typo) -- the page must still render, just
+    # without a sold/capacity line it has no data for.
+    resp = admin_client.get("/admin/orders?event_id=evt_missing")
+    assert resp.status_code == 200
+    assert "sold" not in resp.text
+
+
 def test_orders_page_shows_order_date(admin_client):
     _put_order("ord_dated", created_at="2026-03-14T13:05:00Z")
     resp = admin_client.get("/admin/orders?event_id=evt_2026")

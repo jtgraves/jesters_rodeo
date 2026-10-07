@@ -11,6 +11,9 @@
 
 {% block content %}
 <h1>Orders</h1>
+{% if event %}
+<p>{{ event.tickets_sold_count }}/{{ event.capacity }} sold</p>
+{% endif %}
 <form method="get" action="/admin/orders">
   <input type="hidden" name="event_id" value="{{ event_id }}">
   <input type="hidden" name="sort" value="{{ sort }}">
